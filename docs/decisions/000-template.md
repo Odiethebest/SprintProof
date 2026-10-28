@@ -1,7 +1,7 @@
 # NNN. <Decision title>
 
 **Date:** 2026-__-__ · **Status:** Proposed | Accepted | Superseded by NNN · **Issue:** #<n>
-**Deciders:** Ziqi Yang, Yunhong Huang
+**Deciders:** Ziqi (Odie) Yang, Yunhong Huang
 
 ## Context
 <What problem forced a decision? What constraints apply?>

@@ -1,7 +1,7 @@
 # Sprint 2 planning
 
 **Dates:** Nov 5 – Nov 11, 2026 · **Milestone:** Sprint 2
-**Planned by:** Ziqi Yang, Yunhong Huang · **Planning meeting:** 2026-11-__ <!-- fill in -->
+**Planned by:** Ziqi (Odie) Yang, Yunhong Huang · **Planning meeting:** 2026-11-__ <!-- fill in -->
 
 ## Sprint goal
 GitHub activity flows into a live dashboard; retros with voting, private peer feedback, instructor view and export work end to end; the public API is documented; the full CI/CD pipeline runs on every PR.
@@ -12,7 +12,7 @@ GitHub activity flows into a live dashboard; retros with voting, private peer fe
 ## Capacity
 | Member | Available hours | Notes |
 | --- | --- | --- |
-| Ziqi Yang | | |
+| Ziqi (Odie) Yang | | |
 | Yunhong Huang | | |
 
 ## Committed issues

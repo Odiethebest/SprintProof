@@ -19,7 +19,7 @@ Both rounds must match on everything except the rules file.
 
 | | Without rules | With rules (v1) | With rules (v2) |
 | --- | --- | --- | --- |
-| Run by | Ziqi Yang | Yunhong Huang | Yunhong Huang |
+| Run by | Ziqi (Odie) Yang | Yunhong Huang | Yunhong Huang |
 | Date | | | |
 | Base commit (`git rev-parse --short HEAD`) | | | |
 | Branch | `experiment/without-rules` | `experiment/with-rules` | `experiment/with-rules-v2` |

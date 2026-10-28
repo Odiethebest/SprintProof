@@ -1,6 +1,6 @@
 # SprintProof — Product Requirements Document
 
-**Version:** 1.0 · **Date:** 2026-10-28 · **Authors:** Ziqi Yang, Yunhong Huang
+**Version:** 1.0 · **Date:** 2026-10-28 · **Authors:** Ziqi (Odie) Yang, Yunhong Huang
 **Status:** Approved for Sprint 1 · **Tracking:** GitHub Issues #1–#17, milestones "Sprint 1" and "Sprint 2"
 
 ---

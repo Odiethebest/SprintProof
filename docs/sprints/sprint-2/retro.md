@@ -1,6 +1,6 @@
 # Sprint 2 retrospective
 
-**Date:** 2026-__-__ · **Attendees:** Ziqi Yang, Yunhong Huang
+**Date:** 2026-__-__ · **Attendees:** Ziqi (Odie) Yang, Yunhong Huang
 
 ## Results
 | | Planned | Completed |

@@ -1,7 +1,7 @@
 # Sprint 1 planning
 
 **Dates:** Oct 29 – Nov 4, 2026 · **Milestone:** Sprint 1
-**Planned by:** Ziqi Yang, Yunhong Huang · **Planning meeting:** 2026-10-__ <!-- fill in -->
+**Planned by:** Ziqi (Odie) Yang, Yunhong Huang · **Planning meeting:** 2026-10-__ <!-- fill in -->
 
 ## Sprint goal
 A team can sign in with GitHub, set up sprints with requirements, post daily standups, and get requirement status computed correctly by tested business logic.
@@ -9,7 +9,7 @@ A team can sign in with GitHub, set up sprints with requirements, post daily sta
 ## Capacity
 | Member | Available hours | Notes |
 | --- | --- | --- |
-| Ziqi Yang | | |
+| Ziqi (Odie) Yang | | |
 | Yunhong Huang | | |
 
 ## Committed issues
