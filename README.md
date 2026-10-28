@@ -5,6 +5,7 @@
 [![Next.js](https://img.shields.io/badge/Next.js-16-000000?logo=nextdotjs)](https://nextjs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript)](https://www.typescriptlang.org/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql)](https://www.postgresql.org/)
+[![Scrum](https://img.shields.io/badge/Agile-Scrum-E67E22)](#team--collaboration)
 [![TDD](https://img.shields.io/badge/Test--Driven%20Development-C21325)](#testing)
 [![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 
