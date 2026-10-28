@@ -30,7 +30,7 @@ Never write implementation and tests in the same step, and never weaken or delet
 ## Boundaries
 
 - **Run `git commit` or `git push` only when the developer explicitly asks.** Each approval covers that request only, not later commits. Commit under the developer's own git identity (never change `user.name` or `user.email`), follow the commit format in `AGENTS.md`, and show what is staged before committing. This project measures contribution balance from git history, so every commit must belong to the developer who asked for it.
-- **Never merge PRs, force-push, or push directly to `main`.** Merging needs the partner's approving review.
+- **Never merge PRs or force-push.** Merging needs the partner's approving review.
 - Do not read or edit `.env`, `.env.local` or any real secret file. Only `.env.example` may be edited, and it holds names only.
 - Do not run destructive database commands (`prisma migrate reset`, dropping tables) without explicit permission.
 - Do not add a new dependency without asking first and saying why.
