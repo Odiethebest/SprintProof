@@ -8,6 +8,8 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript)](https://www.typescriptlang.org/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql)](https://www.postgresql.org/)
 [![Prisma](https://img.shields.io/badge/Prisma-ORM-2D3748?logo=prisma)](https://www.prisma.io/)
+[![TDD](https://img.shields.io/badge/Practice-Test--Driven%20Development-C21325)](#testing)
+[![DDD](https://img.shields.io/badge/Architecture-Domain--Driven%20Design-6E40C9)](#counting-rules)
 [![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 
 ---
@@ -65,10 +67,10 @@ SprintProof is built by two people:
 
 | Member | GitHub | Role |
 |---|---|---|
-| Ziqi Yang | [@Odiethebest](https://github.com/Odiethebest) | _Set at Sprint 1 planning_ |
+| Ziqi (Odie) Yang | [@Odiethebest](https://github.com/Odiethebest) | _Set at Sprint 1 planning_ |
 | Yunhong Huang | [@santiaojun](https://github.com/santiaojun) | _Set at Sprint 1 planning_ |
 
-Every task is a GitHub Issue on the project board (Backlog → Sprint Todo → In Progress → In Review → Done). Each issue gets its own branch (`feature/12-standup-form`, `fix/31-webhook-signature`), commits follow [Conventional Commits](https://www.conventionalcommits.org/) ending with the issue number, and every pull request needs CI passing plus an approving review from the other partner. No one merges their own PR, and we never squash-merge, because squashing erases the test-first commits. AI coding tools follow the same rules and never commit; humans make every commit so authorship in the git history stays accurate.
+Every task is a GitHub Issue on the project board (Backlog → Sprint Todo → In Progress → In Review → Done). Each issue gets its own branch (`feature/12-standup-form`, `fix/31-webhook-signature`), commits follow [Conventional Commits](https://www.conventionalcommits.org/) ending with the issue number, and every pull request needs CI passing plus an approving review from the other partner. No one merges their own PR, and we never squash-merge, because squashing erases the test-first commits. AI coding tools follow the same rules and commit or push only when the developer explicitly asks, under that developer's own git identity, so authorship in the git history stays accurate.
 
 | Sprint | Dates | Milestone |
 |---|---|---|

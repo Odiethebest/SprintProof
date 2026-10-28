@@ -230,7 +230,7 @@ feat(checks): count distinct reviewed PRs per member (#7)   ← tests pass
 refactor(checks): extract sprint window helper (#7)         ← optional
 ```
 
-The `test(...)` commit must contain only tests (and factories/fixtures). AI tools: after writing failing tests, stop and let a human commit them before implementing.
+The `test(...)` commit must contain only tests (and factories/fixtures). AI tools: after writing failing tests, stop. The developer commits them, or explicitly asks the AI tool to, before implementation starts. AI tools commit or push only when the developer explicitly asks, under the developer's own git identity.
 
 ### Pull requests
 
@@ -316,4 +316,5 @@ Standups, planning notes and retros for our own team are recorded in SprintProof
 
 | Date | Author | Change | Why |
 | --- | --- | --- | --- |
-| 2026-10-28 | Ziqi Yang, Yunhong Huang | v1: initial rules | Project kickoff |
+| 2026-10-28 | Ziqi (Odie) Yang, Yunhong Huang | v1: initial rules | Project kickoff |
+| 2026-10-28 | Ziqi (Odie) Yang | AI tools may commit and push when the developer explicitly asks, under the developer's own git identity (§3) | Saves a hand-off step; authorship stays accurate because commits still use the developer's identity |
