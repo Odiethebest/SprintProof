@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Product requirements (PRD)
+    url: https://github.com/Odiethebest/SprintProof/blob/main/docs/PRD.md
+    about: Check the user stories and business rules before opening an issue.
