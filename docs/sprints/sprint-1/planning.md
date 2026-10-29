@@ -1,7 +1,7 @@
 # Sprint 1 planning
 
 **Dates:** Oct 29 – Nov 4, 2026 · **Milestone:** Sprint 1
-**Planned by:** Ziqi (Odie) Yang, Yunhong Huang · **Planning meeting:** 2026-10-__ <!-- fill in -->
+**Planned by:** Ziqi (Odie) Yang, Yunhong Huang · **Planning meeting:** 2026-10-28
 
 ## Sprint goal
 A team can sign in with GitHub, set up sprints with requirements, post daily standups, and get requirement status computed correctly by tested business logic.
@@ -9,12 +9,10 @@ A team can sign in with GitHub, set up sprints with requirements, post daily sta
 ## Capacity
 | Member | Available hours | Notes |
 | --- | --- | --- |
-| Ziqi (Odie) Yang | | |
-| Yunhong Huang | | |
+| Ziqi (Odie) Yang | 15 | |
+| Yunhong Huang | 15 | |
 
 ## Committed issues
-<!-- Owners below are a proposal: confirm or change them together in the planning meeting. -->
-
 | Issue | Title | Points | Owner | Depends on |
 | --- | --- | --- | --- | --- |
 | #1 | Write PRD with user stories and acceptance criteria | 2 | Ziqi | — |
@@ -27,7 +25,8 @@ A team can sign in with GitHub, set up sprints with requirements, post daily sta
 | #8 | Create sprints with dates and requirements | 3 | Yunhong | #7 |
 | #9 | Submit and edit a daily standup | 3 | Ziqi | #8 |
 | #10 | Compute requirement status per member | 5 | Yunhong | — |
-| | **Total** | **32** | Ziqi 16 · Yunhong 16 | |
+| #18 | Record Sprint 1 Scrum artifacts | 1 | Ziqi | — |
+| | **Total** | **33** | Ziqi 17 · Yunhong 16 | |
 
 ## Working agreements
 - One branch per issue; partner reviews every PR before merge; no squash merges.
