@@ -7,6 +7,6 @@
 -->
 
 ### 2026-10-29
-**Yesterday:**
-**Today:**
-**Blockers:** None
+**Yesterday:** Built the Next.js scaffold for #3 with Antigravity (#21, merged) and found that Next.js 16 rewrites AGENTS.md, so it's disabled with `agentRules: false`. Set up the multi-stage CI pipeline for #4 (#23, merged). Reviewed #19, #20 and #22, and left a design review on the prototype (#2).
+**Today:** Reviewed #24 and ran the E2E test locally; review Ziqi's standup (#25). Agree on the base commit with Ziqi (S1), then run the with-rules round of the #10 experiment.
+**Blockers:** None.
