@@ -6,7 +6,7 @@ import {
   buildReviewActivity,
   buildSprint,
   buildStandup,
-} from "tests/factories";
+} from "../../factories";
 
 describe("computeRequirementStatus", () => {
   describe("empty sprint and members with no activity", () => {
@@ -42,8 +42,14 @@ describe("computeRequirementStatus", () => {
     it("returns zero counts for a member with no activity when other members have activity", () => {
       // Arrange
       const sprint = buildSprint();
-      const activeMember = buildMember({ id: "active-1", githubLogin: "alice" });
-      const inactiveMember = buildMember({ id: "inactive-2", githubLogin: "bob" });
+      const activeMember = buildMember({
+        id: "active-1",
+        githubLogin: "alice",
+      });
+      const inactiveMember = buildMember({
+        id: "inactive-2",
+        githubLogin: "bob",
+      });
       const standup = buildStandup({
         memberId: "active-1",
         createdAt: "2026-10-29T19:00:00.000Z",
@@ -67,7 +73,9 @@ describe("computeRequirementStatus", () => {
       );
 
       // Assert
-      const inactiveStatus = result.find((item) => item.memberId === "inactive-2");
+      const inactiveStatus = result.find(
+        (item) => item.memberId === "inactive-2"
+      );
       expect(inactiveStatus).toBeDefined();
       expect(inactiveStatus!.standups.count).toBe(0);
       expect(inactiveStatus!.standups.remaining).toBe(3);
@@ -441,6 +449,184 @@ describe("computeRequirementStatus", () => {
       // Assert
       expect(result["alice-id"]).toBeDefined();
       expect(result["alice-id"].memberId).toBe("alice-id");
+    });
+
+    it("ignores activities and standups from other sprints", () => {
+      // Arrange
+      const sprint = buildSprint({ id: "sprint-1" });
+      const member = buildMember({ id: "member-1", githubLogin: "alice" });
+      const otherSprintStandup = buildStandup({
+        sprintId: "sprint-2",
+        memberId: "member-1",
+        createdAt: "2026-10-30T18:00:00.000Z",
+      });
+      const otherSprintReview = buildReviewActivity({
+        sprintId: "sprint-2",
+        githubLogin: "alice",
+        prNumber: 999,
+        prAuthor: "bob",
+        createdAt: "2026-10-30T18:00:00.000Z",
+      });
+      const now = new Date("2026-10-31T12:00:00.000Z");
+
+      // Act
+      const result = computeRequirementStatus(
+        sprint,
+        [member],
+        [otherSprintStandup],
+        [otherSprintReview],
+        now
+      );
+
+      // Assert
+      expect(result[0].standups.count).toBe(0);
+      expect(result[0].reviews.count).toBe(0);
+    });
+
+    it("ignores non-review activity types such as COMMIT or PR_OPENED", () => {
+      // Arrange
+      const sprint = buildSprint();
+      const member = buildMember({ id: "member-1", githubLogin: "alice" });
+      const commitActivity = buildActivity({
+        type: "COMMIT",
+        githubLogin: "alice",
+        createdAt: "2026-10-30T18:00:00.000Z",
+      });
+      const prOpenedActivity = buildActivity({
+        type: "PR_OPENED",
+        githubLogin: "alice",
+        createdAt: "2026-10-30T19:00:00.000Z",
+      });
+      const now = new Date("2026-10-31T12:00:00.000Z");
+
+      // Act
+      const result = computeRequirementStatus(
+        sprint,
+        [member],
+        [],
+        [commitActivity, prOpenedActivity],
+        now
+      );
+
+      // Assert
+      expect(result[0].reviews.count).toBe(0);
+    });
+
+    it("excludes review activities that fall outside sprint date boundaries", () => {
+      // Arrange
+      const sprint = buildSprint({
+        startDate: "2026-10-29",
+        endDate: "2026-11-04",
+        timezone: "America/Los_Angeles",
+      });
+      const member = buildMember({ id: "member-1", githubLogin: "alice" });
+      // Oct 28 23:59:59 PDT = 2026-10-29 06:59:59 UTC (before sprint start)
+      const reviewBefore = buildReviewActivity({
+        githubLogin: "alice",
+        prNumber: 501,
+        prAuthor: "bob",
+        createdAt: "2026-10-29T06:59:59.000Z",
+      });
+      // Nov 05 00:00:01 PST = 2026-11-05 08:00:01 UTC (after sprint end)
+      const reviewAfter = buildReviewActivity({
+        githubLogin: "alice",
+        prNumber: 502,
+        prAuthor: "bob",
+        createdAt: "2026-11-05T08:00:01.000Z",
+      });
+      const now = new Date("2026-11-01T12:00:00.000Z");
+
+      // Act
+      const result = computeRequirementStatus(
+        sprint,
+        [member],
+        [],
+        [reviewBefore, reviewAfter],
+        now
+      );
+
+      // Assert
+      expect(result[0].reviews.count).toBe(0);
+    });
+
+    it("handles standups without timestamp by using standup id fallback", () => {
+      // Arrange
+      const sprint = buildSprint();
+      const member = buildMember({ id: "member-1" });
+      const standupWithoutDate = {
+        id: "standup-nodate",
+        memberId: "member-1",
+        createdAt: undefined,
+      };
+      const now = new Date("2026-10-30T12:00:00.000Z");
+
+      // Act
+      const result = computeRequirementStatus(
+        sprint,
+        [member],
+        [standupWithoutDate],
+        [],
+        now
+      );
+
+      // Assert
+      expect(result[0].standups.count).toBe(1);
+    });
+
+    it("supports sprint startDate and endDate as Date objects", () => {
+      // Arrange
+      const sprint = buildSprint({
+        startDate: new Date("2026-10-29T00:00:00.000Z"),
+        endDate: new Date("2026-11-04T23:59:59.999Z"),
+      });
+      const member = buildMember({ id: "member-1" });
+      const now = new Date("2026-10-30T12:00:00.000Z");
+
+      // Act
+      const result = computeRequirementStatus(sprint, [member], [], [], now);
+
+      // Assert
+      expect(result).toHaveLength(1);
+      expect(result[0].standups.status).toBe("ON_TRACK");
+    });
+
+    it("matches members with nested user object and detects self review by user id", () => {
+      // Arrange
+      const sprint = buildSprint();
+      const member = buildMember({
+        id: "mem-uuid",
+        userId: "user-uuid",
+        user: {
+          id: "user-uuid",
+          login: "alicedev",
+          githubLogin: "alicedev",
+        },
+      });
+      const reviewOwn = buildReviewActivity({
+        userId: "user-uuid",
+        actor: "alicedev",
+        prAuthor: "user-uuid",
+        createdAt: "2026-10-30T18:00:00.000Z",
+      });
+      const reviewOther = buildReviewActivity({
+        userId: "user-uuid",
+        actor: "alicedev",
+        prAuthor: "bobdev",
+        createdAt: "2026-10-30T19:00:00.000Z",
+      });
+      const now = new Date("2026-10-31T12:00:00.000Z");
+
+      // Act
+      const result = computeRequirementStatus(
+        sprint,
+        [member],
+        [],
+        [reviewOwn, reviewOther],
+        now
+      );
+
+      // Assert
+      expect(result[0].reviews.count).toBe(1);
     });
   });
 });
