@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { TZDate } from "@date-fns/tz";
-import { computeRequirementStatus } from "@/lib/checks/requirement-status";
+import {
+  computeRequirementStatus,
+  type MemberRequirementStatus,
+} from "@/lib/checks/requirement-status";
 import {
   createActivity,
   createMember,
@@ -173,7 +176,10 @@ describe("computeRequirementStatus", () => {
 
   it("ignores activity from bot logins ending in [bot] (R4)", () => {
     // Arrange
-    const member = createMember({ id: "mem-bot", githubLogin: "dependabot[bot]" });
+    const member = createMember({
+      id: "mem-bot",
+      githubLogin: "dependabot[bot]",
+    });
     const humanMember = createMember({ id: "mem-1", githubLogin: "alice" });
     const now = new TZDate("2026-10-30T12:00:00", timezone);
 
@@ -306,9 +312,18 @@ describe("computeRequirementStatus", () => {
       const now = new TZDate("2026-11-01T12:00:00", timezone);
 
       const standups = [
-        createStandup({ userId: member.id, createdAt: "2026-10-29T10:00:00-07:00" }),
-        createStandup({ userId: member.id, createdAt: "2026-10-30T10:00:00-07:00" }),
-        createStandup({ userId: member.id, createdAt: "2026-10-31T10:00:00-07:00" }),
+        createStandup({
+          userId: member.id,
+          createdAt: "2026-10-29T10:00:00-07:00",
+        }),
+        createStandup({
+          userId: member.id,
+          createdAt: "2026-10-30T10:00:00-07:00",
+        }),
+        createStandup({
+          userId: member.id,
+          createdAt: "2026-10-31T10:00:00-07:00",
+        }),
       ];
 
       // Act
@@ -405,5 +420,156 @@ describe("computeRequirementStatus", () => {
     // Assert
     expect(results[0].standups.count).toBe(1);
     expect(results[0].reviews.count).toBe(0);
+  });
+
+  it("supports options object parameter structure and lookup helpers", () => {
+    // Arrange
+    const member = createMember({ id: "mem-1", githubLogin: "alice" });
+    const now = new TZDate("2026-10-30T12:00:00", timezone);
+    const standup = createStandup({
+      userId: member.id,
+      createdAt: "2026-10-30T10:00:00-07:00",
+    });
+
+    // Act
+    const results = computeRequirementStatus({
+      sprint: defaultSprint,
+      members: [member],
+      standups: [standup],
+      activities: [],
+      now,
+    });
+
+    // Assert
+    expect(results.get("mem-1")?.standups.count).toBe(1);
+    expect(results.byMemberId["mem-1"]?.standups.count).toBe(1);
+    expect(
+      (results as Record<string, MemberRequirementStatus>)["mem-1"]?.standups
+        .count
+    ).toBe(1);
+  });
+
+  it("ignores non-review activity and reviews outside the sprint window", () => {
+    // Arrange
+    const member = createMember({ id: "mem-1", githubLogin: "alice" });
+    const now = new TZDate("2026-10-30T12:00:00", timezone);
+
+    const commitActivity = createActivity({
+      type: "COMMIT",
+      userId: member.id,
+      actorLogin: "alice",
+      createdAt: "2026-10-30T10:00:00-07:00",
+    });
+
+    const beforeSprintReview = createActivity({
+      type: "REVIEW",
+      userId: member.id,
+      actorLogin: "alice",
+      prNumber: 99,
+      prAuthorLogin: "bob",
+      createdAt: "2026-10-28T10:00:00-07:00",
+    });
+
+    const afterSprintReview = createActivity({
+      type: "REVIEW",
+      userId: member.id,
+      actorLogin: "alice",
+      prNumber: 100,
+      prAuthorLogin: "bob",
+      createdAt: "2026-11-06T10:00:00-07:00",
+    });
+
+    const validReview = createActivity({
+      type: "REVIEW",
+      userId: member.id,
+      actorLogin: "alice",
+      prNumber: 101,
+      prAuthorLogin: "bob",
+      createdAt: "2026-10-30T14:00:00-07:00",
+    });
+
+    // Act
+    const results = computeRequirementStatus(
+      defaultSprint,
+      [member],
+      [],
+      [commitActivity, beforeSprintReview, afterSprintReview, validReview],
+      now
+    );
+
+    // Assert
+    expect(results[0].reviews.count).toBe(1);
+  });
+
+  it("handles sprint with Date objects for start and end dates", () => {
+    // Arrange
+    const sprintWithDates = createSprint({
+      startDate: new TZDate("2026-10-29T00:00:00", timezone),
+      endDate: new TZDate("2026-11-04T23:59:59.999", timezone),
+    });
+    const member = createMember({ id: "mem-1" });
+    const now = new TZDate("2026-10-30T12:00:00", timezone);
+
+    // Act
+    const results = computeRequirementStatus(
+      sprintWithDates,
+      [member],
+      [],
+      [],
+      now
+    );
+
+    // Assert
+    expect(results).toHaveLength(1);
+    expect(results[0].standups.status).toBe("ON_TRACK");
+  });
+
+  it("matches standup and activity by memberId and authorId", () => {
+    // Arrange
+    const member = createMember({ id: "mem-1", userId: "u-1" });
+    const now = new TZDate("2026-10-30T12:00:00", timezone);
+
+    const standupByMemberId = createStandup({
+      id: "s-mem",
+      userId: undefined,
+      memberId: "mem-1",
+      createdAt: "2026-10-29T10:00:00-07:00",
+    });
+
+    const standupByAuthorId = createStandup({
+      id: "s-auth",
+      userId: undefined,
+      authorId: "mem-1",
+      createdAt: "2026-10-30T10:00:00-07:00",
+    });
+
+    const ownPrByIdReview = createActivity({
+      type: "REVIEW",
+      memberId: "mem-1",
+      prNumber: 200,
+      prAuthorId: "u-1",
+      createdAt: "2026-10-30T11:00:00-07:00",
+    });
+
+    const otherPrByIdReview = createActivity({
+      type: "REVIEW",
+      memberId: "mem-1",
+      prNumber: 201,
+      prAuthorId: "other-user",
+      createdAt: "2026-10-30T12:00:00-07:00",
+    });
+
+    // Act
+    const results = computeRequirementStatus(
+      defaultSprint,
+      [member],
+      [standupByMemberId, standupByAuthorId],
+      [ownPrByIdReview, otherPrByIdReview],
+      now
+    );
+
+    // Assert
+    expect(results[0].standups.count).toBe(2);
+    expect(results[0].reviews.count).toBe(1);
   });
 });
