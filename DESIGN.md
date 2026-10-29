@@ -4,7 +4,7 @@
   UI tokens and component rules. AI tools: use ONLY these tokens through Tailwind classes.
   No arbitrary hex values, no one-off spacing. If a design need isn't covered here,
   propose an addition to this file instead of improvising.
-  Update after the mockups in docs/design/ are final.
+  Matches the prototype screenshots in docs/design/; update both together.
 -->
 
 ## 1. Design principles
@@ -109,25 +109,40 @@ Never use font sizes outside this table.
 ## 6. Layout
 
 - Content width `max-w-6xl mx-auto px-4 md:px-6`.
-- Top bar: team name, sprint selector, `LiveIndicator`, user menu.
-- **Dashboard:** `lg:grid-cols-3`; member cards span 2 columns, activity feed 1 column. Below `lg`, the feed stacks under the cards.
+- Top bar: team mark, team name with the repo below it (repo hidden below `sm`), sprint selector, `LiveIndicator`, user menu.
+- Page header: title on the left with a `text-sm text-text-muted` meta line below it; pills and at most one primary action on the right. Wraps on narrow screens.
+- **Dashboard:** `lg:grid-cols-3`; member cards span 2 columns in their own `md:grid-cols-2` grid, activity feed 1 column. Below `lg`, the feed stacks under the cards.
+- **Standups:** `lg:grid-cols-3`; form 1 column, history 2 columns.
+- **Retro:** action items panel, then the two columns (`md:grid-cols-2`), then partner feedback, stacked with `gap-4`.
+- **Review:** requirements table full width, then standups and retro side by side (`lg:grid-cols-2`), then peer feedback full width.
+- **Settings:** `lg:grid-cols-2`; sprints and API tokens span both columns.
 - Breakpoints: Tailwind defaults (`sm 640`, `md 768`, `lg 1024`). Must work at 360 px.
 
 ## 7. Components
 
 | Component | Rules |
 | --- | --- |
-| `Button` | Variants: `primary` (bg-primary), `secondary` (surface + border), `ghost`, `destructive` (missed color, used only for delete/revoke). Height 36 px. One primary button per view. |
-| `Card` | `bg-surface border border-border rounded-lg`. Title + optional action in the header row. |
+| `Button` | Variants: `primary` (bg-primary), `secondary` (surface + border), `ghost`, `destructive` (`missed` text on surface with a border, used only for delete/revoke). Height 36 px, 16 px leading icon optional. Hover: primary `bg-primary/90`, secondary and ghost `bg-text/5`, destructive `bg-missed/10`. One primary button per view. |
+| `Card` | `bg-surface border border-border rounded-lg`. Title + optional action in the header row, optional `text-xs text-text-muted` subtitle under the title. |
+| `Pill` | `rounded-full border border-border px-2 py-1 text-xs text-text-muted`, optional 12 px icon. For roles (Lead, Member, Instructor), "Read-only", retro Open/Closed, and the votes-left counter (`h-9 px-3 text-sm` there). Never uses status colors. |
+| `Avatar` | Circle with initials, `bg-primary/10 text-primary text-xs font-semibold`: 36 px on cards, 32 px in lists, 28 px in the top bar. Decorative (`aria-hidden`); the name is always shown next to it. |
 | `StatusLabel` | Icon + label from section 3. Size 16 px icon, `text-sm`. |
-| `MemberCard` | Avatar, name, GitHub login; four counts (commits, PRs, reviews, standups) in a 2×2 grid; `RequirementChecklist` below. No percentages, no ranking. |
+| `RequirementSummary` | One-row card, `rounded-lg border border-border bg-surface px-4 py-3 text-sm`: `StatusLabel` followed by one plain sentence. |
+| `MemberCard` | Avatar, name, GitHub login and role pill; four counts (commits, PRs, reviews, standups) as tiles in a 2×2 grid (`rounded-md border border-border p-3`, label `text-xs text-text-muted`, value `font-mono text-lg font-semibold tabular-nums`); `RequirementChecklist` below a divider. No percentages, no ranking. |
 | `RequirementChecklist` | One row per requirement using the format in section 3. |
+| `ActivityFeed` | Rows of a 16 px `text-muted` icon, actor and action in `text-sm`, a truncated `text-xs text-text-muted` summary, and the time in `font-mono text-xs`. |
 | `LiveIndicator` | Small dot + "Live" (`met` color) or "Reconnecting…" (`text-muted`). Dot pulses only if `prefers-reduced-motion` is not set. |
-| `StandupForm` | Three labeled textareas, 3 rows each, 1000-char limit with counter. Submit button text: "Post standup" or "Update today's standup". |
-| `RetroColumn` | Column title, item list sorted by votes, "Add item" input at the bottom. |
-| `VoteButton` | `ThumbsUp` icon + count. Filled when the user has voted. Disabled with tooltip "No votes left" when out of votes. |
-| `EmptyState` | Icon, one-line explanation, one action link. |
-| Forms | Visible label above every field; error text below in `missed` color with an icon, linked by `aria-describedby`. |
+| `StandupForm` | Three labeled textareas, 3 rows each, 1000-char limit with counter. Submit button text: "Post standup" or "Update today's standup". Once posted, a `met` `CircleCheck` note above the fields gives the time. |
+| `RetroColumn` | Column title, item count, item list sorted by votes (each item `rounded-md border border-border p-3`), "Add item" input with an "Add" button at the bottom. |
+| `VoteButton` | `ThumbsUp` icon + count, 36 px. When the user has voted: filled icon, `border-primary bg-primary/10 text-primary`. With no votes left: `aria-disabled`, 60% opacity, tooltip "No votes left". |
+| `Table` | `text-sm`, header row `text-xs font-medium text-text-muted` with a bottom border, rows split by `divide-border`, numbers `font-mono tabular-nums`. Wrapped in `overflow-x-auto` so it never widens the page. |
+| `Select` | Same as inputs: 36 px high, `rounded-md border border-border bg-surface px-2 text-sm`. |
+| `Dialog` | Native `<dialog>`, `rounded-lg border border-border bg-surface shadow-lg`, at most 36rem wide, backdrop `canvas` at 75% opacity. Title `text-lg font-semibold`, actions right-aligned: Cancel first, then the primary or destructive action. Focus returns to the trigger on close. |
+| `Toast` | The page's single `aria-live="polite"` region: bottom center, `rounded-md bg-text text-canvas px-4 py-3 text-sm`, clears after about 4.5 s. Used for confirmations ("Standup posted.") and live update announcements. |
+| `Tooltip` | `rounded-md bg-text text-canvas px-2 py-1 text-xs`, shown on hover and keyboard focus, linked with `aria-describedby`. |
+| `EmptyState` | Bordered box (`rounded-md border border-border p-6`), centered 24 px muted icon, one-line explanation, at most one action link. |
+| Forms | Visible label above every field; inputs 36 px high, `rounded-md border border-border bg-surface px-3 text-sm`, border turns `missed` on error; error text below in `missed` color with an icon, linked by `aria-describedby`. "(optional)" in `text-text-muted` after optional labels. |
+| Secrets and codes | URLs, tokens and SHAs in `font-mono text-xs`; copyable values in `rounded-md border border-border bg-canvas px-2 py-1` with a "Copy" button. A newly created token sits in `rounded-md border border-primary bg-primary/10 p-3` until dismissed. |
 
 ## 8. Motion
 
@@ -139,7 +154,7 @@ Never use font sizes outside this table.
 
 - Short, neutral, specific. "1 standup to go." not "You're behind!"
 - Sentence case for everything, including buttons ("Post standup").
-- Dates: "Nov 4" in UI, ISO `2026-11-04` in exports.
+- Dates: "Nov 4" in UI ("Tue, Nov 3" for day headings), ISO `2026-11-04` in exports. Times: "9:05 AM".
 - Never use words like "lazy", "slacking", "low contributor", "top contributor".
 
 ## 10. Accessibility checklist
