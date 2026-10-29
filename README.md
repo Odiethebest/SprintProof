@@ -64,8 +64,8 @@ SprintProof is built by two people:
 
 | Member | GitHub | Role |
 |---|---|---|
-| Ziqi (Odie) Yang | [@Odiethebest](https://github.com/Odiethebest) | _Set at Sprint 1 planning_ |
-| Yunhong Huang | [@santiaojun](https://github.com/santiaojun) | _Set at Sprint 1 planning_ |
+| Ziqi (Odie) Yang | [@Odiethebest](https://github.com/Odiethebest) | Product, design and app features |
+| Yunhong Huang | [@santiaojun](https://github.com/santiaojun) | Platform and core logic |
 
 Every task is a GitHub Issue on the project board (Backlog → Sprint Todo → In Progress → In Review → Done). Each issue gets its own branch (`feature/12-standup-form`, `fix/31-webhook-signature`), commits follow [Conventional Commits](https://www.conventionalcommits.org/) ending with the issue number, and every pull request needs CI passing plus an approving review from the other partner. No one merges their own PR, and we never squash-merge, because squashing erases the test-first commits. AI coding tools follow the same rules and commit or push only when the developer explicitly asks, under that developer's own git identity, so authorship in the git history stays accurate.
 
