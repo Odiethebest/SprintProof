@@ -2,6 +2,7 @@
 
 > Standups, sprint planning and retros in one place, GitHub activity synced automatically, and a clear record of who did what. Your sprint, on the record.
 
+[![CI](https://github.com/Odiethebest/SprintProof/actions/workflows/ci.yml/badge.svg)](https://github.com/Odiethebest/SprintProof/actions/workflows/ci.yml)
 [![Next.js](https://img.shields.io/badge/Next.js-16-000000?logo=nextdotjs)](https://nextjs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript)](https://www.typescriptlang.org/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql)](https://www.postgresql.org/)
