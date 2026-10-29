@@ -35,18 +35,18 @@ Show facts, not judgments. The app displays counts and whether requirements are 
 | Area | Choice | Version |
 | --- | --- | --- |
 | Runtime | Node.js | 20 LTS or later |
-| Framework | Next.js, App Router | 16.x |
-| UI | React | 19.x |
-| Language | TypeScript, `strict: true` | 5.x |
-| Styling | Tailwind CSS (tokens from `DESIGN.md`) | 4.x |
+| Framework | Next.js, App Router | 16.4 |
+| UI | React | 19.3 |
+| Language | TypeScript, `strict: true` | 5.9 |
+| Styling | Tailwind CSS (tokens from `DESIGN.md`) | 4.3 |
 | Database | PostgreSQL | 16+ |
-| ORM | Prisma | latest stable, pinned in `package.json` |
-| Auth | Auth.js (`next-auth`) with GitHub provider, JWT session strategy | 5.x |
-| Validation | Zod | latest stable |
-| Real-time | Pusher Channels (`pusher` server, `pusher-js` client) | latest stable |
-| GitHub API | Octokit (`@octokit/rest`) | latest stable |
-| Unit / integration tests | Vitest | latest stable |
-| E2E tests | Playwright + `@axe-core/playwright` | latest stable |
+| ORM | Prisma | pinned when added (#5) |
+| Auth | Auth.js (`next-auth`) with GitHub provider, JWT session strategy | pinned when added (#6) |
+| Validation | Zod | pinned when added (#7) |
+| Real-time | Pusher Channels (`pusher` server, `pusher-js` client) | pinned when added (#12) |
+| GitHub API | Octokit (`@octokit/rest`) | pinned when added (#11) |
+| Unit / integration tests | Vitest | 5.0 |
+| E2E tests | Playwright + `@axe-core/playwright` | 1.64 (Playwright); pinned when added (#17) (`@axe-core/playwright`) |
 | CI/CD | GitHub Actions, Vercel | — |
 
 ### Architecture
@@ -333,4 +333,5 @@ Standups, planning notes and retros for our own team are recorded in SprintProof
 | 2026-10-28 | Ziqi (Odie) Yang, Yunhong Huang | v1: initial rules | Project kickoff |
 | 2026-10-28 | Ziqi (Odie) Yang | AI tools may commit and push when the developer explicitly asks, under the developer's own git identity (§3) | Saves a hand-off step; authorship stays accurate because commits still use the developer's identity |
 | 2026-10-28 | Ziqi (Odie) Yang | Peer feedback rule (§1) also covers exports | Issue #1 review by Yunhong: AGENTS.md left out exports, so it didn't match PRD rule R7 |
+| 2026-10-28 | Yunhong Huang | Pinned tech stack versions from package.json | Issue #3 |
 | 2026-10-28 | Ziqi (Odie) Yang | §2 rewritten to match prototype screenshots | Issue #2: rules must describe the real mockups |

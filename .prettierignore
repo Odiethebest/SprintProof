@@ -1,0 +1,10 @@
+node_modules/
+.next/
+docs/
+scripts/
+.github/
+README.md
+AGENTS.md
+CLAUDE.md
+DESIGN.md
+LICENSE
