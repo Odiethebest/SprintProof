@@ -5,37 +5,69 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  checks:
-    name: Lint, typecheck and unit tests
+  lint-and-typecheck:
+    name: Lint and typecheck
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      # The Next.js app is scaffolded in Sprint 1. Until package.json exists the
-      # job passes without running app checks, so main and the README badge stay green.
-      - name: Note missing app scaffold
-        if: hashFiles('package.json') == ''
-        run: echo "::notice::No package.json yet, skipping app checks."
-
       - uses: actions/setup-node@v4
-        if: hashFiles('package.json') != ''
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       - name: Install dependencies
-        if: hashFiles('package.json') != ''
         run: npm ci
 
       - name: Lint
-        if: hashFiles('package.json') != ''
         run: npm run lint
 
       - name: Typecheck
-        if: hashFiles('package.json') != ''
         run: npm run typecheck
 
+  unit-tests:
+    name: Unit tests
+    needs: lint-and-typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
       - name: Unit tests
-        if: hashFiles('package.json') != ''
         run: npm test
+
+      - name: Integration tests
+        run: npm run test:integration
+
+  build:
+    name: Production build
+    needs: unit-tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
