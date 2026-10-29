@@ -47,20 +47,27 @@ if [[ "${DELETE_DEFAULT_LABELS:-}" == "1" ]]; then
 fi
 
 # ---------- Milestones ----------
+# GitHub keeps only the date part of due_on, stores it as 00:00 UTC and shows it in
+# the viewer's timezone, so a Nov 4 due date displays as Nov 3 in the US. Sending
+# noon UTC on the day after the sprint's last day makes it display as that last day.
+day_after() {
+  date -u -d "$1 +1 day" +%F 2>/dev/null || date -u -j -v+1d -f %F "$1" +%F
+}
+
 milestone() {
-  local title="$1" due="$2" desc="$3" existing
+  local title="$1" last_day="$2" desc="$3" existing
   existing=$(gh api "repos/$REPO/milestones?state=all&per_page=100" --jq ".[] | select(.title==\"$title\") | .number")
   if [[ -n "$existing" ]]; then
     echo "    exists: $title"
   else
-    gh api "repos/$REPO/milestones" -f title="$title" -f due_on="$due" -f description="$desc" >/dev/null
-    echo "    created: $title (due ${due%%T*})"
+    gh api "repos/$REPO/milestones" -f title="$title" -f due_on="$(day_after "$last_day")T12:00:00Z" -f description="$desc" >/dev/null
+    echo "    created: $title (due $last_day)"
   fi
 }
 
 echo "==> Milestones"
-milestone "Sprint 1" "2026-11-04T23:59:59Z" "Oct 29 – Nov 4, 2026. Goal: sign in, set up sprints, post standups, requirement status computed correctly."
-milestone "Sprint 2" "2026-11-11T23:59:59Z" "Nov 5 – Nov 11, 2026. Goal: live GitHub activity, retros, peer feedback, instructor view, export, public API, full CI/CD."
+milestone "Sprint 1" "2026-11-04" "Oct 29 – Nov 4, 2026. Goal: sign in, set up sprints, post standups, requirement status computed correctly."
+milestone "Sprint 2" "2026-11-11" "Nov 5 – Nov 11, 2026. Goal: live GitHub activity, retros, peer feedback, instructor view, export, public API, full CI/CD."
 
 # ---------- Issues ----------
 EXISTING_TITLES=$(gh issue list --state all --limit 500 --json title --jq '.[].title')
