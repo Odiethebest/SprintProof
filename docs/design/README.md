@@ -12,4 +12,6 @@ Mockup screenshots from the Claude Artifacts prototype. `AGENTS.md` §2 and `DES
 | `05-instructor.png` | Instructor review page |
 | `06-settings.png` | Settings |
 
-Prototype link: <!-- paste the Claude Artifact link here -->
+Prototype link: https://claude.ai/artifact/8pD8FHEnF6tMCAY5NpnhcX?sk=JzUKK2_xRdolq9rp1f31KQ
+
+The screenshots show the prototype with "Pretend today" set to Nov 3 and the light theme. `05-instructor.png` uses "View as: Instructor"; the others use the team lead's view. The control bar above the app (Pretend today, View as, Theme, Simulate GitHub review, Reset demo) exists only in the prototype and is not part of the product.
