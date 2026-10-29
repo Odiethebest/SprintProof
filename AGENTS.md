@@ -116,7 +116,7 @@ Main Prisma models: `User`, `Team`, `Membership` (role: `LEAD` | `MEMBER` | `INS
   - `AT_RISK`: not met, sprint still running, 2 or fewer days left
   - `MISSED`: not met, sprint has ended
 - **Retro votes:** each member gets 3 votes per retro, max 1 per item. The top 3 items in "To improve" by vote count (ties broken by earliest created) become `ActionItem`s for the next sprint.
-- **Peer feedback** is visible only to users with the `INSTRUCTOR` role. Never return it to `LEAD` or `MEMBER`, in any page or API response.
+- **Peer feedback** is visible only to users with the `INSTRUCTOR` role. Never return it to `LEAD` or `MEMBER`, in any page, API response or export.
 
 ### Naming conventions
 
@@ -318,3 +318,4 @@ Standups, planning notes and retros for our own team are recorded in SprintProof
 | --- | --- | --- | --- |
 | 2026-10-28 | Ziqi (Odie) Yang, Yunhong Huang | v1: initial rules | Project kickoff |
 | 2026-10-28 | Ziqi (Odie) Yang | AI tools may commit and push when the developer explicitly asks, under the developer's own git identity (§3) | Saves a hand-off step; authorship stays accurate because commits still use the developer's identity |
+| 2026-10-28 | Ziqi (Odie) Yang | Peer feedback rule (§1) also covers exports | Issue #1 review by Yunhong: AGENTS.md left out exports, so it didn't match PRD rule R7 |
