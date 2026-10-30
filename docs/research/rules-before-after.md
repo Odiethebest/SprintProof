@@ -30,11 +30,13 @@ Every round matched on everything except the rules files. Each round ran in its 
 | Model | Gemini 3.8 Flash High | Gemini 3.8 Flash High | Gemini 3.8 Flash High |
 | Review mode | Request Review | Request Review | Request Review |
 | Global/user rules in the IDE | None installed (no switch; only built-in skills) | None installed | None installed |
-| Knowledge / memories | Nothing to clear (no knowledge folder) | TBD (Yunhong to confirm) | No such setting found; the pilot and run2 conversations were deleted first |
+| Knowledge / memories | Nothing to clear (no knowledge folder) | No such setting found; nothing cleared. The pilot conversation was still in the IDE list | No such setting found; the pilot and run2 conversations were deleted first |
 | Fresh chat | Yes | Yes | Yes |
 | Hidden in the snapshot | `docs/research/`, `scripts/issues/` | `docs/research/`, `scripts/issues/` | `docs/research/`, `scripts/issues/` |
 
-- **Does Antigravity load `AGENTS.md` from the repo root on its own?** Not determined. The WITH prompt names `AGENTS.md` explicitly, so the agent reads it either way.
+- **Does Antigravity load `AGENTS.md` from the repo root on its own?** Per documentation, not verified. Antigravity's documentation (https://antigravity.google/docs/rules) lists a root `AGENTS.md` as a workspace rule, so the WITH rounds count it as loaded. The WITH prompt also names `AGENTS.md`, and both WITH agents read it:
+  - run2 log: "Analyzed AGENTS.md:L1-337"
+  - v2: "Following the Red checkpoint rule in AGENTS.md and CLAUDE.md" (`v2-agent-log.txt:24`)
 - **Full conditions:** IDE permission settings and the 19-rule denylist are in [`raw/conditions.md`](raw/conditions.md).
 
 ### Setup (every round)
@@ -265,12 +267,13 @@ All screenshots are in `docs/research/img/`.
 | [`without-prompt.png`](img/without-prompt.png) | Prompt and first response, without rules |
 | [`without-tree.png`](img/without-tree.png) | Files the AI created |
 | [`without-tests.png`](img/without-tests.png) | Test and coverage output (`npm test`: 57 passed) |
-| `with-prompt.png` | Prompt and first response, with rules v1 |
-| `with-tree.png` | Files the AI created |
-| `with-tests.png` | Test and coverage output |
-| `with-commits.png` | `git log` showing the failing-test commit before implementation |
-| `v2-red-checkpoint.png` | End of the v2 red-checkpoint message |
-| `v2-summary.png` | The agent's final summary, v2 |
+| [`with-tree.png`](img/with-tree.png) | v1 (`experiment/with-rules-run2`): files the AI created (`git log --stat`, `find`) |
+| [`with-tests.png`](img/with-tests.png) | v1: test and coverage output (17 passed; `src/lib/checks` 95.83% lines, 73.88% branches) |
+| [`with-commits.png`](img/with-commits.png) | v1: `git log --stat`, the failing-test commit `5249469` before `feat` `38d2aa0` |
+| [`v2-red-checkpoint.png`](img/v2-red-checkpoint.png) | v2: the end of the red-checkpoint message, after 19 failing tests |
+| [`v2-summary.png`](img/v2-summary.png) | v2: the agent's final summary |
+
+The three v1 screenshots were taken after run2, on the replayed branch in the real repo (10/29, 22:59–23:00). There is no `with-prompt.png`: section 4 quotes both prompts verbatim.
 
 ## 8. What the rules missed → changes in v2
 
@@ -357,6 +360,12 @@ With one run per condition, these are signals, not proof.
 
 **The v2 red checkpoint**
 - **"continue" came before the test commit.** By the time the developer committed the tests, the agent had already replaced the stub with the implementation. So `08cb96e` holds only the tests, and the red-state stub never reached git. The TDD order in git still holds, since the tests-only commit precedes the `feat` commit.
+- **The first test commit was rewritten.**
+  - At about 00:11, the developer committed all 8 files as the test commit (`b1aa067`) in the snapshot. Then they noticed the `src/` timestamps and rewrote it: `git reset --soft HEAD~1`, unstage `src/lib/checks`, and recommit.
+  - The result is `fc239c0` in the snapshot, `08cb96e` after `git am`. It holds the 6 `tests/` files, unchanged since 23:28. `b1aa067` is not in the history.
+  - Checking out `08cb96e` on its own fails on the missing module, not on assertions. The agent's red run against the stub (19 failing) is in the agent log and `v2-red-checkpoint.png`.
+- **The agent restored the test file once.** At 00:14 it ran `git checkout tests/unit/checks/requirement-status.test.ts`, putting the file back to its committed version. The `feat` commit doesn't touch `tests/`.
+- Source: Yunhong's v2 run notes (timeline and deviations).
 
 **Measurement**
 - **Approvals and time aren't comparable.**
