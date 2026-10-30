@@ -352,7 +352,7 @@ Each member gets 3 votes per retro, at most 1 per item. The top 3 "To improve" i
 
 ## Demo & Links
 
-- **Production:** _coming soon_
+- **Production:** https://sprintproof.vercel.app
 - **Demo video:** _coming soon_
 - **API docs:** [`docs/api/openapi.yaml`](docs/api/openapi.yaml)
 
