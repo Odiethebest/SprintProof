@@ -131,7 +131,7 @@ sprintproof/
 │   ├── research/
 │   ├── design/                       # prototype mockups
 │   └── sprints/
-│       ├── sprint-1/                 # planning.md, standups.md, retro.md
+│       ├── sprint-1/                 # planning.md, retro.md, standups/<name>.md
 │       └── sprint-2/
 ├── prisma/
 │   └── schema.prisma
@@ -296,7 +296,8 @@ Each team has a timezone (default `America/Los_Angeles`). Timestamps are stored 
 |---|---|
 | Standup | At most one per person per calendar day (team timezone). Editing the same day's standup updates it instead of adding another. |
 | Review | Distinct PRs reviewed per member (approved, changes requested, or commented). Three reviews on the same PR count as one. Reviews on your own PR never count. |
-| Commit | Deduplicated by SHA, attributed by mapped GitHub login, read from PR commit lists as well as the default branch. Bots are ignored. |
+| Commit | Deduplicated by SHA, attributed by mapped GitHub login, read from PR commit lists as well as the default branch. |
+| Bot | Activity of every type (commits, opened and merged PRs, reviews) from logins ending in `[bot]` is ignored. |
 
 ### Requirement status
 
@@ -306,6 +307,8 @@ Each team has a timezone (default `America/Los_Angeles`). Timestamps are stored 
 | On track | Not met, sprint still running, more than 2 days left |
 | At risk | Not met, sprint still running, 2 or fewer days left |
 | Missed | Not met, sprint has ended |
+
+Days left = the sprint's end date minus today's date, both in the team timezone, plus 1 (today counts). With a Nov 4 end: Nov 2 has 3 days left (On track), Nov 3 has 2 (At risk), Nov 4 has 1 (At risk).
 
 Status is always shown with an icon and a text label, never by color alone.
 

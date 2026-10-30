@@ -5,6 +5,11 @@ import nextTs from "eslint-config-next/typescript";
 const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
+  // AGENTS.md §1: non-null assertions only in tests; nextTs doesn't enforce it.
+  {
+    files: ["src/**/*.{ts,tsx}"],
+    rules: { "@typescript-eslint/no-non-null-assertion": "error" },
+  },
   // Override default ignores of eslint-config-next.
   globalIgnores([
     // Default ignores of eslint-config-next:

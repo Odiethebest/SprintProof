@@ -109,12 +109,14 @@ Main Prisma models: `User`, `Team`, `Membership` (role: `LEAD` | `MEMBER` | `INS
 - **Timezone:** each team has a timezone (default `America/Los_Angeles`). Store timestamps in UTC; compute sprint boundaries in the team timezone. A sprint runs from 00:00 on its start date through 23:59:59.999 on its end date, inclusive.
 - **Standups:** at most one counts per person per calendar day (team timezone). Editing the same day's standup updates it; it does not add a second one.
 - **Reviews:** a review counts when a member submits a review (approved, changes requested, or commented) on a PR authored by someone else. Count distinct PRs per reviewer: three review submissions on the same PR count as one. Reviews on your own PR never count.
-- **Commits:** deduplicate by SHA. Attribute by GitHub login mapped to a team member. Count commits from PR commit lists, not only the default branch, so merges don't hide authorship. Ignore bots (logins ending in `[bot]`).
+- **Commits:** deduplicate by SHA. Attribute by GitHub login mapped to a team member. Count commits from PR commit lists, not only the default branch, so merges don't hide authorship.
+- **Bots:** ignore activity of every type (commits, opened and merged PRs, reviews) from logins ending in `[bot]`.
 - **Requirement status** for each member and requirement, computed in `lib/checks/`:
   - `MET`: count ≥ required
   - `ON_TRACK`: not met, sprint still running, more than 2 days left
   - `AT_RISK`: not met, sprint still running, 2 or fewer days left
   - `MISSED`: not met, sprint has ended
+  - Days left = the sprint's end date minus today's date, both in the team timezone, plus 1 (today counts). With a Nov 4 end: Nov 2 has 3 days left (`ON_TRACK`), Nov 3 has 2 (`AT_RISK`), Nov 4 has 1 (`AT_RISK`).
 - **Retro votes:** each member gets 3 votes per retro, max 1 per item. The top 3 items in "To improve" by vote count (ties broken by earliest created) become `ActionItem`s for the next sprint.
 - **Peer feedback** is visible only to users with the `INSTRUCTOR` role. Never return it to `LEAD` or `MEMBER`, in any page, API response or export.
 
@@ -137,6 +139,7 @@ Main Prisma models: `User`, `Team`, `Membership` (role: `LEAD` | `MEMBER` | `INS
 ### Coding standards
 
 - TypeScript strict. No `any`; use `unknown` and narrow. No `@ts-ignore`. Non-null assertions (`!`) only in tests.
+- **One input shape per function.** Each exported function in `src/lib/` takes one options object (for #10: `{ sprint, members, standups, activities, now }`), typed from the domain model. No positional overloads. No second name for the same value, in the input or the result. No fallback chains across alternative field names. No defaults for fields the model requires (timezone, `standupsPerPerson`, `reviewsPerPerson`). Return plain arrays and objects; never attach properties to an array. If a field isn't named anywhere yet, pick one name, put it in the type, and list it under "Assumptions" in your summary.
 - Named exports everywhere, except where Next.js requires a default export (`page.tsx`, `layout.tsx`, etc.).
 - Small functions with early returns. If a function needs a comment to explain *what* it does, split it; comments explain *why*.
 - No `console.log` in committed code.
@@ -147,6 +150,12 @@ Main Prisma models: `User`, `Team`, `Membership` (role: `LEAD` | `MEMBER` | `INS
 <!-- Why: TDD must be visible in git history — the P2 rubric checks for failing-test commits before implementation. -->
 
 - **TDD is mandatory for `src/lib/` and API routes.** Red → green → refactor, as separate commits (see section 3).
+- **Red checkpoint (AI tools).**
+  1. Write failing tests for every acceptance criterion.
+  2. Run them and show the failing output.
+  3. End your turn. Don't run `git commit` and don't write implementation code until the developer replies; the developer makes the `test(...)` commit.
+
+  An acceptance criterion such as "failing tests committed before implementation" is met by that commit; it isn't a request for you to commit. Tests you add later go in their own `test(...)` commit, not the `feat` commit.
 - **Unit tests (Vitest)** for every function in `src/lib/`. Coverage goal: ≥ 90% lines for `src/lib/`, ≥ 80% overall.
 - **Integration tests (Vitest)** call route handlers directly against a real PostgreSQL test database (reset between test files). Mock only external services at their wrappers: `server/github-client.ts` and `server/realtime.ts`.
 - **E2E tests (Playwright)** cover the user flows in section 2. Each flow includes an `@axe-core/playwright` accessibility check with no serious or critical violations.
@@ -244,7 +253,7 @@ feat(checks): count distinct reviewed PRs per member (#7)   ← tests pass
 refactor(checks): extract sprint window helper (#7)         ← optional
 ```
 
-The `test(...)` commit must contain only tests (and factories/fixtures). AI tools: after writing failing tests, stop. The developer commits them, or explicitly asks the AI tool to, before implementation starts. AI tools commit or push only when the developer explicitly asks, under the developer's own git identity.
+The `test(...)` commit must contain only tests (and factories/fixtures). AI tools: follow the red checkpoint in §1 Testing strategy. AI tools commit or push only when the developer explicitly asks, under the developer's own git identity.
 
 ### Pull requests
 
@@ -262,7 +271,7 @@ The `test(...)` commit must contain only tests (and factories/fixtures). AI tool
 
 ### Sprint records
 
-Standups, planning notes and retros for our own team are recorded in SprintProof and exported into `docs/sprints/sprint-N/` (`planning.md`, `standups.md`, `retro.md`). Until the app can export, add entries to those files by hand on the day they happen.
+Standups, planning notes and retros for our own team are recorded in SprintProof and exported into `docs/sprints/sprint-N/`: `planning.md`, `retro.md`, and one standup file per person in `standups/`, named after them (`standups/ziqi.md`, `standups/yunhong.md`). Until the app can export, add entries to those files by hand on the day they happen.
 
 ---
 
@@ -335,3 +344,9 @@ Standups, planning notes and retros for our own team are recorded in SprintProof
 | 2026-10-28 | Ziqi (Odie) Yang | Peer feedback rule (§1) also covers exports | Issue #1 review by Yunhong: AGENTS.md left out exports, so it didn't match PRD rule R7 |
 | 2026-10-28 | Yunhong Huang | Pinned tech stack versions from package.json | Issue #3 |
 | 2026-10-28 | Ziqi (Odie) Yang | §2 rewritten to match prototype screenshots | Issue #2: rules must describe the real mockups |
+| 2026-10-29 | Yunhong Huang | One input shape per function in `src/lib/` (§1 Coding standards) | HW3 experiment, issue #10: both rounds hedged the interface (several calling conventions, aliased result fields, fallback field names), and most uncovered branches in run2 were those fallbacks |
+| 2026-10-29 | Yunhong Huang | Red checkpoint for AI tools (§1 Testing strategy; §3 points to it) | HW3 experiment, issue #10: run2 committed its failing tests itself and went on without stopping; 4 of the final 16 tests landed in the `feat` commit |
+| 2026-10-29 | Yunhong Huang | Days left defined in §1 Requirement status, PRD R5 and README Counting Rules (same wording) | HW3 experiment, issue #10: the without round failed 2 reference tests by using end − today; run2 got it right only after finding the mockup |
+| 2026-10-29 | Yunhong Huang | Lint: `@typescript-eslint/no-non-null-assertion` is an error in `src/` (`eslint.config.mjs`) | Tooling guardrail, not a wording change. HW3 experiment, issue #10: run2 put `nowArg!` in `src/` and lint passed, though §1 allows `!` only in tests |
+| 2026-10-29 | Yunhong Huang | Bots are ignored for every activity type (§1, PRD R4, README Counting Rules) | Issue #1 review by Yunhong, deferred until R1–R5 were unfrozen. Not an experiment finding: both rounds already ignored bot reviews |
+| 2026-10-29 | Yunhong Huang | Sprint records: one standup file per person under `docs/sprints/sprint-N/standups/` (§3, README) | Matches the repo's actual structure. Not an experiment finding |
