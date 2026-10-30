@@ -136,12 +136,13 @@ These rules are the source of truth for `src/lib/` and are mirrored in `AGENTS.m
 - **R1. Timezone.** Timestamps are stored in UTC. Sprint boundaries are computed in the team's timezone. A sprint runs from 00:00 on its start date through 23:59:59.999 on its end date, inclusive.
 - **R2. Standups.** At most one standup counts per person per calendar day in the team's timezone.
 - **R3. Reviews.** A review counts when a member submits a review (approved, changes requested, or commented) on a PR authored by someone else. Count distinct PRs per reviewer. Reviews on your own PR never count.
-- **R4. Commits.** Deduplicate by SHA; attribute by GitHub login mapped to a team member; count commits from PR commit lists so merges don't hide authorship; ignore bots (logins ending in `[bot]`).
+- **R4. Commits.** Deduplicate by SHA; attribute by GitHub login mapped to a team member; count commits from PR commit lists so merges don't hide authorship. Bots (logins ending in `[bot]`) are ignored for every activity type, not only commits.
 - **R5. Requirement status.**
   - `MET`: count ≥ required
   - `ON_TRACK`: not met, sprint running, more than 2 days left
   - `AT_RISK`: not met, sprint running, 2 or fewer days left
   - `MISSED`: not met, sprint ended
+  - Days left = the sprint's end date minus today's date, both in the team timezone, plus 1 (today counts). With a Nov 4 end: Nov 2 has 3 days left (`ON_TRACK`), Nov 3 has 2 (`AT_RISK`), Nov 4 has 1 (`AT_RISK`).
 - **R6. Retro votes.** 3 votes per member per retro, max 1 per item. The top 3 "To improve" items by votes (ties broken by earliest created) become action items for the next sprint.
 - **R7. Peer feedback visibility.** Readable only by `INSTRUCTOR`. Never returned to `LEAD` or `MEMBER` in any page, API response or export.
 
