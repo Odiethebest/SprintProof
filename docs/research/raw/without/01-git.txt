@@ -1,0 +1,23 @@
+$ git diff --stat c4f1718
+ src/lib/checks/index.ts                       |   4 +
+ src/lib/checks/pr-review-quota.ts             | 242 +++++++++++++
+ src/lib/checks/sprint-requirements.ts         | 245 +++++++++++++
+ src/lib/checks/standup-quota.ts               | 141 ++++++++
+ src/lib/checks/types.ts                       | 124 +++++++
+ src/lib/index.ts                              |   2 +
+ src/lib/sprints/boundaries.ts                 | 208 +++++++++++
+ src/lib/sprints/index.ts                      |   1 +
+ tests/factories/index.ts                      |   4 +
+ tests/factories/member.ts                     |  15 +
+ tests/factories/pr-review.ts                  |  18 +
+ tests/factories/sprint.ts                     |  17 +
+ tests/factories/standup.ts                    |  16 +
+ tests/unit/checks/pr-review-quota.test.ts     | 367 ++++++++++++++++++++
+ tests/unit/checks/sprint-requirements.test.ts | 481 ++++++++++++++++++++++++++
+ tests/unit/checks/standup-quota.test.ts       | 245 +++++++++++++
+ tests/unit/sprints/boundaries.test.ts         | 160 +++++++++
+ 17 files changed, 2290 insertions(+)
+
+$ git log --oneline 290efc0..HEAD
+cc2ef1f experiment: without-rules output (#10)
+c4f1718 chore: remove rules and experiment materials for HW3 baseline (#10)

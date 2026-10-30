@@ -1,0 +1,34 @@
+$ npx vitest run --coverage
+
+ RUN  v5.0.5 /Users/odieyang/Documents/Projects/Group Projects/SprintProof
+      Coverage enabled with v8
+
+
+ Test Files  5 passed (5)
+      Tests  57 passed (57)
+   Start at  14:00:54
+   Duration  726ms (import 90%, transform 7%, tests 2%, worker 2%)
+
+[34m % [39m[2mCoverage report from [22m[33mv8[39m
+-------------------|---------|----------|---------|---------|-------------------
+File               | % Stmts | % Branch | % Funcs | % Lines | Uncovered Line #s 
+-------------------|---------|----------|---------|---------|-------------------
+All files          |   98.61 |     84.8 |     100 |   98.59 |                   
+ src/lib/checks    |   99.36 |    82.47 |     100 |   99.35 |                   
+  ...view-quota.ts |   98.63 |    87.12 |     100 |   98.61 | 65                
+  ...quirements.ts |     100 |    77.77 |     100 |     100 | ...19,124-137,202 
+  standup-quota.ts |     100 |    76.92 |     100 |     100 | 38,101,106        
+ src/lib/sprints   |   95.65 |    82.85 |     100 |   95.55 |                   
+  boundaries.ts    |   95.65 |    82.85 |     100 |   95.55 | 64,81             
+ tests/factories   |     100 |    94.44 |     100 |     100 |                   
+  member.ts        |     100 |    88.88 |     100 |     100 | 7                 
+  standup.ts       |     100 |    84.61 |     100 |     100 | 9-10              
+-------------------|---------|----------|---------|---------|-------------------
+
+=============================== Coverage summary ===============================
+Statements   : 98.61% ( 214/217 )
+Branches     : 84.8% ( 240/283 )
+Functions    : 100% ( 27/27 )
+Lines        : 98.59% ( 210/213 )
+================================================================================
+exit=0

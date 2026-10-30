@@ -1,0 +1,2 @@
+$ grep -rn ": any\|as any" src/
+exit=1
