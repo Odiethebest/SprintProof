@@ -6,12 +6,15 @@
   This file is edited only by Yunhong Huang, so it never conflicts with the partner's file.
 -->
 
-### 2026-10-29
-**Yesterday:** Built the Next.js scaffold for #3 with Antigravity (#21, merged) and found that Next.js 16 rewrites AGENTS.md, so it's disabled with `agentRules: false`. Set up the multi-stage CI pipeline for #4 (#23, merged). Reviewed #19, #20 and #22, and left a design review on the prototype (#2).
-**Today:** Reviewed #24 and ran the E2E test locally; review Ziqi's standup (#25). Agree on the base commit with Ziqi (S1), then run the with-rules round of the #10 experiment.
-**Blockers:** None.
 
 ### 2026-11-01
 **Yesterday:** Since my Oct 29 entry: ran the v2 rerun of #10 and measured it; opened #30 with the v2 implementation (merged Oct 30, closed #10); wrote the HW3 report; reviewed #29 and #31.
 **Today:** Start #5: Prisma schema and database connection, with Supabase as the hosted database.
 **Blockers:** None.
+
+### 2026-10-29
+**Yesterday:** Built the Next.js scaffold for #3 with Antigravity (#21, merged) and found that Next.js 16 rewrites AGENTS.md, so it's disabled with `agentRules: false`. Set up the multi-stage CI pipeline for #4 (#23, merged). Reviewed #19, #20 and #22, and left a design review on the prototype (#2).
+**Today:** Reviewed #24 and ran the E2E test locally; review Ziqi's standup (#25). Agree on the base commit with Ziqi (S1), then run the with-rules round of the #10 experiment.
+**Blockers:** None.
+
+
