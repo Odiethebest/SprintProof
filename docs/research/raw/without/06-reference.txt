@@ -1,0 +1,50 @@
+$ npx vitest run tests/reference/
+
+ RUN  v5.0.5 /Users/odieyang/Documents/Projects/Group Projects/SprintProof
+
+ ❯ tests/reference/requirement-status.reference.test.ts (21 tests | 2 failed) 22ms
+   ❯ requirement status reference tests (issue #10) (21)
+     × marks unmet requirements ON_TRACK with 3 days left (today Nov 2, sprint ends Nov 4) 3ms
+     × works out today's date in the team timezone: 22:00 PST on Nov 2 still has 3 days left 1ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/reference/requirement-status.reference.test.ts > requirement status reference tests (issue #10) > marks unmet requirements ON_TRACK with 3 days left (today Nov 2, sprint ends Nov 4)
+AssertionError: expected 'AT_RISK' to be 'ON_TRACK' // Object.is equality
+
+Expected: "ON_TRACK"
+Received: "AT_RISK"
+
+ ❯ tests/reference/requirement-status.reference.test.ts:283:55
+    281|
+    282|     // Assert
+    283|     expect(resultFor(results, alice).standups.status).toBe("ON_TRACK");
+       |                                                       ^
+    284|     expect(resultFor(results, alice).reviews.status).toBe("ON_TRACK");
+    285|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  tests/reference/requirement-status.reference.test.ts > requirement status reference tests (issue #10) > works out today's date in the team timezone: 22:00 PST on Nov 2 still has 3 days left
+AssertionError: expected 'AT_RISK' to be 'ON_TRACK' // Object.is equality
+
+Expected: "ON_TRACK"
+Received: "AT_RISK"
+
+ ❯ tests/reference/requirement-status.reference.test.ts:296:55
+    294|
+    295|     // Assert
+    296|     expect(resultFor(results, alice).standups.status).toBe("ON_TRACK");
+       |                                                       ^
+    297|   });
+    298|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 19 passed (21)
+   Start at  14:01:40
+   Duration  546ms (import 89%, transform 6%, tests 5%)
+
+exit=1
