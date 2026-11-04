@@ -40,7 +40,7 @@ Show facts, not judgments. The app displays counts and whether requirements are 
 | Language | TypeScript, `strict: true` | 5.9 |
 | Styling | Tailwind CSS (tokens from `DESIGN.md`) | 4.3 |
 | Database | PostgreSQL | 16+ |
-| ORM | Prisma | pinned when added (#5) |
+| ORM | Prisma | 7.10.1 |
 | Auth | Auth.js (`next-auth`) with GitHub provider, JWT session strategy | pinned when added (#6) |
 | Validation | Zod | pinned when added (#7) |
 | Real-time | Pusher Channels (`pusher` server, `pusher-js` client) | pinned when added (#12) |
@@ -350,3 +350,4 @@ Standups, planning notes and retros for our own team are recorded in SprintProof
 | 2026-10-29 | Yunhong Huang | Lint: `@typescript-eslint/no-non-null-assertion` is an error in `src/` (`eslint.config.mjs`) | Tooling guardrail, not a wording change. HW3 experiment, issue #10: run2 put `nowArg!` in `src/` and lint passed, though §1 allows `!` only in tests |
 | 2026-10-29 | Yunhong Huang | Bots are ignored for every activity type (§1, PRD R4, README Counting Rules) | Issue #1 review by Yunhong, deferred until R1–R5 were unfrozen. Not an experiment finding: both rounds already ignored bot reviews |
 | 2026-10-29 | Yunhong Huang | Sprint records: one standup file per person under `docs/sprints/sprint-N/standups/` (§3, README) | Matches the repo's actual structure. Not an experiment finding |
+| 2026-11-04 | Ziqi (Odie) Yang | Pinned Prisma 7.10.1 in tech stack table (#5) | Issue #5: initial database schema and connection |
