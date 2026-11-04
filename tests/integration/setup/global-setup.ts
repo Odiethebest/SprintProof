@@ -11,7 +11,9 @@ export default async function globalSetup(): Promise<void> {
 
   const databaseUrl = process.env.DATABASE_URL;
   if (!databaseUrl) {
-    return;
+    throw new Error(
+      "DATABASE_URL is not set. Integration tests require a running PostgreSQL database.",
+    );
   }
 
   try {

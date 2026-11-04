@@ -10,8 +10,6 @@ if (fs.existsSync(envTestPath)) {
 }
 
 export async function clearDatabase(): Promise<void> {
-  if (!process.env.DATABASE_URL) return;
-
   await db.$executeRawUnsafe(`
     DO $$ DECLARE
       r RECORD;

@@ -1,9 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { db } from "@/server/db";
 
-const hasDb = Boolean(process.env.DATABASE_URL);
-
-describe.skipIf(!hasDb)("User CRUD integration", () => {
+describe("User CRUD integration", () => {
   it("creates a user and reads it back", async () => {
     const user = await db.user.create({
       data: {
