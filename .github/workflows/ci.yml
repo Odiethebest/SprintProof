@@ -8,9 +8,13 @@ on:
 permissions:
   contents: read
 
+# On a PR, a new push makes the previous run obsolete, so cancel it.
+# On main, every merge commit needs its own result: two merges a few seconds
+# apart cancelled the first run (15f23ec, cef11d7). Grouping main runs by SHA
+# also avoids GitHub dropping a pending run when a third merge queues behind it.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   lint-and-typecheck:
