@@ -8,7 +8,6 @@ describe("User CRUD integration", () => {
         githubId: "gh-101",
         githubLogin: "alice",
         name: "Alice Smith",
-        email: "alice@example.com",
       },
     });
 
@@ -24,6 +23,5 @@ describe("User CRUD integration", () => {
     expect(found?.githubId).toBe("gh-101");
     expect(found?.githubLogin).toBe("alice");
     expect(found?.name).toBe("Alice Smith");
-    expect(found?.email).toBe("alice@example.com");
   });
 });

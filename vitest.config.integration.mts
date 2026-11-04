@@ -15,6 +15,9 @@ export default defineConfig({
     globalSetup: ["tests/integration/setup/global-setup.ts"],
     setupFiles: ["tests/integration/setup/test-setup.ts"],
     fileParallelism: false,
+    // next-auth imports "next/server" without a file extension, which Node's ESM
+    // resolver rejects. Inlining lets Vite resolve it.
+    server: { deps: { inline: ["next-auth"] } },
   },
   resolve: {
     alias: {
