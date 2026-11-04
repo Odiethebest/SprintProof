@@ -29,9 +29,8 @@ erDiagram
   User {
     string id PK "cuid"
     string githubId UK "github_id"
-    string githubLogin UK "github_login"
+    string githubLogin UK "github_login, nullable"
     string name
-    string email UK
     string avatarUrl "avatar_url"
     datetime createdAt "created_at"
     datetime updatedAt "updated_at"
@@ -95,7 +94,7 @@ erDiagram
 
 ### Table Mappings & Key Constraints
 
-- **`users` (`User`)**: Unique constraints on `github_id`, `github_login`, and `email`.
+- **`users` (`User`)**: `github_id` is required and unique. `github_login` is unique but nullable: after a GitHub rename the login can move to another account, and the previous holder's login is cleared until they sign in again (#6). No email column (`docs/decisions/001-github-oauth-scopes.md`).
 - **`teams` (`Team`)**: Holds the team timezone (`timezone`, default `America/Los_Angeles`).
 - **`memberships` (`Membership`)**: Join model between `User` and `Team` with `role` (`LEAD`, `MEMBER`, `INSTRUCTOR`). Compound unique constraint on `[user_id, team_id]`.
 - **`sprints` (`Sprint`)**: Calendar boundaries stored as `@db.Date` (`start_date`, `end_date`), along with `standups_per_person` and `reviews_per_person`.

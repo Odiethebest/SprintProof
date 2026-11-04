@@ -22,10 +22,10 @@ enum ActivityType {
 
 model User {
   id          String       @id @default(cuid())
-  githubId    String?      @unique @map("github_id")
+  githubId    String       @unique @map("github_id")
+  // Nullable: after a GitHub rename the login can move to another account (#6).
   githubLogin String?      @unique @map("github_login")
   name        String?
-  email       String?      @unique
   avatarUrl   String?      @map("avatar_url")
   createdAt   DateTime     @default(now()) @map("created_at")
   updatedAt   DateTime     @updatedAt @map("updated_at")
