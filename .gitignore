@@ -15,6 +15,9 @@ build/
 next-env.d.ts
 *.tsbuildinfo
 
+# Generated code
+/src/generated/
+
 # Environment files: secrets never get committed; .env.example holds names only
 .env
 .env.*

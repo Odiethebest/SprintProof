@@ -1,0 +1,121 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum MembershipRole {
+  LEAD
+  MEMBER
+  INSTRUCTOR
+}
+
+enum ActivityType {
+  COMMIT
+  PR_OPENED
+  PR_MERGED
+  REVIEW
+}
+
+model User {
+  id          String       @id @default(cuid())
+  githubId    String?      @unique @map("github_id")
+  githubLogin String?      @unique @map("github_login")
+  name        String?
+  email       String?      @unique
+  avatarUrl   String?      @map("avatar_url")
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+  memberships Membership[]
+  standups    Standup[]
+
+  @@map("users")
+}
+
+model Team {
+  id          String       @id @default(cuid())
+  name        String
+  timezone    String       @default("America/Los_Angeles")
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+  memberships Membership[]
+  sprints     Sprint[]
+  activities  Activity[]
+
+  @@map("teams")
+}
+
+model Membership {
+  id        String         @id @default(cuid())
+  role      MembershipRole @default(MEMBER)
+  userId    String         @map("user_id")
+  teamId    String         @map("team_id")
+  createdAt DateTime       @default(now()) @map("created_at")
+  updatedAt DateTime       @updatedAt @map("updated_at")
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  team      Team           @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, teamId])
+  @@index([userId])
+  @@index([teamId])
+  @@map("memberships")
+}
+
+model Sprint {
+  id                String    @id @default(cuid())
+  teamId            String    @map("team_id")
+  name              String
+  startDate         DateTime  @db.Date @map("start_date")
+  endDate           DateTime  @db.Date @map("end_date")
+  standupsPerPerson Int       @default(3) @map("standups_per_person")
+  reviewsPerPerson  Int       @default(5) @map("reviews_per_person")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+  team              Team      @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  standups          Standup[]
+
+  @@index([teamId])
+  @@map("sprints")
+}
+
+model Standup {
+  id        String   @id @default(cuid())
+  sprintId  String   @map("sprint_id")
+  userId    String   @map("user_id")
+  date      DateTime @db.Date
+  yesterday String
+  today     String
+  blockers  String?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  sprint    Sprint   @relation(fields: [sprintId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([sprintId, userId, date])
+  @@index([sprintId])
+  @@index([userId])
+  @@map("standups")
+}
+
+model Activity {
+  id            String       @id @default(cuid())
+  teamId        String       @map("team_id")
+  type          ActivityType
+  actorLogin    String       @map("actor_login")
+  prNumber      Int?         @map("pr_number")
+  prAuthorLogin String?      @map("pr_author_login")
+  sha           String?
+  title         String?
+  occurredAt    DateTime     @map("occurred_at")
+  createdAt     DateTime     @default(now()) @map("created_at")
+  updatedAt     DateTime     @updatedAt @map("updated_at")
+  team          Team         @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, type, sha])
+  @@index([teamId])
+  @@index([actorLogin])
+  @@map("activities")
+}
