@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import type { NextAuthConfig } from "next-auth";
+import type { NextAuthConfig, Profile } from "next-auth";
 import { db } from "@/server/db";
 import { createAuthConfig } from "@/server/auth-config";
 import { createGithubProfile } from "../../factories";
@@ -40,7 +40,8 @@ function githubSignIn(
       token_type: "bearer",
       scope: "",
     },
-    profile,
+    // Auth.js types Profile.id as a string, but GitHub sends a number.
+    profile: profile as unknown as Profile,
     trigger: "signIn",
   };
 }
@@ -120,11 +121,11 @@ describe("jwt callback", () => {
       picture: AVATAR_URL,
     };
 
-    // Act
+    // Act: Auth.js passes `user` only at sign-in, though its type always requires it.
     const token = await callbacks().jwt!({
       token: existing,
       account: null,
-    } as JwtParams);
+    } as unknown as JwtParams);
 
     // Assert
     expect(token).toEqual(existing);
@@ -134,7 +135,8 @@ describe("jwt callback", () => {
 
 describe("session callback", () => {
   it("exposes the user id, GitHub login, name and avatar, and no email", async () => {
-    // Arrange
+    // Arrange: with JWT sessions Auth.js passes { session, token }; its type
+    // also requires the database-session fields.
     const params = {
       session: {
         user: {
@@ -150,7 +152,7 @@ describe("session callback", () => {
         name: "Octo Cat",
         picture: AVATAR_URL,
       },
-    } as SessionParams;
+    } as unknown as SessionParams;
 
     // Act
     const session = await callbacks().session!(params);
