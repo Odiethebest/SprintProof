@@ -24,6 +24,7 @@ erDiagram
   Team ||--o{ Membership : has
   Team ||--o{ Sprint : plans
   Team ||--o{ Activity : tracks
+  Team ||--o{ Invite : issues
   Sprint ||--o{ Standup : contains
 
   User {
@@ -39,6 +40,7 @@ erDiagram
   Team {
     string id PK "cuid"
     string name
+    string repoFullName UK "repo_full_name (owner/name)"
     string timezone "default America/Los_Angeles"
     datetime createdAt "created_at"
     datetime updatedAt "updated_at"
@@ -49,6 +51,17 @@ erDiagram
     enum role "LEAD | MEMBER | INSTRUCTOR"
     string userId FK "user_id"
     string teamId FK "team_id"
+    datetime createdAt "created_at"
+    datetime updatedAt "updated_at"
+  }
+
+  Invite {
+    string id PK "cuid"
+    string teamId FK "team_id"
+    enum role "MEMBER | INSTRUCTOR"
+    string token UK "random, base64url"
+    datetime expiresAt "expires_at (7 days after creation)"
+    datetime revokedAt "revoked_at, nullable"
     datetime createdAt "created_at"
     datetime updatedAt "updated_at"
   }
@@ -95,7 +108,8 @@ erDiagram
 ### Table Mappings & Key Constraints
 
 - **`users` (`User`)**: `github_id` is required and unique. `github_login` is unique but nullable: after a GitHub rename the login can move to another account, and the previous holder's login is cleared until they sign in again (#6). No email column (`docs/decisions/001-github-oauth-scopes.md`).
-- **`teams` (`Team`)**: Holds the team timezone (`timezone`, default `America/Los_Angeles`).
+- **`teams` (`Team`)**: Holds the connected GitHub repo (`repo_full_name`, GitHub's `owner/name`, unique so a webhook delivery maps to one team) and the team timezone (`timezone`, default `America/Los_Angeles`).
+- **`invites` (`Invite`)**: Invite links. `role` is `MEMBER` or `INSTRUCTOR`; a link works until `expires_at` (7 days after creation) unless `revoked_at` is set. At most one active link per team and role: creating a new one revokes the previous one. `token` is stored as is rather than hashed so the lead can copy the link again from Settings (#7).
 - **`memberships` (`Membership`)**: Join model between `User` and `Team` with `role` (`LEAD`, `MEMBER`, `INSTRUCTOR`). Compound unique constraint on `[user_id, team_id]`.
 - **`sprints` (`Sprint`)**: Calendar boundaries stored as `@db.Date` (`start_date`, `end_date`), along with `standups_per_person` and `reviews_per_person`.
 - **`standups` (`Standup`)**: Calendar day stored as `@db.Date` (`date`) in team timezone with compound unique constraint `@@unique([sprint_id, user_id, date])` ensuring at most one standup per person per day.

@@ -26,11 +26,15 @@ export async function insertUser(overrides: UserRecordOverrides = {}) {
 }
 
 export async function insertTeam(
-  overrides: { name?: string; timezone?: string } = {}
+  overrides: { name?: string; repoFullName?: string; timezone?: string } = {}
 ) {
   const n = recordSeq++;
   return db.team.create({
-    data: { name: `Team ${n}`, ...overrides },
+    data: {
+      name: `Team ${n}`,
+      repoFullName: `owner${n}/repo${n}`,
+      ...overrides,
+    },
   });
 }
 
