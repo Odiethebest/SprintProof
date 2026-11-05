@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-const PROTECTED_PREFIXES = ["/teams", "/review"] as const;
+const PROTECTED_PREFIXES = ["/teams", "/review", "/invite"] as const;
 const SIGN_IN_PATH = "/signin";
 const HOME_PATH = "/";
 // Resolves relative callbacks so a different origin shows up as a mismatch.
@@ -12,6 +12,7 @@ const PAGE_NAMES: ReadonlyArray<{ pattern: RegExp; page: string }> = [
   { pattern: /^\/teams\/[^/]+\/sprints\/[^/]+\/retro$/, page: "the retro" },
   { pattern: /^\/teams\/[^/]+\/settings$/, page: "settings" },
   { pattern: /^\/review\/[^/]+$/, page: "the review page" },
+  { pattern: /^\/invite\/[^/]+$/, page: "your invite" },
 ];
 
 const callbackUrlSchema = z
