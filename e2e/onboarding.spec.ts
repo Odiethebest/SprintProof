@@ -1,0 +1,249 @@
+import { expect, test, type Browser, type Page } from "@playwright/test";
+import AxeBuilder from "@axe-core/playwright";
+import { signInAsTestUser, type TestUser } from "./helpers/auth";
+
+// Needs the dev server started with E2E_TEST_AUTH=true, AUTH_SECRET and DATABASE_URL.
+// Data stays in the database between runs, so every team gets its own repo.
+const LEAD: TestUser = { login: "ziqi-e2e", name: "Ziqi (Odie) Yang" };
+const PARTNER: TestUser = { login: "yunhong-e2e", name: "Yunhong Huang" };
+
+function uniqueRepo(): string {
+  return `e2e-${Date.now()}-${Math.floor(Math.random() * 1000)}/sprintproof`;
+}
+
+async function expectNoBlockingViolations(page: Page) {
+  const results = await new AxeBuilder({ page }).analyze();
+  const blocking = results.violations.filter(
+    (violation) =>
+      violation.impact === "serious" || violation.impact === "critical"
+  );
+  expect(blocking).toEqual([]);
+}
+
+async function createTeam(page: Page, name: string): Promise<void> {
+  await page.goto("/teams/new");
+  await page.getByLabel("Team name").fill(name);
+  await page.getByLabel("GitHub repo").fill(uniqueRepo());
+  await page.getByRole("button", { name: "Create team" }).click();
+  await expect(page).toHaveURL(/\/teams\/[^/]+\/settings$/);
+}
+
+async function createMemberLink(page: Page): Promise<string> {
+  const panel = page.getByRole("region", { name: "Member invite link" });
+  await panel.getByRole("button", { name: "Create link" }).click();
+  const url = panel.getByText(/\/invite\//);
+  await expect(url).toBeVisible();
+  return (await url.textContent()) ?? "";
+}
+
+async function signedInPage(browser: Browser, user: TestUser): Promise<Page> {
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  await signInAsTestUser(page, user);
+  return page;
+}
+
+test.describe("Onboarding", () => {
+  test("creates a team and makes the creator its lead", async ({ page }) => {
+    // Arrange
+    await signInAsTestUser(page, LEAD);
+    await page.goto("/");
+
+    // Act
+    await page.getByRole("link", { name: "Create a team" }).click();
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Create a team" })
+    ).toBeVisible();
+    await expect(page.getByLabel("Team timezone")).toHaveValue(
+      "America/Los_Angeles"
+    );
+    await page.getByLabel("Team name").fill("Onboarding team");
+    await page.getByLabel("GitHub repo").fill(uniqueRepo());
+    await page.getByRole("button", { name: "Create team" }).click();
+
+    // Assert
+    await expect(page).toHaveURL(/\/teams\/[^/]+\/settings$/);
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Settings" })
+    ).toBeVisible();
+    const members = page.getByRole("region", { name: "Members and invites" });
+    await expect(members.getByRole("listitem")).toHaveCount(1);
+    await expect(members.getByRole("listitem")).toContainText(
+      "Ziqi (Odie) Yang (you)"
+    );
+    await expect(members.getByRole("listitem")).toContainText("Lead");
+  });
+
+  test("shows field errors for a repo that isn't owner/name", async ({
+    page,
+  }) => {
+    // Arrange
+    await signInAsTestUser(page, LEAD);
+    await page.goto("/teams/new");
+
+    // Act
+    await page.getByLabel("Team name").fill("Bad repo team");
+    await page.getByLabel("GitHub repo").fill("https://github.com/a/b");
+    await page.getByRole("button", { name: "Create team" }).click();
+
+    // Assert
+    const repo = page.getByLabel("GitHub repo");
+    await expect(repo).toHaveAttribute("aria-invalid", "true");
+    await expect(repo).toHaveAccessibleDescription(
+      /Use the owner\/name format, for example Odiethebest\/SprintProof\./
+    );
+    await expect(page).toHaveURL(/\/teams\/new$/);
+  });
+
+  test("lets a partner join with the member link, once", async ({
+    page,
+    browser,
+  }) => {
+    // Arrange
+    await signInAsTestUser(page, LEAD);
+    await createTeam(page, "Partner team");
+    const inviteUrl = await createMemberLink(page);
+    const partner = await signedInPage(browser, PARTNER);
+
+    // Act
+    await partner.goto(inviteUrl);
+    await expect(
+      partner.getByRole("heading", { level: 1, name: "Join Partner team" })
+    ).toBeVisible();
+    await expect(partner.getByText("You'll join as a member.")).toBeVisible();
+    await partner.getByRole("button", { name: "Join team" }).click();
+
+    // Assert
+    await expect(partner).toHaveURL(/\/$/);
+    const team = partner.getByRole("link", { name: /Partner team/ });
+    await expect(team.first()).toContainText("Member");
+    await partner.goto(inviteUrl);
+    await expect(
+      partner.getByRole("heading", {
+        level: 1,
+        name: "You're already on Partner team",
+      })
+    ).toBeVisible();
+    await page.reload();
+    const members = page.getByRole("region", { name: "Members and invites" });
+    await expect(members.getByRole("listitem")).toHaveCount(2);
+  });
+
+  test("shows a clear error for a revoked link", async ({ page, browser }) => {
+    // Arrange
+    await signInAsTestUser(page, LEAD);
+    await createTeam(page, "Revoke team");
+    const inviteUrl = await createMemberLink(page);
+    const panel = page.getByRole("region", { name: "Member invite link" });
+
+    // Act
+    await panel.getByRole("button", { name: "Revoke" }).click();
+    await expect(
+      panel.getByRole("button", { name: "Create link" })
+    ).toBeVisible();
+    const partner = await signedInPage(browser, PARTNER);
+    await partner.goto(inviteUrl);
+
+    // Assert
+    await expect(
+      partner.getByRole("heading", {
+        level: 1,
+        name: "This invite link can't be used",
+      })
+    ).toBeVisible();
+    await expect(
+      partner.getByText(
+        "This invite link was revoked. Ask your team lead for a new one."
+      )
+    ).toBeVisible();
+  });
+
+  test("shows a clear error for an unknown link", async ({ page }) => {
+    // Arrange
+    await signInAsTestUser(page, PARTNER);
+
+    // Act
+    await page.goto("/invite/not-a-real-token");
+
+    // Assert
+    await expect(
+      page.getByText(
+        "This invite link doesn't work. Check that you copied the whole link, or ask your team lead for a new one."
+      )
+    ).toBeVisible();
+  });
+
+  test("sends a signed-out visitor from an invite link to sign-in", async ({
+    page,
+  }) => {
+    // Act
+    await page.goto("/invite/some-token");
+
+    // Assert
+    await expect(page).toHaveURL(
+      /\/signin\?callbackUrl=%2Finvite%2Fsome-token$/
+    );
+    await expect(
+      page.getByText("Sign in to continue to your invite.")
+    ).toBeVisible();
+  });
+
+  test("doesn't show invite links to a member", async ({ page, browser }) => {
+    // Arrange
+    await signInAsTestUser(page, LEAD);
+    await createTeam(page, "Member view team");
+    const inviteUrl = await createMemberLink(page);
+    const settingsUrl = page.url();
+    const partner = await signedInPage(browser, PARTNER);
+    await partner.goto(inviteUrl);
+    await partner.getByRole("button", { name: "Join team" }).click();
+    await expect(partner).toHaveURL(/\/$/);
+
+    // Act
+    await partner.goto(settingsUrl);
+
+    // Assert
+    const members = partner.getByRole("region", {
+      name: "Members and invites",
+    });
+    await expect(members.getByRole("listitem")).toHaveCount(2);
+    await expect(
+      partner.getByRole("region", { name: "Member invite link" })
+    ).toHaveCount(0);
+    await expect(partner.getByRole("button", { name: "Revoke" })).toHaveCount(
+      0
+    );
+  });
+
+  test("has no serious or critical accessibility violations", async ({
+    page,
+    browser,
+  }) => {
+    // Arrange
+    await signInAsTestUser(page, LEAD);
+
+    // Act and assert: home, create team, settings, invite page
+    await page.goto("/");
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Your teams" })
+    ).toBeVisible();
+    await expectNoBlockingViolations(page);
+
+    await page.goto("/teams/new");
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Create a team" })
+    ).toBeVisible();
+    await expectNoBlockingViolations(page);
+
+    await createTeam(page, "Axe team");
+    const inviteUrl = await createMemberLink(page);
+    await expectNoBlockingViolations(page);
+
+    const partner = await signedInPage(browser, PARTNER);
+    await partner.goto(inviteUrl);
+    await expect(
+      partner.getByRole("button", { name: "Join team" })
+    ).toBeVisible();
+    await expectNoBlockingViolations(partner);
+  });
+});
