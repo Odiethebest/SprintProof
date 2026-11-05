@@ -3,16 +3,20 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { ChevronDown, LogOut } from "lucide-react";
 import { signOut } from "next-auth/react";
+import type { TeamRole } from "@/lib/auth/team-access";
+import { RolePill } from "@/components/teams/role-pill";
 import { Avatar } from "@/components/ui/avatar";
 
 interface UserMenuProps {
   name: string;
   githubLogin: string | null;
+  // The role on the team whose page is open; null outside team pages.
+  role: TeamRole | null;
 }
 
 // A disclosure (button + panel), not an ARIA menu: it holds one action, so
-// arrow-key menu semantics would add nothing. Role pill comes with team pages (#7).
-export function UserMenu({ name, githubLogin }: UserMenuProps) {
+// arrow-key menu semantics would add nothing.
+export function UserMenu({ name, githubLogin, role }: UserMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
   const panelId = useId();
@@ -57,7 +61,7 @@ export function UserMenu({ name, githubLogin }: UserMenuProps) {
         onClick={() => setIsOpen((open) => !open)}
         className="inline-flex h-9 items-center gap-2 rounded-md px-2 text-sm transition-colors duration-150 ease-out hover:bg-text/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
       >
-        <Avatar name={name} />
+        <Avatar name={name} size="sm" />
         <span className="sr-only sm:not-sr-only">{name}</span>
         <ChevronDown size={16} aria-hidden="true" className="text-text-muted" />
       </button>
@@ -72,6 +76,11 @@ export function UserMenu({ name, githubLogin }: UserMenuProps) {
               <p className="font-mono text-xs text-text-muted">
                 @{githubLogin}
               </p>
+            )}
+            {role && (
+              <div>
+                <RolePill role={role} />
+              </div>
             )}
           </div>
           <button
