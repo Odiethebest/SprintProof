@@ -7,6 +7,6 @@
 -->
 
 ### 2026-11-05
-**Yesterday:**
-**Today:**
-**Blockers:** None
+**Yesterday:** Opened #40 with the sprint validation logic for #8 (merged), added my feedback to the Sprint 1 retro (#39) and reviewed the Sprint 2 plan (#42).
+**Today:** Set up the Supabase preview and production databases for #17 and applied the migrations to both; reviewed #44 (#7). Next: decision record 002, then the rest of #8.
+**Blockers:** None.

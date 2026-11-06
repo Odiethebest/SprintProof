@@ -68,25 +68,25 @@ src/
 │       ├── auth/[...nextauth]/
 │       ├── webhooks/github/      # GitHub webhook receiver
 │       └── v1/                   # public, documented REST API (docs/api/openapi.yaml)
-│           ├── teams/            # create a team; [teamId]/invites/ create and revoke links
+│           ├── teams/            # create a team; [teamId]/invites/ create and revoke links; [teamId]/sprints/ (route.ts and [sprintId]/route.ts)
 │           └── memberships/      # join a team with an invite token
 ├── components/
 │   ├── ui/                       # generic primitives (Button, Card, Badge...)
 │   ├── layout/                   # AppHeader (the shared top bar), PageHeader, PageLoading
-│   └── <feature>/                # feature components: auth/, teams/, dashboard/, standups/, retro/...
+│   └── <feature>/                # feature components: auth/, teams/, sprints/, dashboard/, standups/, retro/...
 ├── lib/                          # PURE business logic — no I/O
 │   ├── auth/                     # sign-in redirects, team role checks, test sign-in input
 │   ├── teams/                    # create-team input (name, owner/name repo, timezone)
 │   ├── invites/                  # invite link expiry and validity
 │   ├── checks/                   # requirement checks (standups, reviews per person)
 │   ├── stats/                    # contribution counts per member per sprint
-│   ├── sprints/                  # sprint date math, timezone boundaries
+│   ├── sprints/                  # sprint date math, timezone boundaries (validate-sprint.ts, sprint-dates.ts, sprint-body.ts)
 │   ├── retro/                    # vote tallying, action item selection
 │   ├── github/                   # GitHub login and profile rules, webhook payload → Activity mapping
 │   └── export/                   # sprint summary → Markdown
 ├── server/                       # everything with side effects
 │   ├── db.ts                     # single Prisma client
-│   ├── repositories/             # all database reads/writes
+│   ├── repositories/             # all database reads/writes (sprints.ts)
 │   ├── auth.ts                   # requireTeamRole()
 │   ├── auth-config.ts            # Auth.js config: GitHub provider, test sign-in
 │   ├── auth-session.ts           # getSession(), getSessionUserId(); tests mock this
@@ -158,6 +158,7 @@ Main Prisma models: `User`, `Team`, `Membership` (role: `LEAD` | `MEMBER` | `INS
 
 - TypeScript strict. No `any`; use `unknown` and narrow. No `@ts-ignore`. Non-null assertions (`!`) only in tests.
 - **One input shape per function.** Each exported function in `src/lib/` takes one options object (for #10: `{ sprint, members, standups, activities, now }`), typed from the domain model. No positional overloads. No second name for the same value, in the input or the result. No fallback chains across alternative field names. No defaults for fields the model requires (timezone, `standupsPerPerson`, `reviewsPerPerson`). Return plain arrays and objects; never attach properties to an array. If a field isn't named anywhere yet, pick one name, put it in the type, and list it under "Assumptions" in your summary.
+- **Calendar dates in `src/lib/`:** new code in `src/lib/` takes calendar dates as `'YYYY-MM-DD'` strings, with `src/lib/checks/requirement-status.ts` as the known exception. Sprint dates are `@db.Date` in the database; map them to `'YYYY-MM-DD'` strings in the server layer.
 - Named exports everywhere, except where Next.js requires a default export (`page.tsx`, `layout.tsx`, etc.).
 - Small functions with early returns. If a function needs a comment to explain *what* it does, split it; comments explain *why*.
 - No `console.log` in committed code.
@@ -371,3 +372,4 @@ Standups, planning notes and retros for our own team are recorded in SprintProof
 | 2026-11-04 | Ziqi (Odie) Yang | Pinned Prisma 7.10.1 in tech stack table (#5) | Issue #5: initial database schema and connection |
 | 2026-11-04 | Ziqi (Odie) Yang | Pinned `next-auth` 5.0.0-beta.32, Zod 4.6.7 and `@axe-core/playwright` 4.14.0 in the tech stack table; added `lucide-react` 1.60.0 (#6) | Issue #6: sign-in needs Auth.js, Zod for the test credentials input, icons for the sign-in page and user menu, and an axe check in its E2E spec. Zod and axe were planned for #7 and #17 |
 | 2026-11-05 | Ziqi (Odie) Yang | Architecture tree lists the files added in #6 and #7; Key patterns adds the route handler helpers in `server/api-response.ts`; integration tests may mock `server/auth-session.ts` (#7) | Yunhong's review of PR #44: the rules should match the code |
+| 2026-11-05 | Yunhong Huang | New code in `src/lib/` takes calendar dates as `'YYYY-MM-DD'` strings, with `src/lib/checks/requirement-status.ts` as the exception; sprint dates mapped to strings in server layer (#8) | Prevents timezone and UTC midnight offset bugs when passing `@db.Date` values into pure business logic |
