@@ -1,14 +1,16 @@
 import { z } from "zod";
-import { validateSprint, type SprintInput } from "@/lib/sprints";
+import {
+  updateSprintSchema,
+  validateSprint,
+  type SprintInput,
+} from "@/lib/sprints";
 import {
   accessDeniedResponse,
   errorResponse,
   parseInput,
   parseJsonBody,
-  unauthenticatedResponse,
 } from "@/server/api-response";
-import { getSessionUserId } from "@/server/auth-session";
-import { findMembershipRole } from "@/server/repositories/memberships";
+import { requireTeamRole } from "@/server/auth";
 import {
   findSprintById,
   listSprints,
@@ -20,7 +22,7 @@ const paramsSchema = z.object({
   sprintId: z.string().min(1),
 });
 
-// PATCH: Updates a sprint. Lead only. Non-leads get 403, outsiders get 404.
+// PATCH: Updates a sprint. Lead only. Fields left out keep their stored value.
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ teamId: string; sprintId: string }> }
@@ -33,24 +35,9 @@ export async function PATCH(
     return parsedParams.response;
   }
   const { teamId, sprintId } = parsedParams.data;
-  const userId = await getSessionUserId();
-  if (userId === null) {
-    return unauthenticatedResponse();
-  }
-  const membership = await findMembershipRole({ userId, teamId });
-  if (membership === null) {
-    return errorResponse({
-      status: 404,
-      code: "TEAM_NOT_FOUND",
-      message: "This team does not exist.",
-    });
-  }
-  if (membership.role !== "LEAD") {
-    return accessDeniedResponse({
-      isAllowed: false,
-      status: 403,
-      code: "FORBIDDEN",
-    });
+  const access = await requireTeamRole(teamId, ["LEAD"]);
+  if (!access.isAllowed) {
+    return accessDeniedResponse(access);
   }
   const existingSprint = await findSprintById({ teamId, sprintId });
   if (existingSprint === null) {
@@ -62,29 +49,21 @@ export async function PATCH(
   }
   const parsedBody = await parseJsonBody({
     request,
-    schema: z.record(z.string(), z.unknown()),
+    schema: updateSprintSchema,
   });
   if (!parsedBody.isValid) {
     return parsedBody.response;
   }
-  const body = parsedBody.data;
+  const changes = parsedBody.data;
   const sprintInput: SprintInput = {
     id: sprintId,
-    name: typeof body.name === "string" ? body.name : existingSprint.name,
-    startDate:
-      typeof body.startDate === "string"
-        ? body.startDate
-        : existingSprint.startDate,
-    endDate:
-      typeof body.endDate === "string" ? body.endDate : existingSprint.endDate,
+    name: changes.name ?? existingSprint.name,
+    startDate: changes.startDate ?? existingSprint.startDate,
+    endDate: changes.endDate ?? existingSprint.endDate,
     standupsPerPerson:
-      body.standupsPerPerson === undefined
-        ? existingSprint.standupsPerPerson
-        : (body.standupsPerPerson as number),
+      changes.standupsPerPerson ?? existingSprint.standupsPerPerson,
     reviewsPerPerson:
-      body.reviewsPerPerson === undefined
-        ? existingSprint.reviewsPerPerson
-        : (body.reviewsPerPerson as number),
+      changes.reviewsPerPerson ?? existingSprint.reviewsPerPerson,
   };
 
   const existingSprints = await listSprints({ teamId });
