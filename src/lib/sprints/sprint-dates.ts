@@ -1,0 +1,95 @@
+import { TZDate } from "@date-fns/tz";
+import { endOfDay, startOfDay } from "date-fns";
+
+export interface SprintDateRange {
+  startDate: string;
+  endDate: string;
+}
+
+export interface SprintSummary extends SprintDateRange {
+  id: string;
+  teamId: string;
+  name: string;
+  standupsPerPerson: number;
+  reviewsPerPerson: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface IsWithinSprintOptions {
+  sprint: SprintDateRange;
+  instant: Date;
+  timeZone: string;
+}
+
+function parseDateParts(dateStr: string): [number, number, number] {
+  const [yearStr, monthStr, dayStr] = dateStr.split("-");
+  return [Number(yearStr), Number(monthStr), Number(dayStr)];
+}
+
+function getSprintStartBoundary(startDateStr: string, timeZone: string): Date {
+  const [year, month, day] = parseDateParts(startDateStr);
+  return startOfDay(new TZDate(year, month - 1, day, timeZone));
+}
+
+function getSprintEndBoundary(endDateStr: string, timeZone: string): Date {
+  const [year, month, day] = parseDateParts(endDateStr);
+  return endOfDay(new TZDate(year, month - 1, day, timeZone));
+}
+
+export function isWithinSprint({
+  sprint,
+  instant,
+  timeZone,
+}: IsWithinSprintOptions): boolean {
+  const start = getSprintStartBoundary(sprint.startDate, timeZone);
+  const end = getSprintEndBoundary(sprint.endDate, timeZone);
+  const time = instant.getTime();
+  return time >= start.getTime() && time <= end.getTime();
+}
+
+export interface GetCurrentSprintOptions<
+  T extends SprintDateRange = SprintDateRange,
+> {
+  sprints: readonly T[];
+  now: Date;
+  timeZone: string;
+}
+
+export function getCurrentSprint<T extends SprintDateRange>({
+  sprints,
+  now,
+  timeZone,
+}: GetCurrentSprintOptions<T>): T | null {
+  for (const sprint of sprints) {
+    if (isWithinSprint({ sprint, instant: now, timeZone })) {
+      return sprint;
+    }
+  }
+  return null;
+}
+
+export type SprintState = "UPCOMING" | "CURRENT" | "ENDED";
+
+export interface GetSprintStateOptions {
+  sprint: SprintDateRange;
+  now: Date;
+  timeZone: string;
+}
+
+export function getSprintState({
+  sprint,
+  now,
+  timeZone,
+}: GetSprintStateOptions): SprintState {
+  const start = getSprintStartBoundary(sprint.startDate, timeZone);
+  const end = getSprintEndBoundary(sprint.endDate, timeZone);
+  const time = now.getTime();
+  if (time < start.getTime()) {
+    return "UPCOMING";
+  }
+  if (time > end.getTime()) {
+    return "ENDED";
+  }
+  return "CURRENT";
+}
