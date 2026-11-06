@@ -83,8 +83,39 @@ test.describe("Sprints and requirements", () => {
     await expect(currentSprintRow).toContainText("Current");
     await expect(currentSprintRow).toContainText("3");
     await expect(currentSprintRow).toContainText("5");
+    await expect(
+      currentSprintRow.getByRole("button", { name: "Edit Sprint 1" })
+    ).toBeVisible();
 
     await expectNoBlockingViolations(page);
+  });
+
+  test("start and end date inputs in the sprint form are type='date'", async ({
+    page,
+  }) => {
+    // Arrange
+    await signInAsTestUser(page, LEAD);
+    await createTeam(page, "Date Input Team");
+
+    const section = page.getByRole("region", {
+      name: "Sprints and requirements",
+    });
+
+    // Act: click Add sprint
+    await section.getByRole("button", { name: "Add sprint" }).click();
+    await expect(
+      section.getByRole("heading", { level: 3, name: "New sprint" })
+    ).toBeVisible();
+
+    // Assert
+    await expect(section.getByLabel("Start date")).toHaveAttribute(
+      "type",
+      "date"
+    );
+    await expect(section.getByLabel("End date")).toHaveAttribute(
+      "type",
+      "date"
+    );
   });
 
   test("shows field errors on client when end date is before start date", async ({
@@ -154,6 +185,7 @@ test.describe("Sprints and requirements", () => {
 
     await partnerPage.goto(inviteUrlText);
     await partnerPage.getByRole("button", { name: /join/i }).click();
+    await expect(partnerPage).toHaveURL(/\/$/);
 
     // Partner navigates to settings
     await partnerPage.goto(`/teams/${teamId}/settings`);
@@ -170,7 +202,10 @@ test.describe("Sprints and requirements", () => {
       partnerSection.getByRole("button", { name: "Add sprint" })
     ).toHaveCount(0);
     await expect(
-      partnerSection.getByRole("button", { name: "Edit" })
+      partnerSection.getByRole("button", { name: "Edit Sprint Alpha" })
+    ).toHaveCount(0);
+    await expect(
+      partnerSection.getByRole("button", { name: /edit/i })
     ).toHaveCount(0);
 
     await expectNoBlockingViolations(partnerPage);
