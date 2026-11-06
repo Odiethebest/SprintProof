@@ -136,7 +136,7 @@ These rules are the source of truth for `src/lib/` and are mirrored in `AGENTS.m
 - **R1. Timezone.** Timestamps are stored in UTC. Sprint boundaries are computed in the team's timezone. A sprint runs from 00:00 on its start date through 23:59:59.999 on its end date, inclusive.
 - **R2. Standups.** At most one standup counts per person per calendar day in the team's timezone.
 - **R3. Reviews.** A review counts when a member submits a review (approved, changes requested, or commented) on a PR authored by someone else. Count distinct PRs per reviewer. Reviews on your own PR never count.
-- **R4. Commits.** Deduplicate by SHA; attribute by GitHub login mapped to a team member; count commits from PR commit lists so merges don't hide authorship. Bots (logins ending in `[bot]`) are ignored for every activity type, not only commits.
+- **R4. Commits.** Count commits from `push` events on any branch, so commits on a feature branch are recorded before a merge or squash can hide them (decision 001). Deduplicate by SHA. Attribute by the commit author's GitHub login mapped to a team member, never the committer or the pusher; skip commits whose author isn't linked to a GitHub account. Commits from fork PRs and commits pushed before the webhook was connected aren't counted. Bots (logins ending in `[bot]`) are ignored for every activity type, not only commits.
 - **R5. Requirement status.**
   - `MET`: count ≥ required
   - `ON_TRACK`: not met, sprint running, more than 2 days left

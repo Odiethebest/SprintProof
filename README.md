@@ -296,7 +296,7 @@ Each team has a timezone (default `America/Los_Angeles`). Timestamps are stored 
 |---|---|
 | Standup | At most one per person per calendar day (team timezone). Editing the same day's standup updates it instead of adding another. |
 | Review | Distinct PRs reviewed per member (approved, changes requested, or commented). Three reviews on the same PR count as one. Reviews on your own PR never count. |
-| Commit | Deduplicated by SHA, attributed by mapped GitHub login, read from PR commit lists as well as the default branch. |
+| Commit | Read from pushes to any branch and deduplicated by SHA. Attributed to the commit author's mapped GitHub login, never the committer or the pusher; commits whose author isn't linked to a GitHub account are skipped. Commits from fork PRs or pushed before the webhook was connected aren't counted. |
 | Bot | Activity of every type (commits, opened and merged PRs, reviews) from logins ending in `[bot]` is ignored. |
 
 ### Requirement status
