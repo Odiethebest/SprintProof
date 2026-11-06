@@ -206,6 +206,85 @@ describe("POST /api/v1/teams/{teamId}/sprints", () => {
     expect(await db.sprint.count()).toBe(0);
   });
 
+  it.each([
+    ["a name that isn't text", { name: 42 }, "Sprint name must be text."],
+    [
+      "a start date that isn't a string",
+      { startDate: 20261029 },
+      "Start date must be a valid calendar date in YYYY-MM-DD format.",
+    ],
+    [
+      "standups per person sent as a string",
+      { standupsPerPerson: "5" },
+      "Standups per person must be an integer.",
+    ],
+    [
+      "reviews per person sent as null",
+      { reviewsPerPerson: null },
+      "Reviews per person must be an integer.",
+    ],
+  ])(
+    "returns 400 for %s with its message and creates nothing",
+    async (_label, override, message) => {
+      // Arrange
+      const team = await insertTeam();
+      await signInAs(team.id, "LEAD");
+
+      // Act
+      const res = await createSprint(team.id, {
+        name: "Sprint 1",
+        startDate: "2026-10-29",
+        endDate: "2026-11-04",
+        ...override,
+      });
+
+      // Assert
+      expect(res.status).toBe(400);
+      expect(await res.json()).toEqual({
+        error: { code: "VALIDATION_ERROR", message },
+      });
+      expect(await db.sprint.count()).toBe(0);
+    }
+  );
+
+  it("returns 400 asking for a name when it is missing", async () => {
+    // Arrange
+    const team = await insertTeam();
+    await signInAs(team.id, "LEAD");
+
+    // Act
+    const res = await createSprint(team.id, {
+      startDate: "2026-10-29",
+      endDate: "2026-11-04",
+    });
+
+    // Assert
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({
+      error: { code: "VALIDATION_ERROR", message: "Sprint name is required." },
+    });
+  });
+
+  it("creates the sprint in the URL's team even if the body names another", async () => {
+    // Arrange
+    const team = await insertTeam();
+    const otherTeam = await insertTeam();
+    await signInAs(team.id, "LEAD");
+
+    // Act
+    const res = await createSprint(team.id, {
+      name: "Sprint 1",
+      startDate: "2026-10-29",
+      endDate: "2026-11-04",
+      teamId: otherTeam.id,
+    });
+
+    // Assert
+    expect(res.status).toBe(201);
+    expect(await db.sprint.count({ where: { teamId: team.id } })).toBe(1);
+    expect(await db.sprint.count({ where: { teamId: otherTeam.id } })).toBe(0);
+  });
+
   it("returns 400 when the body isn't JSON", async () => {
     // Arrange
     const team = await insertTeam();
@@ -245,7 +324,8 @@ describe("POST /api/v1/teams/{teamId}/sprints", () => {
     }
   );
 
-  it("returns 404 to a user outside the team", async () => {
+  // Not on the team is treated like a wrong role: 403 either way (#6).
+  it("returns 403 to a user outside the team", async () => {
     // Arrange
     const team = await insertTeam();
     const outsider = await insertUser();
@@ -259,7 +339,8 @@ describe("POST /api/v1/teams/{teamId}/sprints", () => {
     });
 
     // Assert
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(403);
+    expect((await res.json()).error.code).toBe("FORBIDDEN");
     expect(await db.sprint.count()).toBe(0);
   });
 
@@ -343,7 +424,7 @@ describe("GET /api/v1/teams/{teamId}/sprints", () => {
     expect(body.data[1].name).toBe("Sprint 2");
   });
 
-  it("returns 404 to a user outside the team", async () => {
+  it("returns 403 to a user outside the team", async () => {
     // Arrange
     const team = await insertTeam();
     const outsider = await insertUser();
@@ -353,7 +434,8 @@ describe("GET /api/v1/teams/{teamId}/sprints", () => {
     const res = await listSprints(team.id);
 
     // Assert
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(403);
+    expect((await res.json()).error.code).toBe("FORBIDDEN");
   });
 
   it("returns 401 when signed out", async () => {
@@ -474,6 +556,84 @@ describe("PATCH /api/v1/teams/{teamId}/sprints/{sprintId}", () => {
     });
   });
 
+  it.each([
+    ["a name that isn't text", { name: 123 }, "Sprint name must be text."],
+    [
+      "a null start date",
+      { startDate: null },
+      "Start date must be a valid calendar date in YYYY-MM-DD format.",
+    ],
+    [
+      "an end date sent as a number",
+      { endDate: 20261110 },
+      "End date must be a valid calendar date in YYYY-MM-DD format.",
+    ],
+    [
+      "standups per person sent as a string",
+      { standupsPerPerson: "4" },
+      "Standups per person must be an integer.",
+    ],
+  ])(
+    "returns 400 for %s and leaves the sprint unchanged",
+    async (_label, body, message) => {
+      // Arrange
+      const team = await insertTeam();
+      await signInAs(team.id, "LEAD");
+      const sprint = await insertSprint({
+        teamId: team.id,
+        name: "Sprint 1",
+        startDate: "2026-10-29",
+        endDate: "2026-11-04",
+        standupsPerPerson: 3,
+      });
+
+      // Act
+      const res = await editSprint(team.id, sprint.id, body);
+
+      // Assert
+      expect(res.status).toBe(400);
+      expect(await res.json()).toEqual({
+        error: { code: "VALIDATION_ERROR", message },
+      });
+      const stored = await db.sprint.findUniqueOrThrow({
+        where: { id: sprint.id },
+      });
+      expect(stored.name).toBe("Sprint 1");
+      expect(stored.standupsPerPerson).toBe(3);
+      expect(stored.startDate.toISOString().slice(0, 10)).toBe("2026-10-29");
+      expect(stored.endDate.toISOString().slice(0, 10)).toBe("2026-11-04");
+    }
+  );
+
+  it("keeps the fields a partial edit doesn't send", async () => {
+    // Arrange
+    const team = await insertTeam();
+    await signInAs(team.id, "LEAD");
+    const sprint = await insertSprint({
+      teamId: team.id,
+      name: "Sprint 1",
+      startDate: "2026-10-29",
+      endDate: "2026-11-04",
+      standupsPerPerson: 4,
+      reviewsPerPerson: 6,
+    });
+
+    // Act
+    const res = await editSprint(team.id, sprint.id, {
+      name: "Sprint 1 (Renamed)",
+    });
+
+    // Assert
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({
+      name: "Sprint 1 (Renamed)",
+      startDate: "2026-10-29",
+      endDate: "2026-11-04",
+      standupsPerPerson: 4,
+      reviewsPerPerson: 6,
+    });
+  });
+
   it.each(["MEMBER", "INSTRUCTOR"] as const)(
     "returns 403 to a %s when editing",
     async (role) => {
@@ -535,7 +695,7 @@ describe("PATCH /api/v1/teams/{teamId}/sprints/{sprintId}", () => {
     expect(res.status).toBe(404);
   });
 
-  it("returns 404 to an outsider", async () => {
+  it("returns 403 to an outsider", async () => {
     // Arrange
     const team = await insertTeam();
     const sprint = await insertSprint({ teamId: team.id });
@@ -552,7 +712,8 @@ describe("PATCH /api/v1/teams/{teamId}/sprints/{sprintId}", () => {
     });
 
     // Assert
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(403);
+    expect((await res.json()).error.code).toBe("FORBIDDEN");
   });
 
   it("returns 401 when signed out", async () => {
