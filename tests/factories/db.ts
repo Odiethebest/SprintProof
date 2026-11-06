@@ -66,3 +66,30 @@ export async function insertInvite(input: {
     },
   });
 }
+
+export async function insertSprint(input: {
+  teamId: string;
+  name?: string;
+  startDate?: string | Date;
+  endDate?: string | Date;
+  standupsPerPerson?: number;
+  reviewsPerPerson?: number;
+}) {
+  const n = recordSeq++;
+  return db.sprint.create({
+    data: {
+      teamId: input.teamId,
+      name: input.name ?? `Sprint ${n}`,
+      startDate:
+        typeof input.startDate === "string"
+          ? new Date(`${input.startDate}T00:00:00.000Z`)
+          : (input.startDate ?? new Date("2026-10-29T00:00:00.000Z")),
+      endDate:
+        typeof input.endDate === "string"
+          ? new Date(`${input.endDate}T00:00:00.000Z`)
+          : (input.endDate ?? new Date("2026-11-04T00:00:00.000Z")),
+      standupsPerPerson: input.standupsPerPerson ?? 3,
+      reviewsPerPerson: input.reviewsPerPerson ?? 5,
+    },
+  });
+}
