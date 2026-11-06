@@ -54,7 +54,10 @@ Show facts, not judgments. The app displays counts and whether requirements are 
 ```
 src/
 ├── app/                          # Next.js routes ONLY: pages, layouts, route handlers
+│   ├── page.tsx                  # "Your teams": the signed-in user's teams
 │   ├── (public)/signin/
+│   ├── (app)/teams/new/          # create a team (the creator becomes LEAD)
+│   ├── (app)/invite/[token]/     # join a team through an invite link
 │   ├── (app)/teams/[teamId]/
 │   │   ├── dashboard/            # live contribution dashboard
 │   │   ├── standups/             # check-in form + history
@@ -65,22 +68,36 @@ src/
 │       ├── auth/[...nextauth]/
 │       ├── webhooks/github/      # GitHub webhook receiver
 │       └── v1/                   # public, documented REST API (docs/api/openapi.yaml)
+│           ├── teams/            # create a team; [teamId]/invites/ create and revoke links; [teamId]/sprints/ (route.ts and [sprintId]/route.ts)
+│           └── memberships/      # join a team with an invite token
 ├── components/
 │   ├── ui/                       # generic primitives (Button, Card, Badge...)
-│   └── <feature>/                # feature components: dashboard/, standups/, retro/...
+│   ├── layout/                   # AppHeader (the shared top bar), PageHeader, PageLoading
+│   └── <feature>/                # feature components: auth/, teams/, sprints/, dashboard/, standups/, retro/...
 ├── lib/                          # PURE business logic — no I/O
+│   ├── auth/                     # sign-in redirects, team role checks, test sign-in input
+│   ├── teams/                    # create-team input (name, owner/name repo, timezone)
+│   ├── invites/                  # invite link expiry and validity
 │   ├── checks/                   # requirement checks (standups, reviews per person)
 │   ├── stats/                    # contribution counts per member per sprint
-│   ├── sprints/                  # sprint date math, timezone boundaries
+│   ├── sprints/                  # sprint date math, timezone boundaries (validate-sprint.ts, sprint-dates.ts, sprint-body.ts)
 │   ├── retro/                    # vote tallying, action item selection
-│   ├── github/                   # webhook payload → Activity mapping
+│   ├── github/                   # GitHub login and profile rules, webhook payload → Activity mapping
 │   └── export/                   # sprint summary → Markdown
 ├── server/                       # everything with side effects
 │   ├── db.ts                     # single Prisma client
-│   ├── repositories/             # all database reads/writes
-│   ├── auth.ts                   # session helpers, requireTeamRole()
+│   ├── repositories/             # all database reads/writes (sprints.ts)
+│   ├── auth.ts                   # requireTeamRole()
+│   ├── auth-config.ts            # Auth.js config: GitHub provider, test sign-in
+│   ├── auth-session.ts           # getSession(), getSessionUserId(); tests mock this
+│   ├── auth-proxy.ts             # cookie-only Auth.js instance for src/proxy.ts
+│   ├── current-user.ts           # getCurrentUser() for pages
+│   ├── api-response.ts           # errorResponse(), parseJsonBody(), accessDeniedResponse()
+│   ├── prisma-errors.ts          # isUniqueViolation()
+│   ├── request-origin.ts         # origin for absolute links (invite URLs)
 │   ├── github-client.ts          # Octokit wrapper
 │   └── realtime.ts               # Pusher trigger wrapper
+├── proxy.ts                      # sends signed-out visitors to /signin (not access control)
 └── types/
 prisma/schema.prisma
 tests/unit/                       # mirrors src/lib/
@@ -99,6 +116,7 @@ e2e/                              # Playwright specs
 - **All mutations go through route handlers** in `app/api/`. Do not use Server Actions; one mutation pattern keeps integration tests uniform.
 - **Real-time flow:** webhook or mutation → write to DB → `server/realtime.ts` triggers `team-{teamId}` channel with a small event (`activity.created`, `standup.created`) → client refetches the affected section. Never push full records through Pusher.
 - **API response shape:** success returns the resource or `{ data, nextCursor }` for lists. Errors always return `{ "error": { "code": "SNAKE_CASE_CODE", "message": "Human readable" } }` with the right HTTP status.
+- **Route handler helpers** live in `server/api-response.ts`: parse request bodies with `parseJsonBody({ request, schema })` (400 `VALIDATION_ERROR` with the first Zod message), turn a denied `requireTeamRole()` result into a 401 or 403 with `accessDeniedResponse()`, and build every other error with `errorResponse()`. Don't write error JSON by hand.
 
 ### Domain model and counting rules
 
@@ -158,7 +176,7 @@ Main Prisma models: `User`, `Team`, `Membership` (role: `LEAD` | `MEMBER` | `INS
 
   An acceptance criterion such as "failing tests committed before implementation" is met by that commit; it isn't a request for you to commit. Tests you add later go in their own `test(...)` commit, not the `feat` commit.
 - **Unit tests (Vitest)** for every function in `src/lib/`. Coverage goal: ≥ 90% lines for `src/lib/`, ≥ 80% overall.
-- **Integration tests (Vitest)** call route handlers directly against a real PostgreSQL test database (reset between test files). Mock only external services at their wrappers: `server/github-client.ts` and `server/realtime.ts`.
+- **Integration tests (Vitest)** call route handlers directly against a real PostgreSQL test database (reset between test files). Mock only external services at their wrappers: `server/github-client.ts` and `server/realtime.ts`, plus `server/auth-session.ts` to set the signed-in user.
 - **E2E tests (Playwright)** cover the user flows in section 2. Each flow includes an `@axe-core/playwright` accessibility check with no serious or critical violations.
 - E2E sign-in uses a test-only credentials provider that is enabled **only** when `E2E_TEST_AUTH=true`. It must never be enabled in production; CI asserts this.
 - Test structure: Arrange / Act / Assert. One behavior per test. Names describe behavior: `it("counts three reviews on the same PR as one")`.
@@ -353,4 +371,5 @@ Standups, planning notes and retros for our own team are recorded in SprintProof
 | 2026-10-29 | Yunhong Huang | Sprint records: one standup file per person under `docs/sprints/sprint-N/standups/` (§3, README) | Matches the repo's actual structure. Not an experiment finding |
 | 2026-11-04 | Ziqi (Odie) Yang | Pinned Prisma 7.10.1 in tech stack table (#5) | Issue #5: initial database schema and connection |
 | 2026-11-04 | Ziqi (Odie) Yang | Pinned `next-auth` 5.0.0-beta.32, Zod 4.6.7 and `@axe-core/playwright` 4.14.0 in the tech stack table; added `lucide-react` 1.60.0 (#6) | Issue #6: sign-in needs Auth.js, Zod for the test credentials input, icons for the sign-in page and user menu, and an axe check in its E2E spec. Zod and axe were planned for #7 and #17 |
+| 2026-11-05 | Ziqi (Odie) Yang | Architecture tree lists the files added in #6 and #7; Key patterns adds the route handler helpers in `server/api-response.ts`; integration tests may mock `server/auth-session.ts` (#7) | Yunhong's review of PR #44: the rules should match the code |
 | 2026-11-05 | Yunhong Huang | New code in `src/lib/` takes calendar dates as `'YYYY-MM-DD'` strings, with `src/lib/checks/requirement-status.ts` as the exception; sprint dates mapped to strings in server layer (#8) | Prevents timezone and UTC midnight offset bugs when passing `@db.Date` values into pure business logic |
