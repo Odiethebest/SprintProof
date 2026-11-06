@@ -338,7 +338,7 @@ Each member gets 3 votes per retro, at most 1 per item. The top 3 "To improve" i
 
 | Feature | Status | Notes |
 |---|---|---|
-| GitHub sign-in and teams | Planned | Auth.js GitHub provider, invite links, lead / member / instructor roles |
+| GitHub sign-in and teams | Done | Auth.js GitHub provider, invite links, lead / member / instructor roles (#6, #7) |
 | Repository connection and webhooks | Planned | Signature verification, idempotent `Activity` storage |
 | Async standups | Planned | Three-question form, one per person per day |
 | Live contribution dashboard | Planned | Counts per member, Pusher live updates |
