@@ -9,6 +9,10 @@ export function verifyWebhookSignature({
   signatureHeader: string | null | undefined;
   secret: string;
 }): boolean {
+  // Anyone can compute an HMAC with an empty key, so it never proves the sender is GitHub.
+  if (secret === "") {
+    return false;
+  }
   if (!signatureHeader || !signatureHeader.startsWith("sha256=")) {
     return false;
   }
