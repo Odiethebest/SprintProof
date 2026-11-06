@@ -442,7 +442,7 @@ export function SprintsCard({
 
                 if (isEditing) {
                   return (
-                    <tr key={sprint.id} className="bg-surface-elevated/50">
+                    <tr key={sprint.id} className="bg-canvas">
                       <td colSpan={isLead ? 6 : 5} className="py-4">
                         <form
                           onSubmit={(e) => handleEditSubmit(sprint.id, e)}
@@ -592,7 +592,7 @@ export function SprintsCard({
                     data-current={isCurrent ? "true" : undefined}
                     className={`transition-colors duration-150 ${
                       isCurrent
-                        ? "bg-surface-elevated/70 font-medium"
+                        ? "bg-canvas font-medium"
                         : "hover:bg-text/5"
                     }`}
                   >
