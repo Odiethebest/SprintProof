@@ -8,8 +8,10 @@ import { PageHeader } from "@/components/layout/page-header";
 import { PageLoading } from "@/components/layout/page-loading";
 import type { InviteLinkView } from "@/components/teams/invite-links";
 import { MembersCard } from "@/components/teams/members-card";
+import { RepositoryCard } from "@/components/teams/repository-card";
 import { requireTeamRole } from "@/server/auth";
 import { getCurrentUser } from "@/server/current-user";
+import { getLastWebhookDelivery } from "@/server/repositories/activities";
 import { listActiveInvites } from "@/server/repositories/invites";
 import { listTeamMembers } from "@/server/repositories/memberships";
 import { findTeam } from "@/server/repositories/teams";
@@ -41,17 +43,19 @@ async function TeamSettings({ params }: { params: Params }) {
     // Same page as a team that doesn't exist, so outsiders learn nothing.
     notFound();
   }
-  const [user, team, memberships] = await Promise.all([
+  const [user, team, memberships, origin, lastDelivery] = await Promise.all([
     getCurrentUser(),
     findTeam({ teamId }),
     listTeamMembers({ teamId }),
+    getRequestOrigin(),
+    getLastWebhookDelivery({ teamId }),
   ]);
   if (user === null || team === null) {
     notFound();
   }
   const inviteLinks =
     access.role === "LEAD"
-      ? await loadInviteLinks({ teamId, timezone: team.timezone })
+      ? await loadInviteLinks({ teamId, timezone: team.timezone, origin })
       : null;
   const members = memberships.map(({ role, user: member }) => ({
     userId: member.id,
@@ -69,9 +73,16 @@ async function TeamSettings({ params }: { params: Params }) {
           meta={`${team.name} team settings`}
           action={null}
         />
-        {/* TODO(#11): Repository card. TODO(#8): Sprints and requirements card.
-            TODO(#16): API tokens card. */}
+        {/* TODO(#8): Sprints and requirements card. TODO(#16): API tokens card. */}
         <div className="grid gap-4 lg:grid-cols-2">
+          <RepositoryCard
+            repoFullName={team.repoFullName}
+            webhookUrl={
+              access.role === "LEAD" ? `${origin}/api/webhooks/github` : null
+            }
+            isLead={access.role === "LEAD"}
+            lastDeliveryFormatted={lastDelivery ? "Verified" : null}
+          />
           <MembersCard
             teamId={team.id}
             currentUserId={user.id}
@@ -87,14 +98,13 @@ async function TeamSettings({ params }: { params: Params }) {
 async function loadInviteLinks({
   teamId,
   timezone,
+  origin,
 }: {
   teamId: string;
   timezone: string;
+  origin: string;
 }): Promise<InviteLinkView[]> {
-  const [invites, origin] = await Promise.all([
-    listActiveInvites({ teamId, now: new Date() }),
-    getRequestOrigin(),
-  ]);
+  const invites = await listActiveInvites({ teamId, now: new Date() });
   // "Nov 12" in the team's timezone (DESIGN.md §9).
   const expiryFormat = new Intl.DateTimeFormat("en-US", {
     month: "short",
