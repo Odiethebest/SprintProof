@@ -1,11 +1,8 @@
 import { z } from "zod";
+import { GITHUB_LOGIN_PATTERN } from "@/lib/github/login";
 import type { GithubUser } from "@/lib/github/profile";
 
 export const TEST_AUTH_PROVIDER_ID = "e2e-credentials";
-
-// GitHub logins: 1–39 characters, letters, digits and single hyphens, no leading hyphen.
-const GITHUB_LOGIN_PATTERN =
-  /^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$/;
 
 const testSignInSchema = z.object({
   login: z.string().regex(GITHUB_LOGIN_PATTERN),

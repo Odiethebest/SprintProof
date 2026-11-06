@@ -12,11 +12,19 @@ describe("isProtectedPath", () => {
     "/teams/team-1/dashboard",
     "/teams/team-1/sprints/s-1/retro",
     "/review/team-1",
+    "/invite/abc123",
   ])("protects %s", (pathname) => {
     expect(isProtectedPath({ pathname })).toBe(true);
   });
 
-  it.each(["/", "/signin", "/api/auth/session", "/teamsx", "/reviewer"])(
+  it.each([
+    "/",
+    "/signin",
+    "/api/auth/session",
+    "/teamsx",
+    "/reviewer",
+    "/invitex",
+  ])(
     "leaves %s public",
     (pathname) => {
       expect(isProtectedPath({ pathname })).toBe(false);
@@ -80,6 +88,7 @@ describe("toContinueMessage", () => {
     ["/teams/team-1/sprints/s-1/retro", "Sign in to continue to the retro."],
     ["/teams/team-1/settings", "Sign in to continue to settings."],
     ["/review/team-1", "Sign in to continue to the review page."],
+    ["/invite/abc123", "Sign in to continue to your invite."],
   ])("names the page for %s", (callbackPath, message) => {
     expect(toContinueMessage({ callbackPath })).toBe(message);
   });

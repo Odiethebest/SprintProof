@@ -36,14 +36,17 @@ model User {
 }
 
 model Team {
-  id          String       @id @default(cuid())
-  name        String
-  timezone    String       @default("America/Los_Angeles")
-  createdAt   DateTime     @default(now()) @map("created_at")
-  updatedAt   DateTime     @updatedAt @map("updated_at")
-  memberships Membership[]
-  sprints     Sprint[]
-  activities  Activity[]
+  id           String       @id @default(cuid())
+  name         String
+  // GitHub's `full_name` ("owner/name"); webhooks find the team by it (#11).
+  repoFullName String       @unique @map("repo_full_name")
+  timezone     String       @default("America/Los_Angeles")
+  createdAt    DateTime     @default(now()) @map("created_at")
+  updatedAt    DateTime     @updatedAt @map("updated_at")
+  memberships  Membership[]
+  sprints      Sprint[]
+  activities   Activity[]
+  invites      Invite[]
 
   @@map("teams")
 }
@@ -62,6 +65,23 @@ model Membership {
   @@index([userId])
   @@index([teamId])
   @@map("memberships")
+}
+
+model Invite {
+  id        String         @id @default(cuid())
+  teamId    String         @map("team_id")
+  role      MembershipRole
+  // Kept as is, not hashed, so the lead can copy the link again from Settings.
+  // It expires after 7 days and can be revoked (#7).
+  token     String         @unique
+  expiresAt DateTime       @map("expires_at")
+  revokedAt DateTime?      @map("revoked_at")
+  createdAt DateTime       @default(now()) @map("created_at")
+  updatedAt DateTime       @updatedAt @map("updated_at")
+  team      Team           @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@index([teamId])
+  @@map("invites")
 }
 
 model Sprint {
