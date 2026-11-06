@@ -36,17 +36,20 @@ model User {
 }
 
 model Team {
-  id           String       @id @default(cuid())
+  id           String            @id @default(cuid())
   name         String
   // GitHub's `full_name` ("owner/name"); webhooks find the team by it (#11).
-  repoFullName String       @unique @map("repo_full_name")
-  timezone     String       @default("America/Los_Angeles")
-  createdAt    DateTime     @default(now()) @map("created_at")
-  updatedAt    DateTime     @updatedAt @map("updated_at")
+  repoFullName String            @unique @map("repo_full_name")
+  // GitHub's numeric repository ID; set on first webhook delivery (#11).
+  repoId       BigInt?           @unique @map("repo_id")
+  timezone     String            @default("America/Los_Angeles")
+  createdAt    DateTime          @default(now()) @map("created_at")
+  updatedAt    DateTime          @updatedAt @map("updated_at")
   memberships  Membership[]
   sprints      Sprint[]
   activities   Activity[]
   invites      Invite[]
+  deliveries   WebhookDelivery[]
 
   @@map("teams")
 }
@@ -138,4 +141,15 @@ model Activity {
   @@index([teamId])
   @@index([actorLogin])
   @@map("activities")
+}
+
+model WebhookDelivery {
+  id          String   @id
+  teamId      String?  @map("team_id")
+  event       String
+  deliveredAt DateTime @default(now()) @map("delivered_at")
+  team        Team?    @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@index([teamId])
+  @@map("webhook_deliveries")
 }
