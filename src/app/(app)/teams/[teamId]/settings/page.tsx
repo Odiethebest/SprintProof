@@ -128,7 +128,17 @@ async function TeamSettings({ params }: { params: Params }) {
               access.role === "LEAD" ? `${origin}/api/webhooks/github` : null
             }
             isLead={access.role === "LEAD"}
-            lastDeliveryFormatted={lastDelivery ? "Verified" : null}
+            lastDelivery={
+              lastDelivery === null
+                ? null
+                : {
+                    event: lastDelivery.event,
+                    deliveredAtLabel: formatDeliveryTime({
+                      deliveredAt: lastDelivery.deliveredAt,
+                      timezone: team.timezone,
+                    }),
+                  }
+            }
           />
           <MembersCard
             teamId={team.id}
@@ -142,6 +152,23 @@ async function TeamSettings({ params }: { params: Params }) {
       </main>
     </>
   );
+}
+
+// "Nov 3, 2:41 PM" in the team's timezone (DESIGN.md §9).
+function formatDeliveryTime({
+  deliveredAt,
+  timezone,
+}: {
+  deliveredAt: Date;
+  timezone: string;
+}): string {
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: timezone,
+  }).format(deliveredAt);
 }
 
 async function loadInviteLinks({

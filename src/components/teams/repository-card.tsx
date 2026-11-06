@@ -1,15 +1,22 @@
+import { Check } from "lucide-react";
 import { Pill } from "@/components/ui/pill";
+
+export interface WebhookDeliveryView {
+  event: string;
+  // "Nov 3, 2:41 PM" in the team's timezone (DESIGN.md §9).
+  deliveredAtLabel: string;
+}
 
 export function RepositoryCard({
   repoFullName,
   webhookUrl,
   isLead,
-  lastDeliveryFormatted,
+  lastDelivery,
 }: {
   repoFullName: string;
   webhookUrl: string | null;
   isLead: boolean;
-  lastDeliveryFormatted?: string | null;
+  lastDelivery: WebhookDeliveryView | null;
 }) {
   return (
     <section
@@ -54,7 +61,23 @@ export function RepositoryCard({
 
           <div className="flex flex-col gap-1 text-xs text-text-muted">
             <span className="font-medium text-text">Last delivery</span>
-            <span>{lastDeliveryFormatted ?? "No deliveries yet"}</span>
+            {lastDelivery === null ? (
+              <span>No deliveries yet</span>
+            ) : (
+              <>
+                <span>
+                  <span className="font-mono text-text">
+                    {lastDelivery.event}
+                  </span>{" "}
+                  at {lastDelivery.deliveredAtLabel}
+                </span>
+                {/* Only deliveries with a valid signature are stored. */}
+                <span className="inline-flex items-center gap-1 text-met">
+                  <Check size={14} aria-hidden="true" />
+                  Verified
+                </span>
+              </>
+            )}
           </div>
 
           <details className="group flex flex-col gap-2 rounded-md border border-border p-3">
@@ -80,7 +103,10 @@ export function RepositoryCard({
                 <code className="font-mono">application/json</code>.
               </li>
               <li>
-                Enter the team webhook secret into <strong>Secret</strong>.
+                Paste the webhook secret into <strong>Secret</strong>. It&apos;s
+                the server&apos;s{" "}
+                <code className="font-mono">GITHUB_WEBHOOK_SECRET</code>; ask
+                whoever deployed SprintProof for it.
               </li>
               <li>
                 Under{" "}
