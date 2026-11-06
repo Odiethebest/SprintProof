@@ -6,7 +6,7 @@ export interface SprintDateRange {
   endDate: string;
 }
 
-export interface SprintSummary extends SprintDateRange {
+export interface SprintRecord extends SprintDateRange {
   id: string;
   teamId: string;
   name: string;

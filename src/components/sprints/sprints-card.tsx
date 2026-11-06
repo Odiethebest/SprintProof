@@ -32,6 +32,23 @@ const STATE_LABELS: Record<SprintState, string> = {
   UPCOMING: "Upcoming",
 };
 
+const ROW_CLASSES = {
+  current: "transition-colors duration-150 bg-canvas font-medium",
+  default: "transition-colors duration-150 hover:bg-text/5",
+} as const;
+
+const STATE_BADGE_CLASSES = {
+  current:
+    "inline-flex items-center rounded-full px-2 py-0.5 text-xs bg-primary/10 font-semibold text-primary",
+  default:
+    "inline-flex items-center rounded-full px-2 py-0.5 text-xs text-text-muted",
+} as const;
+
+function toDateInputValue(value: string | undefined): string | undefined {
+  if (!value) return value;
+  return value.includes("T") ? value.slice(0, 10) : value;
+}
+
 const INPUT_CLASSES = {
   valid:
     "h-9 w-full rounded-md border border-border bg-surface px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface",
@@ -127,10 +144,12 @@ export function SprintsCard({
   async function handleAddSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
+    const rawStartDate = String(form.get("startDate") ?? "").trim();
+    const rawEndDate = String(form.get("endDate") ?? "").trim();
     const sprintInput = {
       name: String(form.get("name") ?? "").trim(),
-      startDate: String(form.get("startDate") ?? "").trim(),
-      endDate: String(form.get("endDate") ?? "").trim(),
+      startDate: toDateInputValue(rawStartDate) ?? "",
+      endDate: toDateInputValue(rawEndDate) ?? "",
       standupsPerPerson: Number(form.get("standupsPerPerson") ?? 3),
       reviewsPerPerson: Number(form.get("reviewsPerPerson") ?? 5),
     };
@@ -182,11 +201,13 @@ export function SprintsCard({
   ) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
+    const rawStartDate = String(form.get("startDate") ?? "").trim();
+    const rawEndDate = String(form.get("endDate") ?? "").trim();
     const sprintInput = {
       id: sprintId,
       name: String(form.get("name") ?? "").trim(),
-      startDate: String(form.get("startDate") ?? "").trim(),
-      endDate: String(form.get("endDate") ?? "").trim(),
+      startDate: toDateInputValue(rawStartDate) ?? "",
+      endDate: toDateInputValue(rawEndDate) ?? "",
       standupsPerPerson: Number(form.get("standupsPerPerson") ?? 3),
       reviewsPerPerson: Number(form.get("reviewsPerPerson") ?? 5),
     };
@@ -298,13 +319,12 @@ export function SprintsCard({
             >
               {(props) => (
                 <input
-                  type="text"
+                  type="date"
                   name="startDate"
                   id={props.id}
                   aria-describedby={props.describedBy}
                   aria-invalid={props["aria-invalid"]}
                   className={props.className}
-                  placeholder="2026-10-29"
                   required
                 />
               )}
@@ -317,13 +337,12 @@ export function SprintsCard({
             >
               {(props) => (
                 <input
-                  type="text"
+                  type="date"
                   name="endDate"
                   id={props.id}
                   aria-describedby={props.describedBy}
                   aria-invalid={props["aria-invalid"]}
                   className={props.className}
-                  placeholder="2026-11-04"
                   required
                 />
               )}
@@ -478,13 +497,13 @@ export function SprintsCard({
                             >
                               {(props) => (
                                 <input
-                                  type="text"
+                                  type="date"
                                   name="startDate"
                                   id={props.id}
                                   aria-describedby={props.describedBy}
                                   aria-invalid={props["aria-invalid"]}
                                   className={props.className}
-                                  defaultValue={sprint.startDate}
+                                  defaultValue={toDateInputValue(sprint.startDate)}
                                   required
                                 />
                               )}
@@ -497,13 +516,13 @@ export function SprintsCard({
                             >
                               {(props) => (
                                 <input
-                                  type="text"
+                                  type="date"
                                   name="endDate"
                                   id={props.id}
                                   aria-describedby={props.describedBy}
                                   aria-invalid={props["aria-invalid"]}
                                   className={props.className}
-                                  defaultValue={sprint.endDate}
+                                  defaultValue={toDateInputValue(sprint.endDate)}
                                   required
                                 />
                               )}
@@ -590,11 +609,11 @@ export function SprintsCard({
                   <tr
                     key={sprint.id}
                     data-current={isCurrent ? "true" : undefined}
-                    className={`transition-colors duration-150 ${
+                    className={
                       isCurrent
-                        ? "bg-canvas font-medium"
-                        : "hover:bg-text/5"
-                    }`}
+                        ? ROW_CLASSES.current
+                        : ROW_CLASSES.default
+                    }
                   >
                     <td className="py-3">
                       <div className="flex items-center gap-2">
@@ -618,11 +637,11 @@ export function SprintsCard({
                     </td>
                     <td className="py-3">
                       <span
-                        className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs ${
+                        className={
                           isCurrent
-                            ? "bg-primary/10 font-semibold text-primary"
-                            : "text-text-muted"
-                        }`}
+                            ? STATE_BADGE_CLASSES.current
+                            : STATE_BADGE_CLASSES.default
+                        }
                       >
                         {STATE_LABELS[sprint.state]}
                       </span>
@@ -641,6 +660,7 @@ export function SprintsCard({
                         >
                           <Pencil size={14} aria-hidden="true" />
                           Edit
+                          <span className="sr-only"> {sprint.name}</span>
                         </button>
                       </td>
                     )}

@@ -1,5 +1,5 @@
 import { db } from "@/server/db";
-import type { SprintSummary } from "@/lib/sprints";
+import type { SprintRecord } from "@/lib/sprints";
 
 export interface CreateSprintInput {
   teamId: string;
@@ -52,7 +52,7 @@ function parseDbDate(dateStr: string): Date {
   return new Date(`${dateStr}T00:00:00.000Z`);
 }
 
-function toSprintSummary(row: SprintRow): SprintSummary {
+function toSprintRecord(row: SprintRow): SprintRecord {
   return {
     id: row.id,
     teamId: row.teamId,
@@ -70,18 +70,18 @@ export async function listSprints({
   teamId,
 }: {
   teamId: string;
-}): Promise<SprintSummary[]> {
+}): Promise<SprintRecord[]> {
   const rows = await db.sprint.findMany({
     where: { teamId },
     orderBy: [{ startDate: "asc" }, { createdAt: "asc" }],
     select: SPRINT_FIELDS,
   });
-  return rows.map(toSprintSummary);
+  return rows.map(toSprintRecord);
 }
 
 export async function createSprint(
   input: CreateSprintInput
-): Promise<SprintSummary> {
+): Promise<SprintRecord> {
   const row = await db.sprint.create({
     data: {
       teamId: input.teamId,
@@ -93,7 +93,7 @@ export async function createSprint(
     },
     select: SPRINT_FIELDS,
   });
-  return toSprintSummary(row);
+  return toSprintRecord(row);
 }
 
 export async function findSprintById({
@@ -102,17 +102,17 @@ export async function findSprintById({
 }: {
   teamId: string;
   sprintId: string;
-}): Promise<SprintSummary | null> {
+}): Promise<SprintRecord | null> {
   const row = await db.sprint.findFirst({
     where: { id: sprintId, teamId },
     select: SPRINT_FIELDS,
   });
-  return row ? toSprintSummary(row) : null;
+  return row ? toSprintRecord(row) : null;
 }
 
 export async function updateSprint(
   input: UpdateSprintInput
-): Promise<SprintSummary | null> {
+): Promise<SprintRecord | null> {
   const existing = await db.sprint.findFirst({
     where: { id: input.sprintId, teamId: input.teamId },
     select: { id: true },
@@ -131,5 +131,5 @@ export async function updateSprint(
     },
     select: SPRINT_FIELDS,
   });
-  return toSprintSummary(row);
+  return toSprintRecord(row);
 }
