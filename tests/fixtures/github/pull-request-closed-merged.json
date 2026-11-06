@@ -1,0 +1,25 @@
+{
+  "action": "closed",
+  "number": 42,
+  "pull_request": {
+    "number": 42,
+    "title": "Add webhook receiver",
+    "user": {
+      "login": "alice"
+    },
+    "created_at": "2026-11-05T16:00:00Z",
+    "merged": true,
+    "merged_at": "2026-11-05T17:00:00Z",
+    "merged_by": {
+      "login": "bob"
+    }
+  },
+  "repository": {
+    "id": 987654321,
+    "name": "SprintProof",
+    "full_name": "Odiethebest/SprintProof"
+  },
+  "sender": {
+    "login": "bob"
+  }
+}

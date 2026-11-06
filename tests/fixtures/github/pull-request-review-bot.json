@@ -1,0 +1,26 @@
+{
+  "action": "submitted",
+  "review": {
+    "id": 1002,
+    "user": {
+      "login": "codecov[bot]"
+    },
+    "state": "commented",
+    "submitted_at": "2026-11-05T16:46:00Z"
+  },
+  "pull_request": {
+    "number": 42,
+    "title": "Add webhook receiver",
+    "user": {
+      "login": "alice"
+    }
+  },
+  "repository": {
+    "id": 987654321,
+    "name": "SprintProof",
+    "full_name": "Odiethebest/SprintProof"
+  },
+  "sender": {
+    "login": "codecov[bot]"
+  }
+}

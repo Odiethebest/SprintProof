@@ -3,6 +3,7 @@
 import { db } from "@/server/db";
 import type { TeamRole } from "@/lib/auth/team-access";
 import type { InviteRole } from "@/lib/invites/invite-link";
+import type { ActivityType } from "@/generated/prisma/client";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -29,14 +30,22 @@ export async function insertUser(overrides: UserRecordOverrides = {}) {
 }
 
 export async function insertTeam(
-  overrides: { name?: string; repoFullName?: string; timezone?: string } = {}
+  overrides: {
+    name?: string;
+    repoFullName?: string;
+    timezone?: string;
+    repoId?: bigint | number | null;
+  } = {}
 ) {
   const n = recordSeq++;
+  const { repoId, ...rest } = overrides;
   return db.team.create({
     data: {
       name: `Team ${n}`,
       repoFullName: `owner${n}/repo${n}`,
-      ...overrides,
+      repoId:
+        repoId !== undefined && repoId !== null ? BigInt(repoId) : repoId,
+      ...rest,
     },
   });
 }
@@ -62,6 +71,35 @@ export async function insertInvite(input: {
       token: `invite-token-${n}`,
       expiresAt: new Date(Date.now() + 7 * DAY_MS),
       revokedAt: null,
+      ...input,
+    },
+  });
+}
+
+export async function insertWebhookDelivery(input: {
+  id: string;
+  teamId?: string | null;
+  event: string;
+  deliveredAt?: Date;
+}) {
+  return db.webhookDelivery.create({
+    data: input,
+  });
+}
+
+export async function insertActivity(input: {
+  teamId: string;
+  type: ActivityType;
+  actorLogin: string;
+  prNumber?: number | null;
+  prAuthorLogin?: string | null;
+  sha?: string | null;
+  title?: string | null;
+  occurredAt?: Date;
+}) {
+  return db.activity.create({
+    data: {
+      occurredAt: new Date("2026-11-05T12:00:00Z"),
       ...input,
     },
   });
