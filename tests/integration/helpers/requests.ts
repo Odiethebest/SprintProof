@@ -2,7 +2,7 @@ const API_BASE = "http://localhost:3000/api/v1";
 
 // Route handlers get plain web Requests, the same as Next.js passes them.
 export function apiRequest(
-  method: "POST" | "DELETE",
+  method: "GET" | "POST" | "PATCH" | "DELETE",
   path: string,
   body?: unknown
 ): Request {
