@@ -75,6 +75,92 @@ describe("POST /api/webhooks/github", () => {
     });
   });
 
+  describe("configuration and required headers", () => {
+    async function expectNothingStored() {
+      expect(await db.webhookDelivery.count()).toBe(0);
+      expect(await db.activity.count()).toBe(0);
+    }
+
+    // Fail closed: with no secret, an empty HMAC key would let anyone sign events.
+    it.each([
+      ["unset", undefined],
+      ["empty", ""],
+    ])(
+      "returns 500 and stores nothing when GITHUB_WEBHOOK_SECRET is %s, even for a body signed with an empty key",
+      async (_label, secret) => {
+        // Arrange
+        await insertTeam({ repoFullName: "Odiethebest/SprintProof" });
+        if (secret === undefined) {
+          delete process.env.GITHUB_WEBHOOK_SECRET;
+        } else {
+          process.env.GITHUB_WEBHOOK_SECRET = secret;
+        }
+        const payloadString = JSON.stringify(pushPayload);
+        const request = webhookRequest({
+          event: "push",
+          body: payloadString,
+          signature: signWebhookPayload(payloadString, ""),
+          deliveryId: "unconfigured-delivery",
+        });
+
+        // Act
+        const response = await POST(request);
+
+        // Assert
+        expect(response.status).toBe(500);
+        expect(await response.json()).toEqual({
+          error: { code: "WEBHOOK_NOT_CONFIGURED", message: expect.any(String) },
+        });
+        await expectNothingStored();
+      }
+    );
+
+    // Without a delivery id, every later header-less delivery would look like a duplicate.
+    it("returns 400 and stores nothing when X-GitHub-Delivery is missing", async () => {
+      // Arrange
+      await insertTeam({ repoFullName: "Odiethebest/SprintProof" });
+      const payloadString = JSON.stringify(pushPayload);
+      const request = webhookRequest({
+        event: "push",
+        body: payloadString,
+        signature: signWebhookPayload(payloadString, TEST_SECRET),
+        deliveryId: null,
+      });
+
+      // Act
+      const response = await POST(request);
+
+      // Assert
+      expect(response.status).toBe(400);
+      expect(await response.json()).toEqual({
+        error: { code: "VALIDATION_ERROR", message: expect.any(String) },
+      });
+      await expectNothingStored();
+    });
+
+    it("returns 400 and stores nothing when X-GitHub-Event is missing", async () => {
+      // Arrange
+      await insertTeam({ repoFullName: "Odiethebest/SprintProof" });
+      const payloadString = JSON.stringify(pushPayload);
+      const request = webhookRequest({
+        event: null,
+        body: payloadString,
+        signature: signWebhookPayload(payloadString, TEST_SECRET),
+        deliveryId: "no-event-delivery",
+      });
+
+      // Act
+      const response = await POST(request);
+
+      // Assert
+      expect(response.status).toBe(400);
+      expect(await response.json()).toEqual({
+        error: { code: "VALIDATION_ERROR", message: expect.any(String) },
+      });
+      await expectNothingStored();
+    });
+  });
+
   describe("ping event", () => {
     it("returns 200 for ping event and stores repoId on the matching team as BigInt", async () => {
       const team = await insertTeam({
@@ -446,6 +532,73 @@ describe("POST /api/webhooks/github", () => {
       expect(json).toEqual({
         error: { code: "NOT_FOUND", message: expect.any(String) },
       });
+    });
+  });
+
+  describe("payload validation and commit attribution", () => {
+    it("returns 400 and stores nothing for a push whose commit has no timestamp", async () => {
+      // Arrange
+      await insertTeam({ repoFullName: "Odiethebest/SprintProof" });
+      const commit: Record<string, unknown> = { ...pushPayload.commits[0] };
+      delete commit.timestamp;
+      const payloadString = JSON.stringify({ ...pushPayload, commits: [commit] });
+      const request = webhookRequest({
+        event: "push",
+        body: payloadString,
+        signature: signWebhookPayload(payloadString, TEST_SECRET),
+        deliveryId: "malformed-push-delivery",
+      });
+
+      // Act
+      const response = await POST(request);
+
+      // Assert
+      expect(response.status).toBe(400);
+      expect(await response.json()).toEqual({
+        error: {
+          code: "VALIDATION_ERROR",
+          message: "This push payload isn't in the format GitHub sends.",
+        },
+      });
+      expect(await db.webhookDelivery.count()).toBe(0);
+      expect(await db.activity.count()).toBe(0);
+    });
+
+    // Counting rule: commits are attributed by the author's GitHub login (AGENTS.md §1).
+    it("doesn't credit the pusher with a commit whose author has no GitHub username", async () => {
+      // Arrange: Odie pushes a commit Yunhong wrote with an email not linked to GitHub
+      const pusher = await insertUser({ githubLogin: "Odiethebest" });
+      const team = await insertTeam({ repoFullName: "Odiethebest/SprintProof" });
+      await insertMembership({ userId: pusher.id, teamId: team.id, role: "LEAD" });
+      const payloadString = JSON.stringify({
+        ...pushPayload,
+        sender: { login: "Odiethebest" },
+        pusher: { name: "Odiethebest" },
+        commits: [
+          {
+            ...pushPayload.commits[0],
+            author: { name: "Yunhong Huang", email: "unlinked@example.com" },
+            committer: {
+              name: "Odie Yang",
+              email: "odie@example.com",
+              username: "Odiethebest",
+            },
+          },
+        ],
+      });
+      const request = webhookRequest({
+        event: "push",
+        body: payloadString,
+        signature: signWebhookPayload(payloadString, TEST_SECRET),
+        deliveryId: "unlinked-author-delivery",
+      });
+
+      // Act
+      const response = await POST(request);
+
+      // Assert
+      expect(response.status).toBe(200);
+      expect(await db.activity.count({ where: { teamId: team.id } })).toBe(0);
     });
   });
 });

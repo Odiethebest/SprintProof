@@ -31,17 +31,23 @@ export function webhookRequest({
   signature,
   body,
 }: {
-  event: string;
-  deliveryId?: string;
+  // null leaves the header out, to test requests GitHub would never send.
+  event: string | null;
+  deliveryId?: string | null;
   signature?: string;
   body: string | unknown;
 }): Request {
   const payloadString = typeof body === "string" ? body : JSON.stringify(body);
-  const headers = new Headers({
-    "content-type": "application/json",
-    "x-github-event": event,
-    "x-github-delivery": deliveryId ?? "72d3162e-cc78-11e3-81ab-4c9367dc0ff0",
-  });
+  const headers = new Headers({ "content-type": "application/json" });
+  if (event !== null) {
+    headers.set("x-github-event", event);
+  }
+  if (deliveryId !== null) {
+    headers.set(
+      "x-github-delivery",
+      deliveryId ?? "72d3162e-cc78-11e3-81ab-4c9367dc0ff0"
+    );
+  }
   if (signature !== undefined) {
     headers.set("x-hub-signature-256", signature);
   }

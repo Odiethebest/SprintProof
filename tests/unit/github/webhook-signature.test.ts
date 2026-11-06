@@ -21,6 +21,18 @@ describe("verifyWebhookSignature", () => {
     ).toBe(true);
   });
 
+  // An unset GITHUB_WEBHOOK_SECRET must not turn into a key anyone can sign with.
+  it("returns false when the secret is empty, even for a body signed with an empty key", () => {
+    const signatureHeader = createSignature(payload, "");
+    expect(
+      verifyWebhookSignature({
+        rawBody: payload,
+        signatureHeader,
+        secret: "",
+      })
+    ).toBe(false);
+  });
+
   it("returns false when the signature header is null or undefined", () => {
     expect(
       verifyWebhookSignature({
