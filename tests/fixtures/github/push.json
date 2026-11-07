@@ -1,0 +1,66 @@
+{
+  "ref": "refs/heads/main",
+  "before": "0000000000000000000000000000000000000000",
+  "after": "1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b",
+  "repository": {
+    "id": 987654321,
+    "name": "SprintProof",
+    "full_name": "Odiethebest/SprintProof"
+  },
+  "pusher": {
+    "name": "alice"
+  },
+  "sender": {
+    "login": "alice"
+  },
+  "commits": [
+    {
+      "id": "1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b",
+      "message": "feat: add feature\n\nDetailed explanation here",
+      "timestamp": "2026-11-05T15:30:00Z",
+      "author": {
+        "name": "Alice Smith",
+        "email": "alice@example.com",
+        "username": "alice"
+      },
+      "committer": {
+        "name": "Alice Smith",
+        "email": "alice@example.com",
+        "username": "alice"
+      },
+      "distinct": true
+    },
+    {
+      "id": "2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c",
+      "message": "chore(deps): bump dependencies",
+      "timestamp": "2026-11-05T15:31:00Z",
+      "author": {
+        "name": "dependabot[bot]",
+        "email": "dependabot@users.noreply.github.com",
+        "username": "dependabot[bot]"
+      },
+      "committer": {
+        "name": "dependabot[bot]",
+        "email": "dependabot@users.noreply.github.com",
+        "username": "dependabot[bot]"
+      },
+      "distinct": true
+    },
+    {
+      "id": "3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d",
+      "message": "fix: bugfix by outsider",
+      "timestamp": "2026-11-05T15:32:00Z",
+      "author": {
+        "name": "Outsider",
+        "email": "outsider@example.com",
+        "username": "outsider"
+      },
+      "committer": {
+        "name": "Outsider",
+        "email": "outsider@example.com",
+        "username": "outsider"
+      },
+      "distinct": true
+    }
+  ]
+}

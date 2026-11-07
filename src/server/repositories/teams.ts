@@ -48,6 +48,43 @@ export async function findTeam({ teamId }: { teamId: string }) {
   return db.team.findUnique({ where: { id: teamId }, select: TEAM_FIELDS });
 }
 
+export async function findTeamByRepo({
+  repoId,
+  repoFullName,
+}: {
+  repoId?: bigint | null;
+  repoFullName: string;
+}) {
+  if (repoId !== undefined && repoId !== null) {
+    const byRepoId = await db.team.findUnique({
+      where: { repoId },
+      select: { id: true, repoFullName: true, repoId: true },
+    });
+    if (byRepoId !== null) {
+      return byRepoId;
+    }
+  }
+
+  const byFullName = await db.team.findFirst({
+    where: {
+      repoFullName: { equals: repoFullName, mode: "insensitive" },
+    },
+    select: { id: true, repoFullName: true, repoId: true },
+  });
+
+  if (byFullName !== null) {
+    if (repoId !== undefined && repoId !== null && byFullName.repoId === null) {
+      await db.team.update({
+        where: { id: byFullName.id },
+        data: { repoId },
+      });
+    }
+    return byFullName;
+  }
+
+  return null;
+}
+
 export async function listTeamsForUser({ userId }: { userId: string }) {
   const memberships = await db.membership.findMany({
     where: { userId },
