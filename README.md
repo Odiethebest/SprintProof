@@ -199,9 +199,11 @@ Open http://localhost:3000.
 | Name | Purpose |
 |---|---|
 | `DATABASE_URL` | PostgreSQL connection string |
+| `PGSSLMODE` | Vercel only. Set to `no-verify` so the connection to Supabase is encrypted; the certificate isn't checked yet (#53). Leave empty locally. |
 | `AUTH_SECRET` | Secret used to sign session JWTs |
 | `AUTH_GITHUB_ID` | GitHub OAuth App client ID |
 | `AUTH_GITHUB_SECRET` | GitHub OAuth App client secret |
+| `AUTH_REDIRECT_PROXY_URL` | Vercel only. Set on Production and Preview to `https://sprintproof.vercel.app/api/auth` so previews sign in through production's GitHub OAuth App; both then need the same `AUTH_SECRET`. Leave empty locally. |
 | `GITHUB_WEBHOOK_SECRET` | Verifies incoming GitHub webhook signatures |
 | `PUSHER_APP_ID` / `PUSHER_SECRET` | Server-side Pusher credentials |
 | `NEXT_PUBLIC_PUSHER_KEY` / `NEXT_PUBLIC_PUSHER_CLUSTER` | Client-side Pusher config |
@@ -228,8 +230,8 @@ The team lead connects a repository from **Settings**, then adds a webhook on Gi
 
 | Webhook event | Recorded as |
 |---|---|
-| `push` | `COMMIT` activity, deduplicated by SHA |
-| `pull_request` | `PR_OPENED` / `PR_MERGED` activity; commits are also read from the PR's commit list so merges don't hide authorship |
+| `push` | `COMMIT` activity from any branch, deduplicated by SHA and credited to the commit author (see [Counting Rules](#counting-rules)) |
+| `pull_request` | `PR_OPENED` / `PR_MERGED` activity |
 | `pull_request_review` | `REVIEW` activity |
 
 Every delivery is checked before anything is stored:

@@ -16,7 +16,7 @@ Two Supabase projects on the free plan, in a dedicated SprintProof organization 
 
 ## Consequences
 - The Supabase Data API is turned off on both projects, so no table is exposed through Supabase's REST API.
-- Migrations are applied with `prisma migrate deploy` by hand after each merged migration. As of this record, #5, #6 and #7 are applied to both databases. Automating this is a follow-up.
+- Migrations are applied with `prisma migrate deploy` by hand after each merged migration. As of 2026-11-07, #5, #6, #7 and #11 are applied to both databases. Automating this is a follow-up.
 - Connection strings and passwords live only in Vercel environment variables and are shared between partners privately, never in the repo, PRs or docs.
 - A paused project must be resumed from the Supabase dashboard; the data is kept.
 - Supabase runs PostgreSQL 17.11, while the README, local Docker and CI use 16. The schema uses no version-specific features; moving Docker and CI to 17 would close the gap.
