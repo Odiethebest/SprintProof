@@ -93,3 +93,24 @@ export async function insertSprint(input: {
     },
   });
 }
+
+export async function insertStandup(input: {
+  sprintId: string;
+  userId: string;
+  date: string;
+  yesterday?: string;
+  today?: string;
+  blockers?: string | null;
+  createdAt?: Date;
+  updatedAt?: Date;
+}) {
+  return db.standup.create({
+    data: {
+      yesterday: "GitHub sign-in works on preview deploys (#6).",
+      today: "Team creation and invite links (#7).",
+      blockers: null,
+      ...input,
+      date: new Date(`${input.date}T00:00:00.000Z`),
+    },
+  });
+}
