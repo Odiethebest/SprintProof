@@ -199,6 +199,7 @@ Open http://localhost:3000.
 | Name | Purpose |
 |---|---|
 | `DATABASE_URL` | PostgreSQL connection string |
+| `PGSSLMODE` | Vercel only. Set to `no-verify` so the connection to Supabase is encrypted; the certificate isn't checked yet (#53). Leave empty locally. |
 | `AUTH_SECRET` | Secret used to sign session JWTs |
 | `AUTH_GITHUB_ID` | GitHub OAuth App client ID |
 | `AUTH_GITHUB_SECRET` | GitHub OAuth App client secret |
