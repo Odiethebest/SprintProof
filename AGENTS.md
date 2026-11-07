@@ -68,7 +68,7 @@ src/
 │       ├── auth/[...nextauth]/
 │       ├── webhooks/github/      # GitHub webhook receiver
 │       └── v1/                   # public, documented REST API (docs/api/openapi.yaml)
-│           ├── teams/            # create a team; [teamId]/invites/ create and revoke links; [teamId]/sprints/ (route.ts and [sprintId]/route.ts)
+│           ├── teams/            # create a team; [teamId]/invites/ create and revoke links; [teamId]/sprints/ (route.ts and [sprintId]/route.ts); [teamId]/standups/ post or update today's standup
 │           └── memberships/      # join a team with an invite token
 ├── components/
 │   ├── ui/                       # generic primitives (Button, Card, Badge...)
@@ -81,12 +81,13 @@ src/
 │   ├── checks/                   # requirement checks (standups, reviews per person)
 │   ├── stats/                    # contribution counts per member per sprint
 │   ├── sprints/                  # sprint date math, timezone boundaries (validate-sprint.ts, sprint-dates.ts, sprint-body.ts)
+│   ├── standups/                 # standup input, standup date in the team timezone, history grouped by day
 │   ├── retro/                    # vote tallying, action item selection
 │   ├── github/                   # GitHub login and profile rules, webhook payload → Activity mapping
 │   └── export/                   # sprint summary → Markdown
 ├── server/                       # everything with side effects
 │   ├── db.ts                     # single Prisma client
-│   ├── repositories/             # all database reads/writes (sprints.ts)
+│   ├── repositories/             # all database reads/writes (sprints.ts, standups.ts)
 │   ├── auth.ts                   # requireTeamRole()
 │   ├── auth-config.ts            # Auth.js config: GitHub provider, test sign-in
 │   ├── auth-session.ts           # getSession(), getSessionUserId(); tests mock this
@@ -374,3 +375,4 @@ Standups, planning notes and retros for our own team are recorded in SprintProof
 | 2026-11-05 | Ziqi (Odie) Yang | Architecture tree lists the files added in #6 and #7; Key patterns adds the route handler helpers in `server/api-response.ts`; integration tests may mock `server/auth-session.ts` (#7) | Yunhong's review of PR #44: the rules should match the code |
 | 2026-11-05 | Yunhong Huang | New code in `src/lib/` takes calendar dates as `'YYYY-MM-DD'` strings, with `src/lib/checks/requirement-status.ts` as the exception; sprint dates mapped to strings in server layer (#8) | Prevents timezone and UTC midnight offset bugs when passing `@db.Date` values into pure business logic |
 | 2026-11-06 | Ziqi (Odie) Yang | Commits are counted from `push` events and attributed to the commit author only (§1, PRD R4, README Counting Rules) (#11) | Decision 001 asked #11 to reword R4: the `pull_request` payload has no commit list. PR #49 review: crediting the committer or the pusher gave people commits they didn't write |
+| 2026-11-06 | Ziqi (Odie) Yang | Architecture tree lists the standups files added in #9: `lib/standups/`, `repositories/standups.ts` and the `[teamId]/standups/` API route (#9) | Yunhong's review of PR #44: the rules should match the code |
