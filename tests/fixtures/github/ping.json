@@ -1,0 +1,15 @@
+{
+  "zen": "Approachable is better than simple.",
+  "hook_id": 12345678,
+  "repository": {
+    "id": 987654321,
+    "name": "SprintProof",
+    "full_name": "Odiethebest/SprintProof",
+    "owner": {
+      "login": "Odiethebest"
+    }
+  },
+  "sender": {
+    "login": "octocat"
+  }
+}

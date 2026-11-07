@@ -215,6 +215,31 @@ test.describe("Onboarding", () => {
     );
   });
 
+  test("shows the webhook URL and setup steps for the lead in Settings", async ({
+    page,
+  }) => {
+    // Arrange
+    await signInAsTestUser(page, LEAD);
+    await page.goto("/teams/new");
+    await page.getByLabel("Team name").fill("Webhook Settings Team");
+    const repo = uniqueRepo();
+    await page.getByLabel("GitHub repo").fill(repo);
+    await page.getByRole("button", { name: "Create team" }).click();
+    await expect(page).toHaveURL(/\/teams\/[^/]+\/settings$/);
+
+    // Assert
+    const repositorySection = page.getByRole("region", { name: "Repository" });
+    await expect(repositorySection).toBeVisible();
+    await expect(repositorySection.getByText(repo)).toBeVisible();
+    await expect(
+      repositorySection.getByText(/\/api\/webhooks\/github/)
+    ).toBeVisible();
+    await expect(
+      repositorySection.getByText("Webhook setup steps")
+    ).toBeVisible();
+    await expectNoBlockingViolations(page);
+  });
+
   test("has no serious or critical accessibility violations", async ({
     page,
     browser,
