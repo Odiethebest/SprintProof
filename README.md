@@ -202,6 +202,7 @@ Open http://localhost:3000.
 | `AUTH_SECRET` | Secret used to sign session JWTs |
 | `AUTH_GITHUB_ID` | GitHub OAuth App client ID |
 | `AUTH_GITHUB_SECRET` | GitHub OAuth App client secret |
+| `AUTH_REDIRECT_PROXY_URL` | Vercel only. Set on Production and Preview to `https://sprintproof.vercel.app/api/auth` so previews sign in through production's GitHub OAuth App; both then need the same `AUTH_SECRET`. Leave empty locally. |
 | `GITHUB_WEBHOOK_SECRET` | Verifies incoming GitHub webhook signatures |
 | `PUSHER_APP_ID` / `PUSHER_SECRET` | Server-side Pusher credentials |
 | `NEXT_PUBLIC_PUSHER_KEY` / `NEXT_PUBLIC_PUSHER_CLUSTER` | Client-side Pusher config |
