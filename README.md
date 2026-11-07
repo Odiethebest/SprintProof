@@ -229,8 +229,8 @@ The team lead connects a repository from **Settings**, then adds a webhook on Gi
 
 | Webhook event | Recorded as |
 |---|---|
-| `push` | `COMMIT` activity, deduplicated by SHA |
-| `pull_request` | `PR_OPENED` / `PR_MERGED` activity; commits are also read from the PR's commit list so merges don't hide authorship |
+| `push` | `COMMIT` activity from any branch, deduplicated by SHA and credited to the commit author (see [Counting Rules](#counting-rules)) |
+| `pull_request` | `PR_OPENED` / `PR_MERGED` activity |
 | `pull_request_review` | `REVIEW` activity |
 
 Every delivery is checked before anything is stored:
