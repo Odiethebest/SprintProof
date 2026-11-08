@@ -179,7 +179,8 @@ sprintproof/
 - Node.js 20 or later
 - A PostgreSQL database (local, or a free hosted one such as Neon or Supabase)
 - A GitHub OAuth App ([GitHub → Settings → Developer settings → OAuth Apps](https://github.com/settings/developers)) with callback URL `http://localhost:3000/api/auth/callback/github`
-- A Pusher Channels app (free tier is enough)
+- Docker, to run [Soketi](https://docs.soketi.app/), a Pusher-compatible server, for live updates in development and in the E2E tests
+- For deployments, a Pusher Channels app (free tier is enough)
 
 ### Local setup
 
@@ -205,8 +206,9 @@ Open http://localhost:3000.
 | `AUTH_GITHUB_SECRET` | GitHub OAuth App client secret |
 | `AUTH_REDIRECT_PROXY_URL` | Vercel only. Set on Production and Preview to `https://sprintproof.vercel.app/api/auth` so previews sign in through production's GitHub OAuth App; both then need the same `AUTH_SECRET`. Leave empty locally. |
 | `GITHUB_WEBHOOK_SECRET` | Verifies incoming GitHub webhook signatures |
-| `PUSHER_APP_ID` / `PUSHER_SECRET` | Server-side Pusher credentials |
+| `PUSHER_APP_ID` / `PUSHER_SECRET` | Server-side Pusher credentials. Leave all the Pusher values empty to turn live updates off; pages then update on reload. |
 | `NEXT_PUBLIC_PUSHER_KEY` / `NEXT_PUBLIC_PUSHER_CLUSTER` | Client-side Pusher config |
+| `NEXT_PUBLIC_PUSHER_HOST` / `NEXT_PUBLIC_PUSHER_PORT` | Local only: a Pusher-compatible server such as Soketi (`localhost`, `6001`). Leave empty on Vercel so the app uses Pusher Channels. |
 | `E2E_TEST_AUTH` | Enables the test-only sign-in provider for Playwright. Never set in production. |
 
 Never commit real values. [`.env.example`](.env.example) lists names only.
@@ -278,6 +280,26 @@ npx vitest run tests/unit/checks/standup-quota.test.ts   # a single test file
 ```
 
 Before opening a PR, run `npm run lint && npm run typecheck && npm test`.
+
+### Running the tests
+
+The live dashboard specs need Soketi, a Pusher-compatible server, running locally:
+
+```bash
+docker run -d --name sprintproof-soketi -p 6001:6001 quay.io/soketi/soketi:1.6-16-debian
+docker start sprintproof-soketi   # later runs
+```
+
+`playwright.config.ts` points the dev server at it with Soketi's default app credentials (`app-id`, `app-key`, `app-secret`), which aren't secrets. To see live updates in `npm run dev`, put the same values in `.env.local`:
+
+```bash
+PUSHER_APP_ID=app-id
+PUSHER_SECRET=app-secret
+NEXT_PUBLIC_PUSHER_KEY=app-key
+NEXT_PUBLIC_PUSHER_CLUSTER=mt1
+NEXT_PUBLIC_PUSHER_HOST=localhost
+NEXT_PUBLIC_PUSHER_PORT=6001
+```
 
 We follow red-green-refactor, and the git history shows it: every feature starts with a commit containing only failing tests, followed by the implementation commit.
 

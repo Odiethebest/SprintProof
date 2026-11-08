@@ -21,6 +21,7 @@ import {
   readApiError,
 } from "@/components/teams/api-error";
 import { BUTTON_CLASSES } from "@/components/ui/button-styles";
+import { TOAST_DURATION_MS, Toast } from "@/components/ui/toast";
 
 type FieldName = "yesterday" | "today" | "blockers";
 type FieldValues = Record<FieldName, string>;
@@ -28,7 +29,6 @@ type FieldErrors = Partial<Record<FieldName, string[]>>;
 
 // Focus goes to the first invalid field in the order they appear.
 const FIELD_ORDER: FieldName[] = ["yesterday", "today", "blockers"];
-const TOAST_DURATION_MS = 4500;
 
 // DESIGN.md §7 Forms: the border turns `missed` on error.
 const TEXTAREA_CLASSES = {
@@ -232,17 +232,7 @@ function StandupFields({
           </button>
         </div>
       </form>
-      {/* DESIGN.md §7 Toast: the page's polite live region, bottom center. */}
-      <div
-        role="status"
-        className="pointer-events-none fixed inset-x-0 bottom-6 flex justify-center px-4"
-      >
-        {toast && (
-          <p className="rounded-md bg-text px-4 py-3 text-sm text-canvas">
-            {toast}
-          </p>
-        )}
-      </div>
+      <Toast message={toast} />
     </>
   );
 }

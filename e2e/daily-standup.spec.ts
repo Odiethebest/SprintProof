@@ -123,9 +123,6 @@ test.describe("Daily standup", () => {
     await expect(entries.first()).toContainText("Write the E2E spec for #9.");
     await expect(entries.first()).toContainText("Waiting on a review.");
     await expect(entries.first()).toContainText("edited");
-    // Move off the button so axe checks the page at rest: the primary button's
-    // hover color (bg-primary/90, DESIGN.md §7) is 4.48:1, a design-token fix outside #9.
-    await page.mouse.move(0, 0);
     await expectNoBlockingViolations(page);
   });
 
@@ -218,7 +215,7 @@ test.describe("Daily standup", () => {
     const instructor = await signedInPage(browser, INSTRUCTOR);
     await instructor.goto(inviteUrl);
     await instructor.getByRole("button", { name: "Join team" }).click();
-    await expect(instructor).toHaveURL(/\/$/);
+    await expect(instructor).toHaveURL(/\/teams\/[^/]+\/dashboard$/);
 
     // Act
     await instructor.goto(`/teams/${teamId}/standups`);
