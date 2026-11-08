@@ -132,7 +132,7 @@ Never use font sizes outside this table.
 | `MemberCard` | Avatar, name, GitHub login and role pill; four counts (commits, PRs, reviews, standups) as tiles in a 2×2 grid (`rounded-md border border-border p-3`, label `text-xs text-text-muted`, value `font-mono text-lg font-semibold tabular-nums`); `RequirementChecklist` below a divider. No percentages, no ranking. |
 | `RequirementChecklist` | One row per requirement using the format in section 3. |
 | `ActivityFeed` | Rows of a 16 px `text-muted` icon, actor and action in `text-sm`, a truncated `text-xs text-text-muted` summary, and the time in `font-mono text-xs`. |
-| `LiveIndicator` | Small dot + "Live" (`met` color) or "Reconnecting…" (`text-muted`). Dot pulses only if `prefers-reduced-motion` is not set. |
+| `LiveIndicator` | Small dot + "Live" (`met` color) or "Reconnecting…" (`text-muted`); "Connecting…" (`text-muted`) before the first connection. Dot pulses only if `prefers-reduced-motion` is not set. Shown only on pages that update live (dashboard, standups). |
 | `StandupForm` | Three labeled textareas, 3 rows each, 1000-char limit with counter. Submit button text: "Post standup" or "Update today's standup". Once posted, a `met` `CircleCheck` note above the fields gives the time. |
 | `RetroColumn` | Column title, item count, item list sorted by votes (each item `rounded-md border border-border p-3`), "Add item" input with an "Add" button at the bottom. |
 | `VoteButton` | `ThumbsUp` icon + count, 36 px. When the user has voted: filled icon, `border-primary bg-primary/10 text-primary`. With no votes left: `aria-disabled`, 60% opacity, tooltip "No votes left". |
