@@ -43,7 +43,7 @@ Show facts, not judgments. The app displays counts and whether requirements are 
 | ORM | Prisma | 7.10.1 |
 | Auth | Auth.js (`next-auth`) with GitHub provider, JWT session strategy | 5.0.0-beta.32 |
 | Validation | Zod | 4.6.7 |
-| Real-time | Pusher Channels (`pusher` server, `pusher-js` client) | pinned when added (#12) |
+| Real-time | Pusher Channels (`pusher` server, `pusher-js` client); Soketi (Pusher-compatible) locally and in E2E | 5.3.4 (`pusher`), 8.6.0 (`pusher-js`), Soketi image `1.6-16-debian` |
 | GitHub API | Octokit (`@octokit/rest`) | pinned when added (#11) |
 | Unit / integration tests | Vitest | 5.0 |
 | E2E tests | Playwright + `@axe-core/playwright` | 1.64 (Playwright); 4.14.0 (`@axe-core/playwright`) |
@@ -378,3 +378,4 @@ Standups, planning notes and retros for our own team are recorded in SprintProof
 | 2026-11-06 | Ziqi (Odie) Yang | Commits are counted from `push` events and attributed to the commit author only (§1, PRD R4, README Counting Rules) (#11) | Decision 001 asked #11 to reword R4: the `pull_request` payload has no commit list. PR #49 review: crediting the committer or the pusher gave people commits they didn't write |
 | 2026-11-06 | Ziqi (Odie) Yang | Architecture tree lists the standups files added in #9: `lib/standups/`, `repositories/standups.ts` and the `[teamId]/standups/` API route (#9) | Yunhong's review of PR #44: the rules should match the code |
 | 2026-11-07 | Ziqi (Odie) Yang | Architecture tree lists the dashboard files added in #12: `lib/dashboard/`, the `lib/stats/` and `lib/sprints/` additions, `repositories/activities.ts`, and `TeamNav` and `SprintSelector` in `components/layout/` (#12) | Yunhong's review of PR #44: the rules should match the code |
+| 2026-11-07 | Ziqi (Odie) Yang | Pinned `pusher` 5.3.4 and `pusher-js` 8.6.0; E2E runs live updates against a local Soketi container (#12) | Issue #12: live dashboard updates. Soketi speaks the Pusher protocol with fixed test credentials, so E2E needs no real keys or outside network |
