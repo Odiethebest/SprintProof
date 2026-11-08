@@ -31,7 +31,7 @@ function prLabel(prNumber: number | null): string {
 
 // The action after the actor's name, e.g. "pushed 3 commits".
 // TODO(#57): say "approved", "requested changes on" or "commented on" once the review state is stored.
-function describeAction(entry: ActivityFeedEntryView): string {
+export function describeAction(entry: ActivityFeedEntryView): string {
   switch (entry.kind) {
     case "STANDUP":
       return "posted a standup";

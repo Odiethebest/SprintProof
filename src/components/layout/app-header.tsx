@@ -7,6 +7,7 @@ import {
   type SprintOptionView,
 } from "@/components/layout/sprint-selector";
 import { TeamNav, type TeamNavProps } from "@/components/layout/team-nav";
+import { LiveIndicator } from "@/components/realtime/live-indicator";
 
 interface AppHeaderProps {
   team: { name: string; repoFullName: string } | null;
@@ -18,8 +19,8 @@ interface AppHeaderProps {
   sprintSelector: { options: SprintOptionView[]; selectedId: string } | null;
 }
 
-// The shared top bar (AGENTS.md §2 Screens).
-// TODO(#12): add the LiveIndicator on team pages.
+// The shared top bar (AGENTS.md §2 Screens). The LiveIndicator shows only on
+// pages wrapped in a TeamLiveProvider, the ones that update live.
 export function AppHeader({
   team,
   user,
@@ -56,6 +57,7 @@ export function AppHeader({
                 selectedId={sprintSelector.selectedId}
               />
             )}
+            <LiveIndicator />
           </div>
           <UserMenu
             name={user.displayName}

@@ -12,6 +12,7 @@ import {
   buildSprintSelector,
   readRequestedSprintId,
 } from "@/components/layout/sprint-navigation";
+import { TeamLiveProvider } from "@/components/realtime/team-live-provider";
 import { StandupForm } from "@/components/standups/standup-form";
 import {
   StandupHistory,
@@ -133,8 +134,9 @@ async function TeamStandups({
     standups: day.standups.map(toEntryView),
   }));
 
+  // Teammates' standups show up in History without a reload.
   return (
-    <>
+    <TeamLiveProvider teamId={team.id}>
       <AppHeader
         team={team}
         user={user}
@@ -188,6 +190,6 @@ async function TeamStandups({
           </div>
         </div>
       </main>
-    </>
+    </TeamLiveProvider>
   );
 }

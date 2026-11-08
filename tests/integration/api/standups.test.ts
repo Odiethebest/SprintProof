@@ -13,6 +13,8 @@ import { apiRequest, routeContext } from "../helpers/requests";
 import { clearDatabase } from "../setup/test-setup";
 
 vi.mock("@/server/auth-session", () => ({ getSessionUserId: vi.fn() }));
+// Live update events are covered in realtime-events.test.ts.
+vi.mock("@/server/realtime", () => ({ triggerTeamEvent: vi.fn() }));
 
 const NO_CURRENT_SPRINT = {
   error: {

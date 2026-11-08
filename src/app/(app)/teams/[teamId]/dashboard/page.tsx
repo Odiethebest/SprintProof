@@ -23,6 +23,8 @@ import {
   MemberCard,
   type MemberCardView,
 } from "@/components/dashboard/member-card";
+import { LiveAnnouncer } from "@/components/dashboard/live-announcer";
+import { buildLiveUpdates } from "@/components/dashboard/live-updates";
 import { RequirementSummary } from "@/components/dashboard/requirement-summary";
 import { AppHeader } from "@/components/layout/app-header";
 import { PageHeader } from "@/components/layout/page-header";
@@ -33,6 +35,7 @@ import {
   formatShortDate,
   readRequestedSprintId,
 } from "@/components/layout/sprint-navigation";
+import { TeamLiveProvider } from "@/components/realtime/team-live-provider";
 import {
   EMPTY_STATE_LINK_CLASSES,
   EmptyState,
@@ -184,11 +187,15 @@ async function TeamDashboard({
     );
   }
 
+  // The empty state above has nothing a teammate's standup or push could
+  // change, so only a sprint's dashboard listens for live updates.
   return (
-    <>
+    <TeamLiveProvider teamId={team.id}>
       {header}
       <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-8 md:px-6">
+        {/* A new sprint remounts it: no count highlights or announcements for the switch. */}
         <SprintDashboard
+          key={sprint.id}
           sprint={sprint}
           team={team}
           viewer={{ userId: user.id, role: access.role }}
@@ -196,7 +203,7 @@ async function TeamDashboard({
           now={now}
         />
       </main>
-    </>
+    </TeamLiveProvider>
   );
 }
 
@@ -352,6 +359,7 @@ async function SprintDashboard({
           }
         />
       </div>
+      <LiveAnnouncer updates={buildLiveUpdates({ entries, cards })} />
     </>
   );
 }

@@ -1,5 +1,6 @@
 import type { TeamRole } from "@/lib/auth/team-access";
 import type { RequirementProgress } from "@/lib/checks";
+import { LiveCount } from "@/components/realtime/live-count";
 import { RolePill } from "@/components/teams/role-pill";
 import { Avatar } from "@/components/ui/avatar";
 import { RequirementChecklist } from "./requirement-checklist";
@@ -20,7 +21,9 @@ function CountTile({ label, value }: { label: string; value: number }) {
   return (
     <div className="flex flex-col gap-1 rounded-md border border-border p-3">
       <dt className="text-xs text-text-muted">{label}</dt>
-      <dd className="font-mono text-lg font-semibold tabular-nums">{value}</dd>
+      <dd className="font-mono text-lg font-semibold tabular-nums">
+        <LiveCount value={value} />
+      </dd>
     </div>
   );
 }

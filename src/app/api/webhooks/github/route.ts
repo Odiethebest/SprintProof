@@ -6,6 +6,7 @@ import {
 } from "@/lib/github/webhook-events";
 import { findTeamByRepo } from "@/server/repositories/teams";
 import { recordWebhookEvent } from "@/server/repositories/activities";
+import { triggerTeamEvent } from "@/server/realtime";
 
 export async function POST(request: Request): Promise<Response> {
   const secret = process.env.GITHUB_WEBHOOK_SECRET;
@@ -107,8 +108,10 @@ export async function POST(request: Request): Promise<Response> {
     activities: mapping.activities,
   });
 
+  // One event per delivery, however many commits it carried. A redelivery or
+  // a delivery with nothing stored (a bot's review) changes nothing on screen.
   if (!result.alreadyProcessed && mapping.activities.length > 0) {
-    // TODO(#12): trigger Pusher event on team-${team.id} channel (activity.created)
+    await triggerTeamEvent({ teamId: team.id, event: "activity.created" });
   }
 
   return Response.json({ ok: true }, { status: 200 });
