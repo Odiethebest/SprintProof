@@ -114,7 +114,17 @@ async function TeamSettings({ params }: { params: Params }) {
 
   return (
     <>
-      <AppHeader team={team} user={user} role={access.role} />
+      <AppHeader
+        team={team}
+        user={user}
+        role={access.role}
+        teamNav={{
+          teamId: team.id,
+          current: "settings",
+          requestedSprintId: null,
+        }}
+        sprintSelector={null}
+      />
       <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-8 md:px-6">
         <PageHeader
           title="Settings"

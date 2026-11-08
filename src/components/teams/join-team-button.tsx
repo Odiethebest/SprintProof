@@ -10,7 +10,13 @@ import {
 import { BUTTON_CLASSES } from "@/components/ui/button-styles";
 
 // Joining is a POST to the API: opening the invite page never changes anything.
-export function JoinTeamButton({ inviteToken }: { inviteToken: string }) {
+export function JoinTeamButton({
+  inviteToken,
+  teamId,
+}: {
+  inviteToken: string;
+  teamId: string;
+}) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [isJoining, setIsJoining] = useState(false);
@@ -25,8 +31,7 @@ export function JoinTeamButton({ inviteToken }: { inviteToken: string }) {
         body: JSON.stringify({ inviteToken }),
       });
       if (response.ok) {
-        // TODO(#12): go to the team dashboard once it exists.
-        router.push("/");
+        router.push(`/teams/${teamId}/dashboard`);
         return;
       }
       setError((await readApiError(response)).message);

@@ -28,7 +28,13 @@ async function SignedInHome() {
 
   return (
     <>
-      <AppHeader team={null} user={user} role={null} />
+      <AppHeader
+        team={null}
+        user={user}
+        role={null}
+        teamNav={null}
+        sprintSelector={null}
+      />
       <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-8 md:px-6">
         <PageHeader
           title="Your teams"
@@ -52,9 +58,8 @@ async function SignedInHome() {
           <ul className="grid gap-4 md:grid-cols-2">
             {teams.map((team) => (
               <li key={team.id}>
-                {/* TODO(#12): link to the team dashboard once it exists. */}
                 <Link
-                  href={`/teams/${team.id}/settings`}
+                  href={`/teams/${team.id}/dashboard`}
                   className="flex items-center justify-between gap-4 rounded-lg border border-border bg-surface p-4 transition-colors duration-150 ease-out hover:bg-text/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-canvas md:p-6"
                 >
                   <span className="flex min-w-0 flex-col gap-1">
