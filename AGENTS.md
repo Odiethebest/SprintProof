@@ -339,6 +339,7 @@ Standups, planning notes and retros for our own team are recorded in SprintProof
 - **API tokens:** generate with `crypto.randomBytes`, show once, store only a SHA-256 hash. Public API endpoints require `Authorization: Bearer <token>`.
 - **GitHub OAuth:** request the minimum scopes needed; the choice and reasoning live in `docs/decisions/`.
 - **Database:** only Prisma queries or `$queryRaw` tagged templates. Never build SQL with string concatenation.
+- **Dependencies and code scanning:** CI runs `npm audit --audit-level=high`, dependency review on PRs (fails on high or critical) and CodeQL. Don't add or upgrade to a package version with a high or critical advisory, and fix CodeQL alerts instead of dismissing them without a reason.
 - Never log request bodies that may contain standup text, feedback, or tokens.
 
 ### Accessibility requirements
@@ -376,3 +377,4 @@ Standups, planning notes and retros for our own team are recorded in SprintProof
 | 2026-11-05 | Yunhong Huang | New code in `src/lib/` takes calendar dates as `'YYYY-MM-DD'` strings, with `src/lib/checks/requirement-status.ts` as the exception; sprint dates mapped to strings in server layer (#8) | Prevents timezone and UTC midnight offset bugs when passing `@db.Date` values into pure business logic |
 | 2026-11-06 | Ziqi (Odie) Yang | Commits are counted from `push` events and attributed to the commit author only (§1, PRD R4, README Counting Rules) (#11) | Decision 001 asked #11 to reword R4: the `pull_request` payload has no commit list. PR #49 review: crediting the committer or the pusher gave people commits they didn't write |
 | 2026-11-06 | Ziqi (Odie) Yang | Architecture tree lists the standups files added in #9: `lib/standups/`, `repositories/standups.ts` and the `[teamId]/standups/` API route (#9) | Yunhong's review of PR #44: the rules should match the code |
+| 2026-11-07 | Yunhong Huang | §4 Security requirements: CI runs npm audit (high), dependency review and CodeQL; don't add packages with high or critical advisories (#17) | Issue #17: security scanning in CI |
