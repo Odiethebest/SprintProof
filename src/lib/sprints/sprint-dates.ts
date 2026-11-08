@@ -37,6 +37,28 @@ function getSprintEndBoundary(endDateStr: string, timeZone: string): Date {
   return endOfDay(new TZDate(year, month - 1, day, timeZone));
 }
 
+export interface GetSprintWindowOptions {
+  sprint: SprintDateRange;
+  timeZone: string;
+}
+
+export interface SprintWindow {
+  start: Date;
+  end: Date;
+}
+
+// Counting rule: a sprint runs from 00:00 on its start date through 23:59:59.999
+// on its end date, in the team timezone (AGENTS.md §1).
+export function getSprintWindow({
+  sprint,
+  timeZone,
+}: GetSprintWindowOptions): SprintWindow {
+  return {
+    start: new Date(getSprintStartBoundary(sprint.startDate, timeZone)),
+    end: new Date(getSprintEndBoundary(sprint.endDate, timeZone)),
+  };
+}
+
 export function isWithinSprint({
   sprint,
   instant,
