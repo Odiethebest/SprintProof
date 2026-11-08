@@ -182,7 +182,7 @@ Main Prisma models: `User`, `Team`, `Membership` (role: `LEAD` | `MEMBER` | `INS
 - **Unit tests (Vitest)** for every function in `src/lib/`. Coverage goal: ≥ 90% lines for `src/lib/`, ≥ 80% overall.
 - **Integration tests (Vitest)** call route handlers directly against a real PostgreSQL test database (reset between test files). Mock only external services at their wrappers: `server/github-client.ts` and `server/realtime.ts`, plus `server/auth-session.ts` to set the signed-in user.
 - **E2E tests (Playwright)** cover the user flows in section 2. Each flow includes an `@axe-core/playwright` accessibility check with no serious or critical violations.
-- E2E sign-in uses a test-only credentials provider that is enabled **only** when `E2E_TEST_AUTH=true`. It must never be enabled in production; CI asserts this.
+- E2E sign-in uses a test-only credentials provider that is enabled **only** when `E2E_TEST_AUTH=true`. It must never be enabled in production; `.github/workflows/production-guard.yml` checks production after every push to `main` and daily. CI runs the E2E suite with one worker because the specs share one database.
 - Test structure: Arrange / Act / Assert. One behavior per test. Names describe behavior: `it("counts three reviews on the same PR as one")`.
 - Build test data with `tests/factories/`, not inline object literals repeated across files.
 - Every acceptance criterion in the issue maps to at least one test. Edge cases to always consider: empty sprint, sprint boundary at midnight, member with no GitHub login, bot activity, duplicate webhook delivery.
@@ -384,3 +384,4 @@ Standups, planning notes and retros for our own team are recorded in SprintProof
 | 2026-11-07 | Ziqi (Odie) Yang | Architecture tree lists the dashboard files added in #12: `lib/dashboard/`, the `lib/stats/` and `lib/sprints/` additions, `repositories/activities.ts`, and `TeamNav` and `SprintSelector` in `components/layout/` (#12) | Yunhong's review of PR #44: the rules should match the code |
 | 2026-11-07 | Ziqi (Odie) Yang | Pinned `pusher` 5.3.4 and `pusher-js` 8.6.0; E2E runs live updates against a local Soketi container (#12) | Issue #12: live dashboard updates. Soketi speaks the Pusher protocol with fixed test credentials, so E2E needs no real keys or outside network |
 | 2026-11-07 | Ziqi (Odie) Yang | Architecture tree lists the live update files added in #12: `lib/realtime/`, `components/realtime/` and `Toast` in `components/ui/` (#12) | Yunhong's review of PR #44: the rules should match the code |
+| 2026-11-07 | Yunhong Huang | §1 Testing strategy names the production guard workflow and says CI runs E2E with one worker; CI uses PostgreSQL 17 to match Supabase (#17) | Issue #17: E2E stage in CI and the `E2E_TEST_AUTH` production check |

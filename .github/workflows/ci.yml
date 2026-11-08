@@ -60,7 +60,8 @@ jobs:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: postgres:16
+        # 17 matches Supabase (decision 002); local Docker stays on 16.
+        image: postgres:17
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
@@ -91,9 +92,91 @@ jobs:
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/sprintproof_test
 
+  e2e:
+    name: E2E tests
+    needs: unit-tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: sprintproof_e2e
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      # Pusher-compatible server for the live update specs (#12), same image
+      # as the local container. It starts with a default app whose
+      # credentials below are fixed test values, not secrets.
+      soketi:
+        image: quay.io/soketi/soketi:1.6-16-debian
+        ports:
+          - 6001:6001
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/sprintproof_e2e
+      # Job-level, because Next.js inlines NEXT_PUBLIC_ variables into the
+      # browser bundle at build time, not when `next start` runs.
+      PUSHER_APP_ID: app-id
+      PUSHER_SECRET: app-secret
+      NEXT_PUBLIC_PUSHER_KEY: app-key
+      NEXT_PUBLIC_PUSHER_CLUSTER: mt1
+      NEXT_PUBLIC_PUSHER_HOST: localhost
+      NEXT_PUBLIC_PUSHER_PORT: "6001"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Apply migrations
+        run: npx prisma migrate deploy
+
+      # Auth settings are read per request (auth-session.ts), so the build
+      # doesn't need them.
+      - name: Build
+        run: npm run build
+
+      # A throwaway secret for this run's sessions only.
+      - name: Generate AUTH_SECRET
+        run: |
+          secret="$(openssl rand -base64 32)"
+          echo "::add-mask::$secret"
+          echo "AUTH_SECRET=$secret" >> "$GITHUB_ENV"
+
+      # One worker: the specs share one database (AGENTS.md §1 Testing strategy).
+      # AUTH_TRUST_HOST lets Auth.js accept localhost under `next start`.
+      - name: Playwright
+        run: npx playwright test --workers=1
+        env:
+          E2E_TEST_AUTH: "true"
+          AUTH_TRUST_HOST: "true"
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
+
   build:
     name: Production build
-    needs: unit-tests
+    needs: e2e
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

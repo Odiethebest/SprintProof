@@ -19,6 +19,6 @@ Two Supabase projects on the free plan, in a dedicated SprintProof organization 
 - Migrations are applied with `prisma migrate deploy` by hand after each merged migration. As of 2026-11-07, #5, #6, #7 and #11 are applied to both databases. Automating this is a follow-up.
 - Connection strings and passwords live only in Vercel environment variables and are shared between partners privately, never in the repo, PRs or docs.
 - A paused project must be resumed from the Supabase dashboard; the data is kept.
-- Supabase runs PostgreSQL 17.11, while the README, local Docker and CI use 16. The schema uses no version-specific features; moving Docker and CI to 17 would close the gap.
+- Supabase runs PostgreSQL 17.11. CI moved to 17 in #17 so the check that gates merges matches production; local Docker stays on 16. The schema uses no version-specific features.
 - All PR previews share one preview database, so they can see each other's data.
 - If connection limits become a problem, switch the runtime to the Transaction pooler (port 6543) and keep the Session pooler for migrations.
