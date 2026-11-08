@@ -9,6 +9,7 @@ import {
   parseJsonBody,
 } from "@/server/api-response";
 import { requireTeamRole } from "@/server/auth";
+import { triggerTeamEvent } from "@/server/realtime";
 import { listSprints } from "@/server/repositories/sprints";
 import { saveStandup } from "@/server/repositories/standups";
 import { findTeam } from "@/server/repositories/teams";
@@ -69,6 +70,9 @@ export async function POST(
     date: getStandupDate({ now, timezone: team.timezone }),
     ...parsedBody.data,
   });
-  // TODO(#12): trigger `standup.created` on the team's Pusher channel.
+  await triggerTeamEvent({
+    teamId,
+    event: isNew ? "standup.created" : "standup.updated",
+  });
   return Response.json(standup, { status: isNew ? 201 : 200 });
 }

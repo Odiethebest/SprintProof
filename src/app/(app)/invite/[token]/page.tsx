@@ -52,7 +52,13 @@ async function Invite({ params }: { params: Params }) {
 
   return (
     <>
-      <AppHeader team={null} user={user} role={null} />
+      <AppHeader
+        team={null}
+        user={user}
+        role={null}
+        teamNav={null}
+        sprintSelector={null}
+      />
       <main className="flex flex-1 items-center justify-center px-4 py-12">
         {!check.isValid || invite === null ? (
           <InviteCard
@@ -81,7 +87,7 @@ async function Invite({ params }: { params: Params }) {
               {invite.team.repoFullName}
             </p>
             <p className="text-sm">{JOIN_AS[invite.role]}</p>
-            <JoinTeamButton inviteToken={token} />
+            <JoinTeamButton inviteToken={token} teamId={invite.teamId} />
           </InviteCard>
         )}
       </main>

@@ -114,7 +114,8 @@ test.describe("Onboarding", () => {
     await partner.getByRole("button", { name: "Join team" }).click();
 
     // Assert
-    await expect(partner).toHaveURL(/\/$/);
+    await expect(partner).toHaveURL(/\/teams\/[^/]+\/dashboard$/);
+    await partner.goto("/");
     const team = partner.getByRole("link", { name: /Partner team/ });
     await expect(team.first()).toContainText("Member");
     await partner.goto(inviteUrl);
@@ -197,7 +198,7 @@ test.describe("Onboarding", () => {
     const partner = await signedInPage(browser, PARTNER);
     await partner.goto(inviteUrl);
     await partner.getByRole("button", { name: "Join team" }).click();
-    await expect(partner).toHaveURL(/\/$/);
+    await expect(partner).toHaveURL(/\/teams\/[^/]+\/dashboard$/);
 
     // Act
     await partner.goto(settingsUrl);

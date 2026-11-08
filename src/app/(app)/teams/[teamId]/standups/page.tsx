@@ -2,12 +2,17 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import { notFound, redirect } from "next/navigation";
 import { toSignInPath } from "@/lib/auth/sign-in-redirect";
-import { getCurrentSprint } from "@/lib/sprints";
+import { getCurrentSprint, selectSprint } from "@/lib/sprints";
 import { groupStandupsByDay } from "@/lib/standups/group-standups";
 import { getStandupDate } from "@/lib/standups/standup-date";
 import { AppHeader } from "@/components/layout/app-header";
 import { PageHeader } from "@/components/layout/page-header";
 import { PageLoading } from "@/components/layout/page-loading";
+import {
+  buildSprintSelector,
+  readRequestedSprintId,
+} from "@/components/layout/sprint-navigation";
+import { TeamLiveProvider } from "@/components/realtime/team-live-provider";
 import { StandupForm } from "@/components/standups/standup-form";
 import {
   StandupHistory,
@@ -26,6 +31,7 @@ import { findTeam } from "@/server/repositories/teams";
 export const metadata: Metadata = { title: "Standups · SprintProof" };
 
 type Params = Promise<{ teamId: string }>;
+type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
 // "Tue, Nov 3" for a YYYY-MM-DD date (DESIGN.md §9). The date is already the
 // team's calendar day, so it's formatted in UTC to keep it from shifting.
@@ -40,15 +46,27 @@ function formatDay(date: string): string {
   return DAY_FORMAT.format(new Date(`${date}T00:00:00.000Z`));
 }
 
-export default function StandupsPage({ params }: { params: Params }) {
+export default function StandupsPage({
+  params,
+  searchParams,
+}: {
+  params: Params;
+  searchParams: SearchParams;
+}) {
   return (
     <Suspense fallback={<PageLoading />}>
-      <TeamStandups params={params} />
+      <TeamStandups params={params} searchParams={searchParams} />
     </Suspense>
   );
 }
 
-async function TeamStandups({ params }: { params: Params }) {
+async function TeamStandups({
+  params,
+  searchParams,
+}: {
+  params: Params;
+  searchParams: SearchParams;
+}) {
   const { teamId } = await params;
   const access = await requireTeamRole(teamId, [
     "LEAD",
@@ -73,18 +91,26 @@ async function TeamStandups({ params }: { params: Params }) {
 
   const now = new Date();
   const sprint = getCurrentSprint({ sprints, now, timeZone: team.timezone });
+  // History follows the sprint selector; the form always files under the
+  // current sprint (AGENTS.md §2 StandupForm).
+  const requestedSprintId = readRequestedSprintId(await searchParams);
+  const historySprint = selectSprint({
+    sprints,
+    requestedSprintId,
+    now,
+    timeZone: team.timezone,
+  });
   const today = getStandupDate({ now, timezone: team.timezone });
   // Instructors read standups but don't post them (AGENTS.md §2 Standups).
   const canPost = access.role !== "INSTRUCTOR";
-  const [standups, saved] =
-    sprint === null
-      ? [[], null]
-      : await Promise.all([
-          listSprintStandups({ sprintId: sprint.id }),
-          canPost
-            ? findStandup({ sprintId: sprint.id, userId: user.id, date: today })
-            : null,
-        ]);
+  const [standups, saved] = await Promise.all([
+    historySprint === null
+      ? []
+      : listSprintStandups({ sprintId: historySprint.id }),
+    canPost && sprint !== null
+      ? findStandup({ sprintId: sprint.id, userId: user.id, date: today })
+      : null,
+  ]);
 
   // "9:05 AM" in the team's timezone (DESIGN.md §9).
   const timeFormat = new Intl.DateTimeFormat("en-US", {
@@ -108,9 +134,28 @@ async function TeamStandups({ params }: { params: Params }) {
     standups: day.standups.map(toEntryView),
   }));
 
+  // Teammates' standups show up in History without a reload.
   return (
-    <>
-      <AppHeader team={team} user={user} role={access.role} />
+    <TeamLiveProvider teamId={team.id}>
+      <AppHeader
+        team={team}
+        user={user}
+        role={access.role}
+        teamNav={{
+          teamId: team.id,
+          current: "standups",
+          requestedSprintId:
+            historySprint !== null && historySprint.id === requestedSprintId
+              ? requestedSprintId
+              : null,
+        }}
+        sprintSelector={buildSprintSelector({
+          sprints,
+          selectedId: historySprint?.id ?? null,
+          now,
+          timeZone: team.timezone,
+        })}
+      />
       <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-8 md:px-6">
         <PageHeader
           title="Standups"
@@ -138,13 +183,13 @@ async function TeamStandups({ params }: { params: Params }) {
           )}
           <div className={canPost ? "lg:col-span-2" : "lg:col-span-3"}>
             <StandupHistory
-              sprintName={sprint?.name ?? null}
+              sprintName={historySprint?.name ?? null}
               days={days}
-              canPost={canPost}
+              canPost={canPost && sprint !== null && historySprint === sprint}
             />
           </div>
         </div>
       </main>
-    </>
+    </TeamLiveProvider>
   );
 }

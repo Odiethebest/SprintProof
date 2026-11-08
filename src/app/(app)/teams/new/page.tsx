@@ -28,7 +28,13 @@ async function NewTeam() {
 
   return (
     <>
-      <AppHeader team={null} user={user} role={null} />
+      <AppHeader
+        team={null}
+        user={user}
+        role={null}
+        teamNav={null}
+        sprintSelector={null}
+      />
       <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-8 md:px-6">
         <PageHeader
           title="Create a team"

@@ -215,7 +215,7 @@ test.describe("Daily standup", () => {
     const instructor = await signedInPage(browser, INSTRUCTOR);
     await instructor.goto(inviteUrl);
     await instructor.getByRole("button", { name: "Join team" }).click();
-    await expect(instructor).toHaveURL(/\/$/);
+    await expect(instructor).toHaveURL(/\/teams\/[^/]+\/dashboard$/);
 
     // Act
     await instructor.goto(`/teams/${teamId}/standups`);

@@ -1,8 +1,9 @@
 // DESIGN.md §7: initials in a circle, decorative because the name is always shown
-// next to it. 28 px in the top bar, 32 px in lists; the 36 px card size comes with #12.
+// next to it. 28 px in the top bar, 32 px in lists, 36 px on cards.
 const SIZE_CLASSES = {
   sm: "inline-flex size-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary",
   md: "inline-flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary",
+  lg: "inline-flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary",
 } as const;
 
 export function Avatar({

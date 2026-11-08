@@ -43,7 +43,7 @@ Show facts, not judgments. The app displays counts and whether requirements are 
 | ORM | Prisma | 7.10.1 |
 | Auth | Auth.js (`next-auth`) with GitHub provider, JWT session strategy | 5.0.0-beta.32 |
 | Validation | Zod | 4.6.7 |
-| Real-time | Pusher Channels (`pusher` server, `pusher-js` client) | pinned when added (#12) |
+| Real-time | Pusher Channels (`pusher` server, `pusher-js` client); Soketi (Pusher-compatible) locally and in E2E | 5.3.4 (`pusher`), 8.6.0 (`pusher-js`), Soketi image `1.6-16-debian` |
 | GitHub API | Octokit (`@octokit/rest`) | pinned when added (#11) |
 | Unit / integration tests | Vitest | 5.0 |
 | E2E tests | Playwright + `@axe-core/playwright` | 1.64 (Playwright); 4.14.0 (`@axe-core/playwright`) |
@@ -71,23 +71,26 @@ src/
 │           ├── teams/            # create a team; [teamId]/invites/ create and revoke links; [teamId]/sprints/ (route.ts and [sprintId]/route.ts); [teamId]/standups/ post or update today's standup
 │           └── memberships/      # join a team with an invite token
 ├── components/
-│   ├── ui/                       # generic primitives (Button, Card, Badge...)
-│   ├── layout/                   # AppHeader (the shared top bar), PageHeader, PageLoading
+│   ├── ui/                       # generic primitives (Button, Card, Badge, Toast...)
+│   ├── layout/                   # AppHeader (the shared top bar), TeamNav, SprintSelector, PageHeader, PageLoading
+│   ├── realtime/                 # TeamLiveProvider (Pusher subscription, refetch on events), LiveIndicator, LiveCount
 │   └── <feature>/                # feature components: auth/, teams/, sprints/, dashboard/, standups/, retro/...
 ├── lib/                          # PURE business logic — no I/O
 │   ├── auth/                     # sign-in redirects, team role checks, test sign-in input
 │   ├── teams/                    # create-team input (name, owner/name repo, timezone)
 │   ├── invites/                  # invite link expiry and validity
 │   ├── checks/                   # requirement checks (standups, reviews per person)
-│   ├── stats/                    # contribution counts per member per sprint
-│   ├── sprints/                  # sprint date math, timezone boundaries (validate-sprint.ts, sprint-dates.ts, sprint-body.ts)
+│   ├── stats/                    # contribution counts per member per sprint (commits, opened PRs), activity → member attribution
+│   ├── dashboard/                # activity feed: standups, PRs, reviews, commits grouped per member per day
+│   ├── sprints/                  # sprint date math, timezone boundaries, days left, sprint selection (validate-sprint.ts, sprint-dates.ts, sprint-body.ts, sprint-selection.ts)
 │   ├── standups/                 # standup input, standup date in the team timezone, history grouped by day
 │   ├── retro/                    # vote tallying, action item selection
 │   ├── github/                   # GitHub login and profile rules, webhook payload → Activity mapping
+│   ├── realtime/                 # team channel name (team-{teamId}) and the events it carries
 │   └── export/                   # sprint summary → Markdown
 ├── server/                       # everything with side effects
 │   ├── db.ts                     # single Prisma client
-│   ├── repositories/             # all database reads/writes (sprints.ts, standups.ts)
+│   ├── repositories/             # all database reads/writes (sprints.ts, standups.ts, activities.ts, ...)
 │   ├── auth.ts                   # requireTeamRole()
 │   ├── auth-config.ts            # Auth.js config: GitHub provider, test sign-in
 │   ├── auth-session.ts           # getSession(), getSessionUserId(); tests mock this
@@ -97,7 +100,7 @@ src/
 │   ├── prisma-errors.ts          # isUniqueViolation()
 │   ├── request-origin.ts         # origin for absolute links (invite URLs)
 │   ├── github-client.ts          # Octokit wrapper
-│   └── realtime.ts               # Pusher trigger wrapper
+│   └── realtime.ts               # Pusher trigger wrapper: triggerTeamEvent(); tests mock this
 ├── proxy.ts                      # sends signed-out visitors to /signin (not access control)
 └── types/
 prisma/schema.prisma
@@ -378,3 +381,6 @@ Standups, planning notes and retros for our own team are recorded in SprintProof
 | 2026-11-06 | Ziqi (Odie) Yang | Commits are counted from `push` events and attributed to the commit author only (§1, PRD R4, README Counting Rules) (#11) | Decision 001 asked #11 to reword R4: the `pull_request` payload has no commit list. PR #49 review: crediting the committer or the pusher gave people commits they didn't write |
 | 2026-11-06 | Ziqi (Odie) Yang | Architecture tree lists the standups files added in #9: `lib/standups/`, `repositories/standups.ts` and the `[teamId]/standups/` API route (#9) | Yunhong's review of PR #44: the rules should match the code |
 | 2026-11-07 | Yunhong Huang | §4 Security requirements: CI runs npm audit (high), dependency review and CodeQL; don't add packages with high or critical advisories (#17) | Issue #17: security scanning in CI |
+| 2026-11-07 | Ziqi (Odie) Yang | Architecture tree lists the dashboard files added in #12: `lib/dashboard/`, the `lib/stats/` and `lib/sprints/` additions, `repositories/activities.ts`, and `TeamNav` and `SprintSelector` in `components/layout/` (#12) | Yunhong's review of PR #44: the rules should match the code |
+| 2026-11-07 | Ziqi (Odie) Yang | Pinned `pusher` 5.3.4 and `pusher-js` 8.6.0; E2E runs live updates against a local Soketi container (#12) | Issue #12: live dashboard updates. Soketi speaks the Pusher protocol with fixed test credentials, so E2E needs no real keys or outside network |
+| 2026-11-07 | Ziqi (Odie) Yang | Architecture tree lists the live update files added in #12: `lib/realtime/`, `components/realtime/` and `Toast` in `components/ui/` (#12) | Yunhong's review of PR #44: the rules should match the code |

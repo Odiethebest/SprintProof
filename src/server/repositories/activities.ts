@@ -1,6 +1,7 @@
 import { db } from "@/server/db";
 import { isUniqueViolation } from "@/server/prisma-errors";
 import type { MappedActivity } from "@/lib/github/webhook-events";
+import type { ActivityRecord } from "@/lib/stats/member-activity";
 
 export async function recordWebhookEvent({
   teamId,
@@ -93,6 +94,32 @@ export async function getLastWebhookDelivery({
       id: true,
       event: true,
       deliveredAt: true,
+    },
+  });
+}
+
+// Activities that happened between `from` and `to` (inclusive), newest first.
+export async function listTeamActivities({
+  teamId,
+  from,
+  to,
+}: {
+  teamId: string;
+  from: Date;
+  to: Date;
+}): Promise<ActivityRecord[]> {
+  return db.activity.findMany({
+    where: { teamId, occurredAt: { gte: from, lte: to } },
+    orderBy: [{ occurredAt: "desc" }, { createdAt: "desc" }],
+    select: {
+      id: true,
+      type: true,
+      actorLogin: true,
+      prNumber: true,
+      prAuthorLogin: true,
+      sha: true,
+      title: true,
+      occurredAt: true,
     },
   });
 }

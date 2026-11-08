@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "@/server/db";
 import { POST } from "@/app/api/webhooks/github/route";
 import pingPayload from "../../fixtures/github/ping.json";
@@ -15,6 +15,10 @@ import {
 } from "../../factories/db";
 import { signWebhookPayload, webhookRequest } from "../helpers/requests";
 import { clearDatabase } from "../setup/test-setup";
+
+// Integration tests mock external services at their wrappers (AGENTS.md §1 Testing).
+// Live update events are covered in realtime-events.test.ts.
+vi.mock("@/server/realtime", () => ({ triggerTeamEvent: vi.fn() }));
 
 const TEST_SECRET = "test-webhook-secret-12345";
 

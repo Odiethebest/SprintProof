@@ -112,6 +112,7 @@ Never use font sizes outside this table.
 
 - Content width `max-w-6xl mx-auto px-4 md:px-6`.
 - Top bar: team mark, team name with the repo below it (repo hidden below `sm`), sprint selector, `LiveIndicator`, user menu.
+- Team navigation (team pages only): a second row in the top bar with links to Dashboard, Standups and Settings, each `h-9 px-3 rounded-md text-sm font-medium`. The current page has `aria-current="page"` and `bg-primary/10 text-primary`; the others are `text-text-muted` with the `ghost` hover. The prototype has no product navigation (its tab row is part of the demo controls), so this row was added in #12.
 - Page header: title on the left with a `text-sm text-text-muted` meta line below it; pills and at most one primary action on the right. Wraps on narrow screens.
 - **Dashboard:** `lg:grid-cols-3`; member cards span 2 columns in their own `md:grid-cols-2` grid, activity feed 1 column. Below `lg`, the feed stacks under the cards.
 - **Standups:** `lg:grid-cols-3`; form 1 column, history 2 columns.
@@ -133,7 +134,7 @@ Never use font sizes outside this table.
 | `MemberCard` | Avatar, name, GitHub login and role pill; four counts (commits, PRs, reviews, standups) as tiles in a 2×2 grid (`rounded-md border border-border p-3`, label `text-xs text-text-muted`, value `font-mono text-lg font-semibold tabular-nums`); `RequirementChecklist` below a divider. No percentages, no ranking. |
 | `RequirementChecklist` | One row per requirement using the format in section 3. |
 | `ActivityFeed` | Rows of a 16 px `text-muted` icon, actor and action in `text-sm`, a truncated `text-xs text-text-muted` summary, and the time in `font-mono text-xs`. |
-| `LiveIndicator` | Small dot + "Live" (`met` color) or "Reconnecting…" (`text-muted`). Dot pulses only if `prefers-reduced-motion` is not set. |
+| `LiveIndicator` | Small dot + "Live" (`met` color) or "Reconnecting…" (`text-muted`); "Connecting…" (`text-muted`) before the first connection. Dot pulses only if `prefers-reduced-motion` is not set. Shown only on pages that update live (dashboard, standups). |
 | `StandupForm` | Three labeled textareas, 3 rows each, 1000-char limit with counter. Submit button text: "Post standup" or "Update today's standup". Once posted, a `met` `CircleCheck` note above the fields gives the time. |
 | `RetroColumn` | Column title, item count, item list sorted by votes (each item `rounded-md border border-border p-3`), "Add item" input with an "Add" button at the bottom. |
 | `VoteButton` | `ThumbsUp` icon + count, 36 px. When the user has voted: filled icon, `border-primary bg-primary/10 text-primary`. With no votes left: `aria-disabled`, 60% opacity, tooltip "No votes left". |
