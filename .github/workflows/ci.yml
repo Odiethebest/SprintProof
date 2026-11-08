@@ -110,8 +110,23 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+      # Pusher-compatible server for the live update specs (#12), same image
+      # as the local container. It starts with a default app whose
+      # credentials below are fixed test values, not secrets.
+      soketi:
+        image: quay.io/soketi/soketi:1.6-16-debian
+        ports:
+          - 6001:6001
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/sprintproof_e2e
+      # Job-level, because Next.js inlines NEXT_PUBLIC_ variables into the
+      # browser bundle at build time, not when `next start` runs.
+      PUSHER_APP_ID: app-id
+      PUSHER_SECRET: app-secret
+      NEXT_PUBLIC_PUSHER_KEY: app-key
+      NEXT_PUBLIC_PUSHER_CLUSTER: mt1
+      NEXT_PUBLIC_PUSHER_HOST: localhost
+      NEXT_PUBLIC_PUSHER_PORT: "6001"
     steps:
       - uses: actions/checkout@v4
 

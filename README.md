@@ -259,7 +259,7 @@ See [`docs/architecture.md`](docs/architecture.md) for details.
 |---|---|---|---|
 | Lint and typecheck | `ci.yml` | Every PR and push to `main` | ESLint and `tsc --noEmit` |
 | Unit tests | `ci.yml` | After lint and typecheck | Unit tests, then integration tests against a PostgreSQL 17 service container |
-| E2E tests | `ci.yml` | After unit tests | Applies migrations to a PostgreSQL 17 service container, builds, then runs every spec in `e2e/` against `next start` with one worker (the specs share one database). The Playwright report is uploaded as an artifact when it fails |
+| E2E tests | `ci.yml` | After unit tests | Applies migrations to a PostgreSQL 17 service container, builds with the Pusher settings of a Soketi service container (live updates), then runs every spec in `e2e/` against `next start` with one worker (the specs share one database). The Playwright report is uploaded as an artifact when it fails |
 | Production build | `ci.yml` | After E2E tests | `next build` |
 | Dependency audit | `ci.yml` | Every PR and push to `main` | `npm audit --audit-level=high`: fails on high or critical advisories |
 | Dependency review | `dependency-review.yml` | Every PR | Fails if the PR adds a dependency with a high or critical advisory |
