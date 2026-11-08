@@ -2,9 +2,14 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import { notFound, redirect } from "next/navigation";
 import { TZDate } from "@date-fns/tz";
+import { maskApiToken } from "@/lib/api-tokens/api-token";
 import { toSignInPath } from "@/lib/auth/sign-in-redirect";
 import { INVITE_ROLES } from "@/lib/invites/invite-link";
 import { getSprintState } from "@/lib/sprints";
+import {
+  ApiTokensCard,
+  type ApiTokenView,
+} from "@/components/api-tokens/api-tokens-card";
 import { AppHeader } from "@/components/layout/app-header";
 import { PageHeader } from "@/components/layout/page-header";
 import { PageLoading } from "@/components/layout/page-loading";
@@ -15,6 +20,7 @@ import { RepositoryCard } from "@/components/teams/repository-card";
 import { requireTeamRole } from "@/server/auth";
 import { getCurrentUser } from "@/server/current-user";
 import { getLastWebhookDelivery } from "@/server/repositories/activities";
+import { listApiTokens } from "@/server/repositories/api-tokens";
 import { listActiveInvites } from "@/server/repositories/invites";
 import { listTeamMembers } from "@/server/repositories/memberships";
 import { listSprints } from "@/server/repositories/sprints";
@@ -69,7 +75,7 @@ async function TeamSettings({ params }: { params: Params }) {
     // Same page as a team that doesn't exist, so outsiders learn nothing.
     notFound();
   }
-  const [user, team, memberships, sprints, origin, lastDelivery] =
+  const [user, team, memberships, sprints, origin, lastDelivery, apiTokens] =
     await Promise.all([
       getCurrentUser(),
       findTeam({ teamId }),
@@ -77,6 +83,7 @@ async function TeamSettings({ params }: { params: Params }) {
       listSprints({ teamId }),
       getRequestOrigin(),
       getLastWebhookDelivery({ teamId }),
+      listApiTokens({ userId: access.userId }),
     ]);
   if (user === null || team === null) {
     notFound();
@@ -158,7 +165,9 @@ async function TeamSettings({ params }: { params: Params }) {
           />
         </div>
         <SprintsCard teamId={team.id} role={access.role} sprints={sprintViews} />
-        {/* TODO(#16): API tokens card. */}
+        <ApiTokensCard
+          tokens={toApiTokenViews({ apiTokens, timezone: team.timezone })}
+        />
       </main>
     </>
   );
@@ -179,6 +188,32 @@ function formatDeliveryTime({
     minute: "2-digit",
     timeZone: timezone,
   }).format(deliveredAt);
+}
+
+// "Nov 8" in the team's timezone (DESIGN.md §9). Tokens belong to the user,
+// but Settings shows every date in the team's timezone.
+function toApiTokenViews({
+  apiTokens,
+  timezone,
+}: {
+  apiTokens: Awaited<ReturnType<typeof listApiTokens>>;
+  timezone: string;
+}): ApiTokenView[] {
+  const dateFormat = new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    timeZone: timezone,
+  });
+  return apiTokens.map((apiToken) => ({
+    id: apiToken.id,
+    name: apiToken.name,
+    maskedToken: maskApiToken({ last4: apiToken.last4 }),
+    createdLabel: dateFormat.format(apiToken.createdAt),
+    lastUsedLabel:
+      apiToken.lastUsedAt === null
+        ? null
+        : dateFormat.format(apiToken.lastUsedAt),
+  }));
 }
 
 async function loadInviteLinks({
