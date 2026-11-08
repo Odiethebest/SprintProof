@@ -25,13 +25,14 @@ Defined as CSS variables in `src/app/globals.css` and exposed to Tailwind v4 thr
 | `text` | `text-text` | `#1C1917` | `#F5F5F4` | Primary text |
 | `text-muted` | `text-text-muted` | `#57534E` | `#A8A29E` | Secondary text, labels |
 | `primary` | `bg-primary` | `#0F766E` | `#2DD4BF` | Primary buttons, links, focus ring |
+| `primary-hover` | `hover:bg-primary-hover` | `#115E59` | `#5EEAD4` | Primary button hover |
 | `primary-fg` | `text-primary-fg` | `#FFFFFF` | `#042F2E` | Text on primary |
 | `met` | `text-met` | `#15803D` | `#4ADE80` | Requirement met |
 | `on-track` | `text-on-track` | `#1D4ED8` | `#60A5FA` | Not met yet, plenty of time |
 | `at-risk` | `text-at-risk` | `#B45309` | `#FBBF24` | 2 or fewer days left |
 | `missed` | `text-missed` | `#B91C1C` | `#F87171` | Sprint ended, not met |
 
-All text tokens meet 4.5:1 contrast against `canvas` and `surface` in their mode.
+All text tokens meet 4.5:1 contrast against `canvas` and `surface` in their mode. `primary-fg` meets it on `primary` (5.47:1 light, 7.77:1 dark) and on `primary-hover` (7.58:1, 9.78:1). The hover color sits further from `primary-fg` than `primary` does, so every color in the hover transition passes too. Don't use an opacity like `bg-primary/90` for hover: blended toward white, it drops to 4.48:1 (#62).
 
 ### `globals.css` starting point
 
@@ -41,7 +42,7 @@ All text tokens meet 4.5:1 contrast against `canvas` and `surface` in their mode
 :root {
   --canvas: #FAFAF9;  --surface: #FFFFFF;  --border: #E7E5E4;
   --text: #1C1917;    --text-muted: #57534E;
-  --primary: #0F766E; --primary-fg: #FFFFFF;
+  --primary: #0F766E; --primary-hover: #115E59; --primary-fg: #FFFFFF;
   --met: #15803D; --on-track: #1D4ED8; --at-risk: #B45309; --missed: #B91C1C;
   color-scheme: light;
 }
@@ -50,7 +51,7 @@ All text tokens meet 4.5:1 contrast against `canvas` and `surface` in their mode
   :root {
     --canvas: #0C0A09;  --surface: #1C1917;  --border: #292524;
     --text: #F5F5F4;    --text-muted: #A8A29E;
-    --primary: #2DD4BF; --primary-fg: #042F2E;
+    --primary: #2DD4BF; --primary-hover: #5EEAD4; --primary-fg: #042F2E;
     --met: #4ADE80; --on-track: #60A5FA; --at-risk: #FBBF24; --missed: #F87171;
     color-scheme: dark;
   }
@@ -63,6 +64,7 @@ All text tokens meet 4.5:1 contrast against `canvas` and `surface` in their mode
   --color-text: var(--text);
   --color-text-muted: var(--text-muted);
   --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
   --color-primary-fg: var(--primary-fg);
   --color-met: var(--met);
   --color-on-track: var(--on-track);
@@ -122,7 +124,7 @@ Never use font sizes outside this table.
 
 | Component | Rules |
 | --- | --- |
-| `Button` | Variants: `primary` (bg-primary), `secondary` (surface + border), `ghost`, `destructive` (`missed` text on surface with a border, used only for delete/revoke). Height 36 px, 16 px leading icon optional. Hover: primary `bg-primary/90`, secondary and ghost `bg-text/5`, destructive `bg-missed/10`. One primary button per view. |
+| `Button` | Variants: `primary` (bg-primary), `secondary` (surface + border), `ghost`, `destructive` (`missed` text on surface with a border, used only for delete/revoke). Height 36 px, 16 px leading icon optional. Hover: primary `bg-primary-hover`, secondary and ghost `bg-text/5`, destructive `bg-missed/10`. One primary button per view. |
 | `Card` | `bg-surface border border-border rounded-lg`. Title + optional action in the header row, optional `text-xs text-text-muted` subtitle under the title. |
 | `Pill` | `rounded-full border border-border px-2 py-1 text-xs text-text-muted`, optional 12 px icon. For roles (Lead, Member, Instructor), "Read-only", retro Open/Closed, and the votes-left counter (`h-9 px-3 text-sm` there). Never uses status colors. |
 | `Avatar` | Circle with initials, `bg-primary/10 text-primary text-xs font-semibold`: 36 px on cards, 32 px in lists, 28 px in the top bar. Decorative (`aria-hidden`); the name is always shown next to it. |
