@@ -110,6 +110,7 @@ Never use font sizes outside this table.
 
 - Content width `max-w-6xl mx-auto px-4 md:px-6`.
 - Top bar: team mark, team name with the repo below it (repo hidden below `sm`), sprint selector, `LiveIndicator`, user menu.
+- Team navigation (team pages only): a second row in the top bar with links to Dashboard, Standups and Settings, each `h-9 px-3 rounded-md text-sm font-medium`. The current page has `aria-current="page"` and `bg-primary/10 text-primary`; the others are `text-text-muted` with the `ghost` hover. The prototype has no product navigation (its tab row is part of the demo controls), so this row was added in #12.
 - Page header: title on the left with a `text-sm text-text-muted` meta line below it; pills and at most one primary action on the right. Wraps on narrow screens.
 - **Dashboard:** `lg:grid-cols-3`; member cards span 2 columns in their own `md:grid-cols-2` grid, activity feed 1 column. Below `lg`, the feed stacks under the cards.
 - **Standups:** `lg:grid-cols-3`; form 1 column, history 2 columns.
