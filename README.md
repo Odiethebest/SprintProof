@@ -258,11 +258,13 @@ See [`docs/architecture.md`](docs/architecture.md) for details.
 | Check | Workflow | Runs on | What it does |
 |---|---|---|---|
 | Lint and typecheck | `ci.yml` | Every PR and push to `main` | ESLint and `tsc --noEmit` |
-| Unit tests | `ci.yml` | After lint and typecheck | Unit tests, then integration tests against a PostgreSQL service container |
-| Production build | `ci.yml` | After the tests | `next build` |
+| Unit tests | `ci.yml` | After lint and typecheck | Unit tests, then integration tests against a PostgreSQL 17 service container |
+| E2E tests | `ci.yml` | After unit tests | Applies migrations to a PostgreSQL 17 service container, builds, then runs every spec in `e2e/` against `next start` with one worker (the specs share one database). The Playwright report is uploaded as an artifact when it fails |
+| Production build | `ci.yml` | After E2E tests | `next build` |
 | Dependency audit | `ci.yml` | Every PR and push to `main` | `npm audit --audit-level=high`: fails on high or critical advisories |
 | Dependency review | `dependency-review.yml` | Every PR | Fails if the PR adds a dependency with a high or critical advisory |
 | CodeQL | `codeql.yml` | Every PR, push to `main`, weekly | Code scanning for JavaScript and TypeScript; results under Security → Code scanning |
+| Production guard | `production-guard.yml` | Push to `main`, daily, manual | Fails if production's `/api/auth/providers` offers the test sign-in provider (`E2E_TEST_AUTH`). Not run on PRs, so a production outage doesn't block them |
 
 ---
 

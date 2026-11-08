@@ -1,0 +1,42 @@
+name: Production guard
+
+# Checks that production never offers the test-only sign-in provider
+# (AGENTS.md §1 Testing strategy). Not on PRs: a production outage
+# shouldn't turn every PR red.
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "17 14 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+env:
+  PRODUCTION_URL: https://sprintproof.vercel.app
+
+jobs:
+  test-auth-disabled:
+    name: Test sign-in disabled in production
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check the sign-in providers
+        run: |
+          providers="$(curl --fail --silent --show-error --retry 3 --retry-delay 10 \
+            "$PRODUCTION_URL/api/auth/providers")"
+          echo "Providers: $(echo "$providers" | jq -r 'keys | join(", ")')"
+
+          if ! echo "$providers" | jq -e 'has("github")' > /dev/null; then
+            echo "::error::Production doesn't list the GitHub provider, so this check can't be trusted."
+            exit 1
+          fi
+
+          if echo "$providers" | jq -e 'has("e2e-credentials")' > /dev/null; then
+            echo "::error::Production offers the test sign-in provider. Remove E2E_TEST_AUTH from Vercel production and redeploy."
+            exit 1
+          fi
