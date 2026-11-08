@@ -38,11 +38,13 @@ test.describe("Team dashboard", () => {
   test("shows an empty state until the team has a sprint", async ({ page }) => {
     // Arrange
     await signInAsTestUser(page, EMPTY_LEAD);
-    const teamId = await createTeam(page, "Empty dashboard team");
+    // A unique name: the same test user keeps its teams from earlier runs.
+    const teamName = `Empty dashboard team ${Date.now()}`;
+    const teamId = await createTeam(page, teamName);
 
     // Act: open the team from the home page
     await page.goto("/");
-    await page.getByRole("link", { name: /Empty dashboard team/ }).click();
+    await page.getByRole("link", { name: new RegExp(teamName) }).click();
 
     // Assert
     await expect(page).toHaveURL(new RegExp(`/teams/${teamId}/dashboard$`));
