@@ -253,6 +253,17 @@ The OAuth scopes we request, and why, are recorded in [`docs/decisions/`](docs/d
 
 See [`docs/architecture.md`](docs/architecture.md) for details.
 
+### Continuous integration
+
+| Check | Workflow | Runs on | What it does |
+|---|---|---|---|
+| Lint and typecheck | `ci.yml` | Every PR and push to `main` | ESLint and `tsc --noEmit` |
+| Unit tests | `ci.yml` | After lint and typecheck | Unit tests, then integration tests against a PostgreSQL service container |
+| Production build | `ci.yml` | After the tests | `next build` |
+| Dependency audit | `ci.yml` | Every PR and push to `main` | `npm audit --audit-level=high`: fails on high or critical advisories |
+| Dependency review | `dependency-review.yml` | Every PR | Fails if the PR adds a dependency with a high or critical advisory |
+| CodeQL | `codeql.yml` | Every PR, push to `main`, weekly | Code scanning for JavaScript and TypeScript; results under Security → Code scanning |
+
 ---
 
 ## Testing

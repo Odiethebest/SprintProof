@@ -37,6 +37,23 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+  # Fails on high or critical advisories only. Moderate ones stay in the log:
+  # as of Nov 7 there are 8, all in typescript-eslint via eslint-config-next,
+  # with no fix short of a breaking `npm audit fix --force`.
+  audit:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # npm audit reads package-lock.json, so no npm ci is needed.
+      - name: npm audit
+        run: npm audit --audit-level=high
+
   unit-tests:
     name: Unit tests
     needs: lint-and-typecheck
