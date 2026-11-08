@@ -185,7 +185,7 @@ test.describe("Sprints and requirements", () => {
 
     await partnerPage.goto(inviteUrlText);
     await partnerPage.getByRole("button", { name: /join/i }).click();
-    await expect(partnerPage).toHaveURL(/\/$/);
+    await expect(partnerPage).toHaveURL(/\/teams\/[^/]+\/dashboard$/);
 
     // Partner navigates to settings
     await partnerPage.goto(`/teams/${teamId}/settings`);
