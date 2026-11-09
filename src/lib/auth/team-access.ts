@@ -25,3 +25,8 @@ export function checkTeamAccess({
   }
   return { isAllowed: true, userId, role: membership.role };
 }
+
+// A request with an API token can also fail because the token isn't valid:
+// malformed, never created or revoked (#16).
+export type ApiTeamAccess =
+  TeamAccess | { isAllowed: false; status: 401; code: "INVALID_TOKEN" };

@@ -52,3 +52,20 @@ export async function deleteApiToken({
   });
   return count > 0;
 }
+
+// Looks a token up by its hash and stamps lastUsedAt in the same query.
+// Returns the owner, or null when no token has that hash (never created, or revoked).
+export async function recordApiTokenUse({
+  tokenHash,
+  usedAt,
+}: {
+  tokenHash: string;
+  usedAt: Date;
+}): Promise<{ userId: string } | null> {
+  const [token] = await db.apiToken.updateManyAndReturn({
+    where: { tokenHash },
+    data: { lastUsedAt: usedAt },
+    select: { userId: true },
+  });
+  return token ?? null;
+}

@@ -1,5 +1,6 @@
 import { db } from "@/server/db";
 import { isUniqueViolation } from "@/server/prisma-errors";
+import { toPage, type Page } from "@/lib/api/pagination";
 
 export interface StandupRecord {
   id: string;
@@ -119,6 +120,25 @@ export async function findStandup(
   return row === null ? null : toStandupRecord(row);
 }
 
+// Newest first. The id breaks ties, so paging never skips or repeats a standup.
+const HISTORY_ORDER = [
+  { date: "desc" },
+  { createdAt: "desc" },
+  { id: "desc" },
+] as const;
+
+const STANDUP_WITH_AUTHOR_FIELDS = {
+  ...STANDUP_FIELDS,
+  user: { select: { name: true, githubLogin: true, avatarUrl: true } },
+} as const;
+
+function toStandupWithAuthor({
+  user,
+  ...row
+}: StandupRow & { user: StandupAuthor }): StandupWithAuthor {
+  return { ...toStandupRecord(row), author: user };
+}
+
 export async function listSprintStandups({
   sprintId,
 }: {
@@ -126,14 +146,38 @@ export async function listSprintStandups({
 }): Promise<StandupWithAuthor[]> {
   const rows = await db.standup.findMany({
     where: { sprintId },
-    orderBy: [{ date: "desc" }, { createdAt: "desc" }],
-    select: {
-      ...STANDUP_FIELDS,
-      user: { select: { name: true, githubLogin: true, avatarUrl: true } },
-    },
+    orderBy: [...HISTORY_ORDER],
+    select: STANDUP_WITH_AUTHOR_FIELDS,
   });
-  return rows.map(({ user, ...row }) => ({
-    ...toStandupRecord(row),
-    author: user,
-  }));
+  return rows.map(toStandupWithAuthor);
+}
+
+// One page of a sprint's standups. Returns null when the cursor isn't one of
+// this sprint's standups.
+export async function listSprintStandupsPage({
+  sprintId,
+  limit,
+  cursor,
+}: {
+  sprintId: string;
+  limit: number;
+  cursor?: string;
+}): Promise<Page<StandupWithAuthor> | null> {
+  if (cursor !== undefined) {
+    const cursorRow = await db.standup.findFirst({
+      where: { id: cursor, sprintId },
+      select: { id: true },
+    });
+    if (cursorRow === null) {
+      return null;
+    }
+  }
+  const rows = await db.standup.findMany({
+    where: { sprintId },
+    orderBy: [...HISTORY_ORDER],
+    take: limit + 1,
+    ...(cursor === undefined ? {} : { cursor: { id: cursor }, skip: 1 }),
+    select: STANDUP_WITH_AUTHOR_FIELDS,
+  });
+  return toPage({ rows: rows.map(toStandupWithAuthor), limit });
 }

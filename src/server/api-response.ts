@@ -1,11 +1,13 @@
 import type { z } from "zod";
-import type { TeamAccess } from "@/lib/auth/team-access";
+import type { ApiTeamAccess } from "@/lib/auth/team-access";
+import { paginationQuerySchema } from "@/lib/api/pagination";
 
-type DeniedAccess = Extract<TeamAccess, { isAllowed: false }>;
+type DeniedAccess = Extract<ApiTeamAccess, { isAllowed: false }>;
 
 const ACCESS_MESSAGES: Record<DeniedAccess["code"], string> = {
   UNAUTHENTICATED: "Sign in to continue.",
   FORBIDDEN: "You don't have permission to do this on this team.",
+  INVALID_TOKEN: "This API token isn't valid. Create a new one in Settings.",
 };
 
 // Every API error has this one shape (AGENTS.md §1 Key patterns).
@@ -77,4 +79,34 @@ export async function parseJsonBody<Schema extends z.ZodType>({
     };
   }
   return parseInput({ input, schema });
+}
+
+// ?limit= and ?cursor= for list endpoints (AGENTS.md §1 API response shape).
+export function parsePaginationQuery({
+  request,
+}: {
+  request: Request;
+}): ParsedInput<typeof paginationQuerySchema> {
+  const { searchParams } = new URL(request.url);
+  return parseInput({
+    input: Object.fromEntries(searchParams),
+    schema: paginationQuerySchema,
+  });
+}
+
+export function invalidCursorResponse(): Response {
+  return errorResponse({
+    status: 400,
+    code: "INVALID_CURSOR",
+    message:
+      "This cursor isn't from this list. Use the nextCursor from the previous page.",
+  });
+}
+
+export function sprintNotFoundResponse(): Response {
+  return errorResponse({
+    status: 404,
+    code: "SPRINT_NOT_FOUND",
+    message: "Sprint not found.",
+  });
 }
