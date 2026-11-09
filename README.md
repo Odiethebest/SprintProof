@@ -361,7 +361,7 @@ Each member gets 3 votes per retro, at most 1 per item. The top 3 "To improve" i
 |---|---|
 | [`docs/PRD.md`](docs/PRD.md) | Product requirements: problem, user stories, acceptance criteria, out-of-scope list |
 | [`docs/architecture.md`](docs/architecture.md) | System design, database schema diagram, deployment details |
-| [`docs/api/openapi.yaml`](docs/api/openapi.yaml) | Public REST API reference (sprint summaries, standups) |
+| [`docs/api/openapi.yaml`](docs/api/openapi.yaml) | REST API reference for every `/api/v1` endpoint, shown with Swagger UI at `/api-docs` |
 | [`DESIGN.md`](DESIGN.md) | Design system: colors, type scale, spacing, component rules |
 | [`docs/design/`](docs/design/) | Prototype mockups for each screen |
 | [`docs/decisions/`](docs/decisions/) | One record per big technical choice |
@@ -383,7 +383,7 @@ Each member gets 3 votes per retro, at most 1 per item. The top 3 "To improve" i
 | Retros and action items | Planned | Voting, top 3 "To improve" items carried into the next sprint |
 | Peer feedback | Planned | Instructor-only, enforced on the server |
 | Instructor view and Markdown export | Planned | Read-only review page, `sprint-N-summary.md` download |
-| Public REST API | Planned | Bearer tokens, stored as SHA-256 hashes |
+| Public REST API | Done | Personal tokens stored as SHA-256 hashes; read-only Bearer access to sprints, sprint summaries and standups; cursor pagination; Swagger UI at `/api-docs` (#16) |
 
 ---
 
@@ -391,7 +391,7 @@ Each member gets 3 votes per retro, at most 1 per item. The top 3 "To improve" i
 
 - **Production:** https://sprintproof.vercel.app
 - **Demo video:** _coming soon_
-- **API docs:** [`docs/api/openapi.yaml`](docs/api/openapi.yaml)
+- **API docs:** https://sprintproof.vercel.app/api-docs (source: [`docs/api/openapi.yaml`](docs/api/openapi.yaml))
 
 ---
 

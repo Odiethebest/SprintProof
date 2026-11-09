@@ -3,17 +3,24 @@ import { createSprintSchema, validateSprint } from "@/lib/sprints";
 import {
   accessDeniedResponse,
   errorResponse,
+  invalidCursorResponse,
   parseInput,
   parseJsonBody,
+  parsePaginationQuery,
 } from "@/server/api-response";
-import { requireTeamRole } from "@/server/auth";
-import { createSprint, listSprints } from "@/server/repositories/sprints";
+import { requireApiTeamRole, requireTeamRole } from "@/server/auth";
+import {
+  createSprint,
+  listSprints,
+  listSprintsPage,
+} from "@/server/repositories/sprints";
 
 const paramsSchema = z.object({ teamId: z.string().min(1) });
 
-// GET: Lists a team's sprints. Any member (LEAD, MEMBER, INSTRUCTOR) can list.
+// GET: Lists a team's sprints, oldest first, one page at a time. Any member
+// (LEAD, MEMBER, INSTRUCTOR) can list, with a session or an API token (#16).
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ teamId: string }> }
 ) {
   const parsedParams = parseInput({
@@ -24,7 +31,7 @@ export async function GET(
     return parsedParams.response;
   }
   const { teamId } = parsedParams.data;
-  const access = await requireTeamRole(teamId, [
+  const access = await requireApiTeamRole(request, teamId, [
     "LEAD",
     "MEMBER",
     "INSTRUCTOR",
@@ -32,8 +39,15 @@ export async function GET(
   if (!access.isAllowed) {
     return accessDeniedResponse(access);
   }
-  const sprints = await listSprints({ teamId });
-  return Response.json({ data: sprints });
+  const query = parsePaginationQuery({ request });
+  if (!query.isValid) {
+    return query.response;
+  }
+  const page = await listSprintsPage({ teamId, ...query.data });
+  if (page === null) {
+    return invalidCursorResponse();
+  }
+  return Response.json(page);
 }
 
 // POST: Creates a sprint. Lead only.

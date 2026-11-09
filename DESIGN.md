@@ -34,6 +34,8 @@ Defined as CSS variables in `src/app/globals.css` and exposed to Tailwind v4 thr
 
 All text tokens meet 4.5:1 contrast against `canvas` and `surface` in their mode. `primary-fg` meets it on `primary` (5.47:1 light, 7.77:1 dark) and on `primary-hover` (7.58:1, 9.78:1). The hover color sits further from `primary-fg` than `primary` does, so every color in the hover transition passes too. Don't use an opacity like `bg-primary/90` for hover: blended toward white, it drops to 4.48:1 (#62).
 
+An embedded tool with light styles only (Swagger UI on `/api-docs`) sits in a `.theme-light` container, which keeps the light token values inside it in dark mode. Its own colors are mapped to these tokens in `components/api-docs/swagger-overrides.css`; don't add new hex values there (#16).
+
 ### `globals.css` starting point
 
 ```css
@@ -119,6 +121,7 @@ Never use font sizes outside this table.
 - **Retro:** action items panel, then the two columns (`md:grid-cols-2`), then partner feedback, stacked with `gap-4`.
 - **Review:** requirements table full width, then standups and retro side by side (`lg:grid-cols-2`), then peer feedback full width.
 - **Settings:** `lg:grid-cols-2`; sprints and API tokens span both columns.
+- **API docs** (`/api-docs`, public, no mockup): a top bar with only the app mark and name, the page header ("API docs", base URL and an `openapi.yaml` link), one line on sending a token, then Swagger UI full width in a light card.
 - Breakpoints: Tailwind defaults (`sm 640`, `md 768`, `lg 1024`). Must work at 360 px.
 
 ## 7. Components

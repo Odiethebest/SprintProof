@@ -29,9 +29,9 @@ function createSprint(teamId: string, body: unknown) {
   );
 }
 
-function listSprints(teamId: string) {
+function listSprints(teamId: string, query = "") {
   return GET(
-    apiRequest("GET", `/teams/${teamId}/sprints`),
+    apiRequest("GET", `/teams/${teamId}/sprints${query}`),
     routeContext({ teamId })
   );
 }
@@ -448,6 +448,143 @@ describe("GET /api/v1/teams/{teamId}/sprints", () => {
 
     // Assert
     expect(res.status).toBe(401);
+  });
+});
+
+// Cursor pagination: ?limit= (1–100, default 20) and ?cursor= (AGENTS.md §1 API response shape).
+describe("GET /api/v1/teams/{teamId}/sprints pagination", () => {
+  beforeEach(async () => {
+    await clearDatabase();
+    vi.mocked(getSessionUserId).mockReset();
+  });
+
+  async function insertWeeklySprints(teamId: string, count: number) {
+    const sprints = [];
+    for (let week = 0; week < count; week++) {
+      const start = new Date(Date.UTC(2026, 9, 29 + week * 7));
+      const end = new Date(Date.UTC(2026, 9, 29 + week * 7 + 6));
+      sprints.push(
+        await insertSprint({
+          teamId,
+          name: `Sprint ${week + 1}`,
+          startDate: start,
+          endDate: end,
+        })
+      );
+    }
+    return sprints;
+  }
+
+  it("returns a null nextCursor when every sprint fits on one page", async () => {
+    // Arrange
+    const team = await insertTeam();
+    await signInAs(team.id, "MEMBER");
+    await insertWeeklySprints(team.id, 2);
+
+    // Act
+    const res = await listSprints(team.id);
+
+    // Assert
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.data).toHaveLength(2);
+    expect(body.nextCursor).toBeNull();
+  });
+
+  it("returns 20 sprints by default and a cursor for the rest", async () => {
+    // Arrange
+    const team = await insertTeam();
+    await signInAs(team.id, "MEMBER");
+    await insertWeeklySprints(team.id, 21);
+
+    // Act
+    const res = await listSprints(team.id);
+
+    // Assert
+    const body = await res.json();
+    expect(body.data).toHaveLength(20);
+    expect(body.nextCursor).toBe(body.data[19].id);
+  });
+
+  it("returns `limit` sprints, then the next ones from the cursor", async () => {
+    // Arrange
+    const team = await insertTeam();
+    await signInAs(team.id, "MEMBER");
+    await insertWeeklySprints(team.id, 3);
+
+    // Act
+    const first = await (await listSprints(team.id, "?limit=2")).json();
+    const second = await (
+      await listSprints(team.id, `?limit=2&cursor=${first.nextCursor}`)
+    ).json();
+
+    // Assert
+    expect(first.data.map((sprint: { name: string }) => sprint.name)).toEqual([
+      "Sprint 1",
+      "Sprint 2",
+    ]);
+    expect(first.nextCursor).toBe(first.data[1].id);
+    expect(second.data.map((sprint: { name: string }) => sprint.name)).toEqual([
+      "Sprint 3",
+    ]);
+    expect(second.nextCursor).toBeNull();
+  });
+
+  it.each(["0", "101", "ten"])(
+    "returns 400 for a limit of %s",
+    async (limit) => {
+      // Arrange
+      const team = await insertTeam();
+      await signInAs(team.id, "MEMBER");
+
+      // Act
+      const res = await listSprints(team.id, `?limit=${limit}`);
+
+      // Assert
+      expect(res.status).toBe(400);
+      expect(await res.json()).toEqual({
+        error: {
+          code: "VALIDATION_ERROR",
+          message: "Set limit to a whole number from 1 to 100.",
+        },
+      });
+    }
+  );
+
+  it("returns 400 INVALID_CURSOR for a cursor from another team's list", async () => {
+    // Arrange
+    const team = await insertTeam();
+    const otherTeam = await insertTeam();
+    await signInAs(team.id, "MEMBER");
+    await insertWeeklySprints(team.id, 1);
+    const [otherSprint] = await insertWeeklySprints(otherTeam.id, 1);
+
+    // Act
+    const res = await listSprints(team.id, `?cursor=${otherSprint.id}`);
+
+    // Assert
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({
+      error: {
+        code: "INVALID_CURSOR",
+        message:
+          "This cursor isn't from this list. Use the nextCursor from the previous page.",
+      },
+    });
+  });
+
+  it("returns 400 INVALID_CURSOR for a cursor that doesn't exist", async () => {
+    // Arrange
+    const team = await insertTeam();
+    await signInAs(team.id, "MEMBER");
+    await insertWeeklySprints(team.id, 1);
+
+    // Act
+    const res = await listSprints(team.id, "?cursor=no-such-sprint");
+
+    // Assert
+    expect(res.status).toBe(400);
+    expect((await res.json()).error.code).toBe("INVALID_CURSOR");
   });
 });
 

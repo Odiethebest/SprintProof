@@ -1,4 +1,5 @@
 import { db } from "@/server/db";
+import { toPage, type Page } from "@/lib/api/pagination";
 import type { SprintRecord } from "@/lib/sprints";
 
 export interface CreateSprintInput {
@@ -77,6 +78,44 @@ export async function listSprints({
     select: SPRINT_FIELDS,
   });
   return rows.map(toSprintRecord);
+}
+
+// Oldest first, as listSprints() orders them; the id breaks ties so every
+// sprint lands on exactly one page.
+const SPRINT_PAGE_ORDER = [
+  { startDate: "asc" },
+  { createdAt: "asc" },
+  { id: "asc" },
+] as const;
+
+// One page of a team's sprints. Returns null when the cursor isn't one of this
+// team's sprints, so a client can't page through another team's list.
+export async function listSprintsPage({
+  teamId,
+  limit,
+  cursor,
+}: {
+  teamId: string;
+  limit: number;
+  cursor?: string;
+}): Promise<Page<SprintRecord> | null> {
+  if (cursor !== undefined) {
+    const cursorRow = await db.sprint.findFirst({
+      where: { id: cursor, teamId },
+      select: { id: true },
+    });
+    if (cursorRow === null) {
+      return null;
+    }
+  }
+  const rows = await db.sprint.findMany({
+    where: { teamId },
+    orderBy: [...SPRINT_PAGE_ORDER],
+    take: limit + 1,
+    ...(cursor === undefined ? {} : { cursor: { id: cursor }, skip: 1 }),
+    select: SPRINT_FIELDS,
+  });
+  return toPage({ rows: rows.map(toSprintRecord), limit });
 }
 
 export async function createSprint(

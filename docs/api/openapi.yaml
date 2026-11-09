@@ -1,0 +1,975 @@
+openapi: 3.1.0
+info:
+  title: SprintProof API
+  version: 1.0.0
+  license:
+    name: MIT
+    identifier: MIT
+  description: |
+    Read your team's sprint data from your own tools, and see every endpoint the
+    SprintProof app itself calls.
+
+    ## Authentication
+    - **Personal API token.** Create one under Settings → API tokens and send it as
+      `Authorization: Bearer spk_live_…`. Tokens only read: they work on the three
+      `GET` endpoints tagged **Public API** and nowhere else. A token acts as you,
+      so it sees the teams you're on, with your role.
+    - **Session cookie.** Every other endpoint needs a signed-in session in the
+      browser and ignores tokens.
+
+    A request with an `Authorization` header is checked by its token alone, even
+    when it also carries a session cookie.
+
+    ## Errors
+    Every error has the same shape, with a stable `code` and a message you can show:
+    `{ "error": { "code": "SPRINT_NOT_FOUND", "message": "Sprint not found." } }`
+
+    ## Pagination
+    List endpoints return `{ "data": [...], "nextCursor": "..." }`. Pass
+    `nextCursor` back as `?cursor=` for the next page; it is `null` on the last page.
+    `?limit=` sets the page size, from 1 to 100 (default 20).
+
+    ## Counting rules
+    Counts follow the rules in the README: one standup per person per day in the
+    team's timezone, reviews count distinct PRs by someone else, and bot activity
+    is ignored. Peer feedback is never part of any response.
+servers:
+  - url: /api/v1
+tags:
+  - name: Public API
+    description: Read-only. Takes a personal API token or a session.
+  - name: Teams
+    description: Session only. Create a team for a GitHub repo.
+  - name: Invites
+    description: Session only, lead only. Member and instructor invite links.
+  - name: Memberships
+    description: Session only. Join a team through an invite link.
+  - name: Sprints
+    description: Session only, lead only. Add and edit sprints and their requirements.
+  - name: Standups
+    description: Session only. Post today's standup.
+  - name: API tokens
+    description: Session only. Create and revoke personal API tokens.
+paths:
+  /teams:
+    post:
+      tags: [Teams]
+      summary: Create a team
+      description: The signed-in user becomes the team's lead.
+      operationId: createTeam
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTeamInput"
+      responses:
+        "201":
+          description: The new team.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Team"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "409":
+          description: Another team already connected this repo.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error:
+                  code: REPO_ALREADY_CONNECTED
+                  message: Another team already connected this repo.
+  /teams/{teamId}/invites:
+    parameters:
+      - $ref: "#/components/parameters/TeamId"
+    post:
+      tags: [Invites]
+      summary: Create an invite link
+      description: |
+        Lead only. Links expire after 7 days. Creating a link revokes the team's
+        current link for the same role, so each role has at most one working link.
+      operationId: createInvite
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [role]
+              properties:
+                role:
+                  type: string
+                  enum: [MEMBER, INSTRUCTOR]
+      responses:
+        "201":
+          description: The new invite link.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Invite"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /teams/{teamId}/invites/{inviteId}:
+    parameters:
+      - $ref: "#/components/parameters/TeamId"
+      - name: inviteId
+        in: path
+        required: true
+        schema:
+          type: string
+    delete:
+      tags: [Invites]
+      summary: Revoke an invite link
+      description: Lead only. Revoking a link twice is not an error.
+      operationId: revokeInvite
+      security:
+        - sessionCookie: []
+      responses:
+        "204":
+          description: Revoked.
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: The team has no invite link with that id.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error:
+                  code: INVITE_NOT_FOUND
+                  message: This team has no invite link with that id.
+  /memberships:
+    post:
+      tags: [Memberships]
+      summary: Join a team with an invite token
+      description: |
+        Adds the signed-in user with the link's role. If they're already on the
+        team, their role stays as it is.
+      operationId: joinTeam
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [inviteToken]
+              properties:
+                inviteToken:
+                  type: string
+                  description: The last part of the invite link.
+      responses:
+        "201":
+          description: Joined the team.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Membership"
+        "200":
+          description: Already on the team.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Membership"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          description: No invite link has this token.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error:
+                  code: INVITE_NOT_FOUND
+                  message: This invite link doesn't work. Check that you copied the whole link, or ask your team lead for a new one.
+        "410":
+          description: "The link was revoked (`INVITE_REVOKED`) or has expired (`INVITE_EXPIRED`)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error:
+                  code: INVITE_EXPIRED
+                  message: This invite link has expired. Ask your team lead for a new one.
+  /teams/{teamId}/sprints:
+    parameters:
+      - $ref: "#/components/parameters/TeamId"
+    get:
+      tags: [Public API]
+      summary: List a team's sprints
+      description: Oldest first. Any team member can list them.
+      operationId: listSprints
+      security:
+        - bearerToken: []
+        - sessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: One page of sprints.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SprintList"
+        "400":
+          $ref: "#/components/responses/BadPageQuery"
+        "401":
+          $ref: "#/components/responses/TokenOrSessionMissing"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    post:
+      tags: [Sprints]
+      summary: Add a sprint
+      description: |
+        Lead only. Dates are calendar days in the team's timezone; the sprint runs
+        from 00:00 on the start date through the end of the end date. Sprints in
+        one team can't overlap.
+      operationId: createSprint
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSprintInput"
+      responses:
+        "201":
+          description: The new sprint.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Sprint"
+        "400":
+          $ref: "#/components/responses/SprintValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /teams/{teamId}/sprints/{sprintId}:
+    parameters:
+      - $ref: "#/components/parameters/TeamId"
+      - $ref: "#/components/parameters/SprintId"
+    patch:
+      tags: [Sprints]
+      summary: Edit a sprint
+      description: Lead only. Fields you leave out keep their stored values.
+      operationId: updateSprint
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateSprintInput"
+      responses:
+        "200":
+          description: The edited sprint.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Sprint"
+        "400":
+          $ref: "#/components/responses/SprintValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/SprintNotFound"
+  /teams/{teamId}/sprints/{sprintId}/summary:
+    parameters:
+      - $ref: "#/components/parameters/TeamId"
+      - $ref: "#/components/parameters/SprintId"
+    get:
+      tags: [Public API]
+      summary: Get a sprint's counts per member
+      description: |
+        Commits, opened PRs, standups and PR reviews for each lead and member,
+        with each requirement's status, as the dashboard shows them. Instructors
+        have no requirements, so they aren't listed. Any team member can read it.
+      operationId: getSprintSummary
+      security:
+        - bearerToken: []
+        - sessionCookie: []
+      responses:
+        "200":
+          description: The sprint's summary.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SprintSummary"
+        "401":
+          $ref: "#/components/responses/TokenOrSessionMissing"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/SprintNotFound"
+  /teams/{teamId}/sprints/{sprintId}/standups:
+    parameters:
+      - $ref: "#/components/parameters/TeamId"
+      - $ref: "#/components/parameters/SprintId"
+    get:
+      tags: [Public API]
+      summary: List a sprint's standups
+      description: Newest first. Any team member can list them.
+      operationId: listSprintStandups
+      security:
+        - bearerToken: []
+        - sessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: One page of standups.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandupList"
+        "400":
+          $ref: "#/components/responses/BadPageQuery"
+        "401":
+          $ref: "#/components/responses/TokenOrSessionMissing"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/SprintNotFound"
+  /teams/{teamId}/standups:
+    parameters:
+      - $ref: "#/components/parameters/TeamId"
+    post:
+      tags: [Standups]
+      summary: Post or update today's standup
+      description: |
+        Leads and members only. The server files it under today's date in the
+        team's timezone and under the current sprint. Posting again the same day
+        updates that standup instead of adding a second one.
+      operationId: postStandup
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StandupInput"
+      responses:
+        "201":
+          description: Posted today's standup.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Standup"
+        "200":
+          description: Updated today's standup.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Standup"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: The team doesn't exist.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error:
+                  code: NOT_FOUND
+                  message: This team doesn't exist.
+        "409":
+          description: Today isn't inside any of the team's sprints.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error:
+                  code: NO_CURRENT_SPRINT
+                  message: Today isn't in any sprint. A lead can add one in Settings.
+  /tokens:
+    post:
+      tags: [API tokens]
+      summary: Create a personal API token
+      description: |
+        The response is the only time the token is shown; SprintProof keeps only
+        its SHA-256 hash. Session only: a token can't create tokens.
+      operationId: createApiToken
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                  minLength: 1
+                  maxLength: 50
+                  description: Spaces around the name are trimmed.
+      responses:
+        "201":
+          description: The new token, shown this once.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NewApiToken"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+  /tokens/{tokenId}:
+    parameters:
+      - name: tokenId
+        in: path
+        required: true
+        schema:
+          type: string
+    delete:
+      tags: [API tokens]
+      summary: Revoke a personal API token
+      description: The token stops working at once. Session only.
+      operationId: revokeApiToken
+      security:
+        - sessionCookie: []
+      responses:
+        "204":
+          description: Revoked.
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          description: You have no token with that id. Someone else's token gets the same answer.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error:
+                  code: TOKEN_NOT_FOUND
+                  message: You have no API token with that id.
+components:
+  securitySchemes:
+    bearerToken:
+      type: http
+      scheme: bearer
+      description: A personal API token, `spk_live_` followed by 43 characters.
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: __Secure-authjs.session-token
+      description: The session cookie set when you sign in with GitHub.
+  parameters:
+    TeamId:
+      name: teamId
+      in: path
+      required: true
+      schema:
+        type: string
+    SprintId:
+      name: sprintId
+      in: path
+      required: true
+      schema:
+        type: string
+    Limit:
+      name: limit
+      in: query
+      required: false
+      description: Page size.
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+    Cursor:
+      name: cursor
+      in: query
+      required: false
+      description: The `nextCursor` from the previous page. Leave it out for the first page.
+      schema:
+        type: string
+        minLength: 1
+  responses:
+    ValidationError:
+      description: The request body isn't valid. The message names the first problem.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error:
+              code: VALIDATION_ERROR
+              message: Send the request body as JSON.
+    SprintValidationError:
+      description: |
+        The sprint isn't valid: a missing name, a date that isn't YYYY-MM-DD, an end
+        date before the start date, dates that overlap another sprint, or a
+        requirement outside 1–20.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error:
+              code: VALIDATION_ERROR
+              message: Dates overlap with existing sprint "Sprint 1".
+    BadPageQuery:
+      description: |
+        `limit` isn't a whole number from 1 to 100 (`VALIDATION_ERROR`), or
+        `cursor` isn't from this list (`INVALID_CURSOR`).
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          examples:
+            limit:
+              value:
+                error:
+                  code: VALIDATION_ERROR
+                  message: Set limit to a whole number from 1 to 100.
+            cursor:
+              value:
+                error:
+                  code: INVALID_CURSOR
+                  message: This cursor isn't from this list. Use the nextCursor from the previous page.
+    Unauthenticated:
+      description: No signed-in session.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error:
+              code: UNAUTHENTICATED
+              message: Sign in to continue.
+    TokenOrSessionMissing:
+      description: |
+        No token and no session (`UNAUTHENTICATED`), or the `Authorization` header
+        doesn't hold a working token (`INVALID_TOKEN`): it is malformed, was never
+        created, or was revoked.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          examples:
+            missing:
+              value:
+                error:
+                  code: UNAUTHENTICATED
+                  message: Sign in to continue.
+            invalid:
+              value:
+                error:
+                  code: INVALID_TOKEN
+                  message: This API token isn't valid. Create a new one in Settings.
+    Forbidden:
+      description: You aren't on this team, or your role can't do this.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error:
+              code: FORBIDDEN
+              message: You don't have permission to do this on this team.
+    SprintNotFound:
+      description: The team has no sprint with this id.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error:
+              code: SPRINT_NOT_FOUND
+              message: Sprint not found.
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              description: Stable, in SNAKE_CASE. Branch on this, not on the message.
+            message:
+              type: string
+              description: A sentence you can show to people.
+    Team:
+      type: object
+      required: [id, name, repoFullName, timezone]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        repoFullName:
+          type: string
+          examples: [Odiethebest/SprintProof]
+        timezone:
+          type: string
+          description: IANA timezone for sprint days and standup dates.
+          examples: [America/Los_Angeles]
+    CreateTeamInput:
+      type: object
+      required: [name, repoFullName]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        repoFullName:
+          type: string
+          description: The GitHub repo as owner/name.
+          examples: [Odiethebest/SprintProof]
+        timezone:
+          type: string
+          description: An IANA timezone.
+          default: America/Los_Angeles
+    Invite:
+      type: object
+      required: [id, role, token, expiresAt]
+      properties:
+        id:
+          type: string
+        role:
+          type: string
+          enum: [MEMBER, INSTRUCTOR]
+        token:
+          type: string
+          description: The last part of the invite link, `/invite/{token}`.
+        expiresAt:
+          type: string
+          format: date-time
+    Membership:
+      type: object
+      required: [teamId, role]
+      properties:
+        teamId:
+          type: string
+        role:
+          $ref: "#/components/schemas/Role"
+    Role:
+      type: string
+      enum: [LEAD, MEMBER, INSTRUCTOR]
+    Sprint:
+      type: object
+      required:
+        [
+          id,
+          teamId,
+          name,
+          startDate,
+          endDate,
+          standupsPerPerson,
+          reviewsPerPerson,
+          createdAt,
+          updatedAt,
+        ]
+      properties:
+        id:
+          type: string
+        teamId:
+          type: string
+        name:
+          type: string
+        startDate:
+          type: string
+          format: date
+          description: First day, in the team's timezone.
+        endDate:
+          type: string
+          format: date
+          description: Last day, in the team's timezone.
+        standupsPerPerson:
+          type: integer
+        reviewsPerPerson:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    SprintList:
+      type: object
+      required: [data, nextCursor]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Sprint"
+        nextCursor:
+          type: [string, "null"]
+    CreateSprintInput:
+      type: object
+      required: [name, startDate, endDate]
+      properties:
+        name:
+          type: string
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+        standupsPerPerson:
+          type: integer
+          minimum: 1
+          maximum: 20
+          default: 3
+        reviewsPerPerson:
+          type: integer
+          minimum: 1
+          maximum: 20
+          default: 5
+    UpdateSprintInput:
+      type: object
+      properties:
+        name:
+          type: string
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+        standupsPerPerson:
+          type: integer
+          minimum: 1
+          maximum: 20
+        reviewsPerPerson:
+          type: integer
+          minimum: 1
+          maximum: 20
+    RequirementProgress:
+      type: object
+      required: [count, required, remaining, status]
+      properties:
+        count:
+          type: integer
+        required:
+          type: integer
+        remaining:
+          type: integer
+          description: How many to go; 0 once met.
+        status:
+          type: string
+          enum: [MET, ON_TRACK, AT_RISK, MISSED]
+          description: |
+            `MET`: count reached the requirement. `ON_TRACK`: not met, more than 2 days
+            left. `AT_RISK`: not met, 2 or fewer days left. `MISSED`: not met, the
+            sprint has ended.
+    MemberSummary:
+      type: object
+      required:
+        [
+          userId,
+          name,
+          githubLogin,
+          role,
+          commits,
+          pullRequests,
+          standups,
+          reviews,
+        ]
+      properties:
+        userId:
+          type: string
+        name:
+          type: [string, "null"]
+        githubLogin:
+          type: [string, "null"]
+        role:
+          type: string
+          enum: [LEAD, MEMBER]
+        commits:
+          type: integer
+          description: Distinct commits pushed during the sprint, by commit author.
+        pullRequests:
+          type: integer
+          description: PRs opened during the sprint.
+        standups:
+          $ref: "#/components/schemas/RequirementProgress"
+        reviews:
+          $ref: "#/components/schemas/RequirementProgress"
+    SprintSummary:
+      type: object
+      required: [sprint, countsAsOf, members]
+      properties:
+        sprint:
+          type: object
+          required:
+            [
+              id,
+              name,
+              startDate,
+              endDate,
+              standupsPerPerson,
+              reviewsPerPerson,
+              state,
+              daysLeft,
+            ]
+          properties:
+            id:
+              type: string
+            name:
+              type: string
+            startDate:
+              type: string
+              format: date
+            endDate:
+              type: string
+              format: date
+            standupsPerPerson:
+              type: integer
+            reviewsPerPerson:
+              type: integer
+            state:
+              type: string
+              enum: [UPCOMING, CURRENT, ENDED]
+            daysLeft:
+              type: integer
+              description: The end date minus today, plus 1 because today counts. 0 once the sprint has ended.
+        countsAsOf:
+          type: string
+          format: date-time
+          description: When the counts were taken.
+        members:
+          type: array
+          description: Leads and members, leads first.
+          items:
+            $ref: "#/components/schemas/MemberSummary"
+    StandupInput:
+      type: object
+      required: [yesterday, today]
+      properties:
+        yesterday:
+          type: string
+          minLength: 1
+          maxLength: 1000
+        today:
+          type: string
+          minLength: 1
+          maxLength: 1000
+        blockers:
+          type: [string, "null"]
+          maxLength: 1000
+          description: Optional. An empty answer is stored as null.
+    Standup:
+      type: object
+      required:
+        [
+          id,
+          sprintId,
+          userId,
+          date,
+          yesterday,
+          today,
+          blockers,
+          createdAt,
+          updatedAt,
+        ]
+      properties:
+        id:
+          type: string
+        sprintId:
+          type: string
+        userId:
+          type: string
+        date:
+          type: string
+          format: date
+          description: The day it was filed under, in the team's timezone.
+        yesterday:
+          type: string
+        today:
+          type: string
+        blockers:
+          type: [string, "null"]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+          description: Later than createdAt when the standup was edited.
+    StandupWithAuthor:
+      allOf:
+        - $ref: "#/components/schemas/Standup"
+        - type: object
+          required: [author]
+          properties:
+            author:
+              type: object
+              required: [name, githubLogin, avatarUrl]
+              properties:
+                name:
+                  type: [string, "null"]
+                githubLogin:
+                  type: [string, "null"]
+                avatarUrl:
+                  type: [string, "null"]
+    StandupList:
+      type: object
+      required: [data, nextCursor]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/StandupWithAuthor"
+        nextCursor:
+          type: [string, "null"]
+    NewApiToken:
+      type: object
+      required: [id, name, token, last4, createdAt, lastUsedAt]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        token:
+          type: string
+          description: The full token, `spk_live_` and 43 characters. Copy it now; it isn't shown again.
+        last4:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        lastUsedAt:
+          type: [string, "null"]
+          format: date-time
