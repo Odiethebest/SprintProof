@@ -65,7 +65,7 @@ export async function POST(
   }
 
   const { standup, isNew } = await saveStandup({
-    sprintId: sprint.id,
+    sprint,
     userId: access.userId,
     date: getStandupDate({ now, timezone: team.timezone }),
     ...parsedBody.data,

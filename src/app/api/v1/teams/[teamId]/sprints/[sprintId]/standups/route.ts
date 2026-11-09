@@ -46,7 +46,7 @@ export async function GET(
   if (sprint === null) {
     return sprintNotFoundResponse();
   }
-  const page = await listSprintStandupsPage({ sprintId, ...query.data });
+  const page = await listSprintStandupsPage({ sprint, ...query.data });
   if (page === null) {
     return invalidCursorResponse();
   }
