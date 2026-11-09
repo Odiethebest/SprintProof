@@ -1,63 +1,70 @@
 /* Swagger UI's own colors, mapped to the DESIGN.md tokens so its text and
-   method labels meet WCAG AA contrast (AGENTS.md §4 Accessibility). */
-.swagger-host .swagger-ui,
-.swagger-host .swagger-ui .info .title,
-.swagger-host .swagger-ui .opblock-tag,
-.swagger-host .swagger-ui .opblock .opblock-summary-path,
-.swagger-host .swagger-ui .opblock .opblock-summary-description {
+   method labels meet WCAG AA contrast (AGENTS.md §4 Accessibility).
+   Every rule starts from the container's id: Swagger's stylesheet has no id
+   selectors, so these win whichever stylesheet loads last. (In the production
+   build Swagger's loads after this file, and class-only selectors tied.) */
+#api-reference .swagger-ui,
+#api-reference .swagger-ui .info .title,
+#api-reference .swagger-ui .opblock-tag,
+#api-reference .swagger-ui .opblock .opblock-summary-path,
+#api-reference .swagger-ui .opblock .opblock-summary-description {
   font-family: var(--font-sans);
   color: var(--text);
 }
 
-.swagger-host .swagger-ui .opblock .opblock-summary-method {
+#api-reference .swagger-ui .opblock .opblock-summary-method {
   background: var(--primary);
   color: var(--primary-fg);
 }
 
 /* Version stamps: light text on Swagger's grey and green pills. */
-.swagger-host .swagger-ui .info .title small {
+#api-reference .swagger-ui .info .title small {
   background: var(--text-muted);
 }
 
-.swagger-host .swagger-ui .info .title small pre {
+#api-reference .swagger-ui .info .title small pre {
   color: var(--surface);
 }
 
-.swagger-host .swagger-ui .info a,
-.swagger-host .swagger-ui .info .url {
+#api-reference .swagger-ui .info a,
+#api-reference .swagger-ui .info .url {
   color: var(--primary);
 }
 
-.swagger-host .swagger-ui .btn.authorize {
+#api-reference .swagger-ui .btn.authorize {
   border-color: var(--primary);
   color: var(--primary);
 }
 
 /* There's one server, so its unlabeled picker has nothing to choose; the page
    header names the base URL instead. */
-.swagger-host .swagger-ui .scheme-container .schemes .schemes-server-container {
+#api-reference
+  .swagger-ui
+  .scheme-container
+  .schemes
+  .schemes-server-container {
   display: none;
 }
 
-.swagger-host .swagger-ui .parameter__in,
-.swagger-host .swagger-ui .parameter__type {
+#api-reference .swagger-ui .parameter__in,
+#api-reference .swagger-ui .parameter__type {
   color: var(--text-muted);
 }
 
 /* Code samples scroll sideways, so they take keyboard focus; show it. */
-.swagger-host .swagger-ui pre.microlight:focus-visible {
+#api-reference .swagger-ui pre.microlight:focus-visible {
   outline: 2px solid var(--primary);
   outline-offset: 2px;
 }
 
 /* "Try it out" controls. */
-.swagger-host .swagger-ui .btn.execute {
+#api-reference .swagger-ui .btn.execute {
   background: var(--primary);
   border-color: var(--primary);
   color: var(--primary-fg);
 }
 
-.swagger-host .swagger-ui .btn.cancel {
+#api-reference .swagger-ui .btn.cancel {
   border-color: var(--missed);
   color: var(--missed);
 }

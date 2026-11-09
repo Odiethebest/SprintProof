@@ -97,7 +97,8 @@ export function SwaggerUi({ specUrl }: { specUrl: string }) {
       {/* Swagger UI has light styles only, so it keeps the light tokens in dark mode. */}
       <div
         ref={containerRef}
-        className="swagger-host theme-light rounded-lg border border-border bg-surface text-text"
+        id="api-reference"
+        className="theme-light rounded-lg border border-border bg-surface text-text"
         hidden={loadState === "failed"}
       />
     </>
