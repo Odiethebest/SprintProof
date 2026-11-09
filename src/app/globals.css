@@ -1,6 +1,9 @@
 @import "tailwindcss";
 
-:root {
+/* .theme-light keeps the light tokens inside it in dark mode, for embedded
+   tools with light styles only (DESIGN.md §2). */
+:root,
+.theme-light {
   --canvas: #fafaf9;
   --surface: #ffffff;
   --border: #e7e5e4;
