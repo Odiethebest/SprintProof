@@ -64,7 +64,7 @@ async function setUpSprint() {
   ] as const) {
     const postedAt = new Date(`${date}T17:00:00Z`);
     await insertStandup({
-      sprintId: sprint.id,
+      teamId: team.id,
       userId,
       date,
       createdAt: postedAt,

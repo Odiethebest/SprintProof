@@ -54,10 +54,10 @@ async function setUpTeam() {
 }
 
 // One standup a day, posted at 9:00 AM in Los Angeles.
-async function postStandupOn(sprintId: string, userId: string, date: string) {
+async function postStandupOn(teamId: string, userId: string, date: string) {
   const postedAt = new Date(`${date}T17:00:00Z`);
   return insertStandup({
-    sprintId,
+    teamId,
     userId,
     date,
     createdAt: postedAt,
@@ -75,9 +75,9 @@ describe("GET /api/v1/teams/{teamId}/sprints/{sprintId}/standups", () => {
   it("lists the sprint's standups newest first, each with its author", async () => {
     // Arrange
     const { team, sprint, alice, bob, token } = await setUpTeam();
-    await postStandupOn(sprint.id, alice.id, "2026-10-30");
-    await postStandupOn(sprint.id, bob.id, "2026-10-31");
-    const newest = await postStandupOn(sprint.id, alice.id, "2026-11-02");
+    await postStandupOn(team.id, alice.id, "2026-10-30");
+    await postStandupOn(team.id, bob.id, "2026-10-31");
+    const newest = await postStandupOn(team.id, alice.id, "2026-11-02");
 
     // Act
     const res = await listStandups({
@@ -123,14 +123,14 @@ describe("GET /api/v1/teams/{teamId}/sprints/{sprintId}/standups", () => {
   it("leaves out standups from other sprints", async () => {
     // Arrange
     const { team, sprint, alice, token } = await setUpTeam();
-    const sprint2 = await insertSprint({
+    await insertSprint({
       teamId: team.id,
       name: "Sprint 2",
       startDate: "2026-11-05",
       endDate: "2026-11-11",
     });
-    await postStandupOn(sprint.id, alice.id, "2026-11-02");
-    await postStandupOn(sprint2.id, alice.id, "2026-11-06");
+    await postStandupOn(team.id, alice.id, "2026-11-02");
+    await postStandupOn(team.id, alice.id, "2026-11-06");
 
     // Act
     const res = await listStandups({
@@ -165,10 +165,10 @@ describe("GET /api/v1/teams/{teamId}/sprints/{sprintId}/standups", () => {
   it("returns `limit` standups, then the next ones from the cursor", async () => {
     // Arrange: two standups on Oct 31, so the cursor has to break a tie
     const { team, sprint, alice, bob, token } = await setUpTeam();
-    await postStandupOn(sprint.id, alice.id, "2026-10-30");
-    await postStandupOn(sprint.id, alice.id, "2026-10-31");
-    await postStandupOn(sprint.id, bob.id, "2026-10-31");
-    await postStandupOn(sprint.id, bob.id, "2026-11-02");
+    await postStandupOn(team.id, alice.id, "2026-10-30");
+    await postStandupOn(team.id, alice.id, "2026-10-31");
+    await postStandupOn(team.id, bob.id, "2026-10-31");
+    await postStandupOn(team.id, bob.id, "2026-11-02");
 
     // Act
     const first = await (
@@ -225,13 +225,13 @@ describe("GET /api/v1/teams/{teamId}/sprints/{sprintId}/standups", () => {
   it("returns 400 INVALID_CURSOR for a cursor from another sprint's list", async () => {
     // Arrange
     const { team, sprint, alice, token } = await setUpTeam();
-    const sprint2 = await insertSprint({
+    await insertSprint({
       teamId: team.id,
       startDate: "2026-11-05",
       endDate: "2026-11-11",
     });
-    await postStandupOn(sprint.id, alice.id, "2026-11-02");
-    const elsewhere = await postStandupOn(sprint2.id, alice.id, "2026-11-06");
+    await postStandupOn(team.id, alice.id, "2026-11-02");
+    const elsewhere = await postStandupOn(team.id, alice.id, "2026-11-06");
 
     // Act
     const res = await listStandups({
