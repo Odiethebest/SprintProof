@@ -64,25 +64,27 @@ src/
 │   │   ├── sprints/[sprintId]/   # planning notes, retro
 │   │   └── settings/             # repo connection, requirements, members, API tokens
 │   ├── review/[teamId]/          # instructor/TA read-only view
+│   ├── api-docs/                 # public Swagger UI for docs/api/openapi.yaml; openapi.yaml/ serves the raw file
 │   └── api/
 │       ├── auth/[...nextauth]/
 │       ├── webhooks/github/      # GitHub webhook receiver
 │       └── v1/                   # public, documented REST API (docs/api/openapi.yaml)
-│           ├── teams/            # create a team; [teamId]/invites/ create and revoke links; [teamId]/sprints/ (route.ts and [sprintId]/route.ts); [teamId]/standups/ post or update today's standup
+│           ├── teams/            # create a team; [teamId]/invites/ create and revoke links; [teamId]/sprints/ (route.ts and [sprintId]/route.ts, [sprintId]/summary/, [sprintId]/standups/); [teamId]/standups/ post or update today's standup
 │           ├── memberships/      # join a team with an invite token
 │           └── tokens/           # create a personal API token (shown once); [tokenId]/ revoke it. Session only
 ├── components/
 │   ├── ui/                       # generic primitives (Button, Card, Badge, Toast, ConfirmDialog...)
 │   ├── layout/                   # AppHeader (the shared top bar), TeamNav, SprintSelector, PageHeader, PageLoading
 │   ├── realtime/                 # TeamLiveProvider (Pusher subscription, refetch on events), LiveIndicator, LiveCount
-│   └── <feature>/                # feature components: auth/, teams/, sprints/, dashboard/, standups/, api-tokens/, retro/...
+│   └── <feature>/                # feature components: auth/, teams/, sprints/, dashboard/, standups/, api-tokens/, api-docs/, retro/...
 ├── lib/                          # PURE business logic — no I/O
 │   ├── auth/                     # sign-in redirects, team role checks, test sign-in input
 │   ├── teams/                    # create-team input (name, owner/name repo, timezone)
 │   ├── invites/                  # invite link expiry and validity
-│   ├── api-tokens/               # API token name input, SHA-256 hash, masked display (spk_live_••••last4)
+│   ├── api/                      # list pagination: ?limit= and ?cursor= schema, rows → { data, nextCursor }
+│   ├── api-tokens/               # API token name input, SHA-256 hash, masked display (spk_live_••••last4), Bearer header parsing
 │   ├── checks/                   # requirement checks (standups, reviews per person)
-│   ├── stats/                    # contribution counts per member per sprint (commits, opened PRs), activity → member attribution
+│   ├── stats/                    # contribution counts per member per sprint (commits, opened PRs), activity → member attribution, sprint summary for the API
 │   ├── dashboard/                # activity feed: standups, PRs, reviews, commits grouped per member per day
 │   ├── sprints/                  # sprint date math, timezone boundaries, days left, sprint selection (validate-sprint.ts, sprint-dates.ts, sprint-body.ts, sprint-selection.ts)
 │   ├── standups/                 # standup input, standup date in the team timezone, history grouped by day
@@ -93,13 +95,14 @@ src/
 ├── server/                       # everything with side effects
 │   ├── db.ts                     # single Prisma client
 │   ├── repositories/             # all database reads/writes (sprints.ts, standups.ts, activities.ts, api-tokens.ts, ...)
-│   ├── auth.ts                   # requireTeamRole()
+│   ├── auth.ts                   # requireTeamRole(); requireApiTeamRole() for the read-only endpoints that take an API token
 │   ├── auth-config.ts            # Auth.js config: GitHub provider, test sign-in
 │   ├── auth-session.ts           # getSession(), getSessionUserId(); tests mock this
 │   ├── auth-proxy.ts             # cookie-only Auth.js instance for src/proxy.ts
 │   ├── current-user.ts           # getCurrentUser() for pages
-│   ├── api-response.ts           # errorResponse(), parseJsonBody(), accessDeniedResponse()
+│   ├── api-response.ts           # errorResponse(), parseJsonBody(), accessDeniedResponse(), parsePaginationQuery()
 │   ├── api-tokens.ts             # createPersonalApiToken(): random token, stores only its hash
+│   ├── openapi-spec.ts           # reads docs/api/openapi.yaml for /api-docs
 │   ├── prisma-errors.ts          # isUniqueViolation()
 │   ├── request-origin.ts         # origin for absolute links (invite URLs)
 │   ├── github-client.ts          # Octokit wrapper
@@ -123,7 +126,9 @@ e2e/                              # Playwright specs
 - **All mutations go through route handlers** in `app/api/`. Do not use Server Actions; one mutation pattern keeps integration tests uniform.
 - **Real-time flow:** webhook or mutation → write to DB → `server/realtime.ts` triggers `team-{teamId}` channel with a small event (`activity.created`, `standup.created`) → client refetches the affected section. Never push full records through Pusher.
 - **API response shape:** success returns the resource or `{ data, nextCursor }` for lists. Errors always return `{ "error": { "code": "SNAKE_CASE_CODE", "message": "Human readable" } }` with the right HTTP status.
-- **Route handler helpers** live in `server/api-response.ts`: parse request bodies with `parseJsonBody({ request, schema })` (400 `VALIDATION_ERROR` with the first Zod message), turn a denied `requireTeamRole()` result into a 401 or 403 with `accessDeniedResponse()`, and build every other error with `errorResponse()`. Don't write error JSON by hand.
+- **Route handler helpers** live in `server/api-response.ts`: parse request bodies with `parseJsonBody({ request, schema })` (400 `VALIDATION_ERROR` with the first Zod message), parse `?limit=` and `?cursor=` with `parsePaginationQuery({ request })`, turn a denied `requireTeamRole()` or `requireApiTeamRole()` result into a 401 or 403 with `accessDeniedResponse()`, and build every other error with `errorResponse()`. Don't write error JSON by hand.
+- **API tokens only read.** Only `GET /teams/{teamId}/sprints`, `.../sprints/{sprintId}/summary` and `.../sprints/{sprintId}/standups` call `requireApiTeamRole()`, which takes `Authorization: Bearer` or the session. Every other route keeps `requireTeamRole()` (session only), so a leaked token can't change data or create tokens.
+- **The OpenAPI spec is part of the API.** A new or changed route under `app/api/v1/` updates `docs/api/openapi.yaml` in the same PR; `tests/unit/docs/openapi-coverage.test.ts` fails when a route and the spec disagree.
 
 ### Domain model and counting rules
 
@@ -306,7 +311,7 @@ Standups, planning notes and retros for our own team are recorded in SprintProof
 ### Do
 
 - Validate every external input with Zod: request bodies, query params, route params, webhook payloads.
-- Call `requireTeamRole(teamId, roles)` at the top of every route handler and server page that touches team data.
+- Call `requireTeamRole(teamId, roles)` at the top of every route handler and server page that touches team data (`requireApiTeamRole(request, teamId, roles)` in the three token endpoints).
 - Put logic in `src/lib/` as pure functions and test it first.
 - Use design tokens from `DESIGN.md` through Tailwind classes.
 - Write UI copy that is short, neutral and specific.
@@ -389,3 +394,4 @@ Standups, planning notes and retros for our own team are recorded in SprintProof
 | 2026-11-07 | Ziqi (Odie) Yang | Architecture tree lists the live update files added in #12: `lib/realtime/`, `components/realtime/` and `Toast` in `components/ui/` (#12) | Yunhong's review of PR #44: the rules should match the code |
 | 2026-11-07 | Yunhong Huang | §1 Testing strategy names the production guard workflow and says CI runs E2E with one worker; CI uses PostgreSQL 17 to match Supabase (#17) | Issue #17: E2E stage in CI and the `E2E_TEST_AUTH` production check |
 | 2026-11-08 | Ziqi (Odie) Yang | Architecture tree lists the API token files added in #16: `api/v1/tokens/`, `lib/api-tokens/`, `server/api-tokens.ts`, `repositories/api-tokens.ts`, `components/api-tokens/` and `ConfirmDialog` in `components/ui/` (#16) | Yunhong's review of PR #44: the rules should match the code |
+| 2026-11-09 | Ziqi (Odie) Yang | Architecture tree lists the public API files added in #16 (`app/api-docs/`, the summary and standups routes, `lib/api/`, `server/openapi-spec.ts`, `components/api-docs/`); Key patterns: `requireApiTeamRole()` and `parsePaginationQuery()`, tokens only read, routes and `openapi.yaml` change together (#16) | Issue #16: public API v1. The rules should match the code |
