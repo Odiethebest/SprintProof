@@ -67,6 +67,7 @@ As a team lead, I want to create sprints with dates and the course's requirement
 - Sprint has name, start date, end date, standups per person (default 3), PR reviews per person (default 5).
 - Sprints in one team cannot overlap; end date is on or after start date.
 - The current sprint is the one containing today in the team's timezone.
+- Changing a sprint's dates moves standups with their days: each standup shows and counts in the sprint whose dates contain it (#56).
 
 **US-4. Post an async standup** · Issue #9
 As someone who forgets standups, I want a quick three-question check-in that files itself under the right sprint, so the record builds on its own.
@@ -134,7 +135,7 @@ As someone who builds my own tools, I want a documented API for our sprint data,
 These rules are the source of truth for `src/lib/` and are mirrored in `AGENTS.md` §1.
 
 - **R1. Timezone.** Timestamps are stored in UTC. Sprint boundaries are computed in the team's timezone. A sprint runs from 00:00 on its start date through 23:59:59.999 on its end date, inclusive.
-- **R2. Standups.** At most one standup counts per person per calendar day in the team's timezone.
+- **R2. Standups.** At most one standup counts per person per calendar day in the team's timezone. A standup counts in the sprint whose dates contain its day, so it moves with its day when sprint dates change; one on a day outside every sprint is kept but not counted.
 - **R3. Reviews.** A review counts when a member submits a review (approved, changes requested, or commented) on a PR authored by someone else. Count distinct PRs per reviewer. Reviews on your own PR never count.
 - **R4. Commits.** Count commits from `push` events on any branch, so commits on a feature branch are recorded before a merge or squash can hide them (decision 001). Deduplicate by SHA. Attribute by the commit author's GitHub login mapped to a team member, never the committer or the pusher; skip commits whose author isn't linked to a GitHub account. Commits from fork PRs and commits pushed before the webhook was connected aren't counted. Bots (logins ending in `[bot]`) are ignored for every activity type, not only commits.
 - **R5. Requirement status.**
