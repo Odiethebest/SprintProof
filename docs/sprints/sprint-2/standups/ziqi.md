@@ -6,6 +6,11 @@
   This file is edited only by Ziqi (Odie) Yang, so it never conflicts with the partner's file.
 -->
 
+### 2026-11-09
+**Yesterday:** Finished #12: the sprint dashboard with member counts and the activity feed (#58) and live updates through Pusher (#60), both merged. Fixed the primary button hover color, which was below 4.5:1 contrast (#63). Reviewed and merged Yunhong's CodeQL and audit PR (#59), and finished her E2E stage (#61) by running the live update specs against a Soketi container. Opened #64 for #16: create and revoke personal API tokens in Settings; only a SHA-256 hash is stored.
+**Today:** Finished #16. API tokens now read three endpoints (sprints, sprint summary, standups) with cursor pagination; every `/api/v1` endpoint is in `docs/api/openapi.yaml`, shown with Swagger UI at `/api-docs`. Merged after Yunhong's review (#64, #66). #65 merged into the stacked branch instead of `main`, so #66 carried the same commits. Closed #12 by hand. Next: the Sprint 2 retro on Nov 11, and #56 (sprint date edits that leave standups outside their sprint).
+**Blockers:** None.
+
 ### 2026-11-07
 **Yesterday:** Finished #9: standup logic, the standups API route and page, with unit, integration and E2E tests; merged after Yunhong's review (#51). Reviewed Yunhong's webhook PR (#49), pushed fixes for my review points to her branch (failing tests first), and merged it. Approved and merged her sprints PR (#47) and her Nov 6 standup (#50).
 **Today:** Set up hosting: a production GitHub OAuth App and Vercel env vars for Production and Preview (previews sign in through production with the Auth.js redirect proxy), and applied the #11 migration to both Supabase databases. Production sign-in works again. Found that the app connected to Supabase without TLS; the connection is encrypted now, and #53 tracks certificate verification. Recorded it all in #52. Next: #12 dashboard.
