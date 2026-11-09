@@ -1,5 +1,6 @@
 // Database record builders for integration tests. Not exported from ./index,
 // so unit tests never import the Prisma client.
+import crypto from "node:crypto";
 import { db } from "@/server/db";
 import type { TeamRole } from "@/lib/auth/team-access";
 import type { InviteRole } from "@/lib/invites/invite-link";
@@ -151,4 +152,31 @@ export async function insertStandup(input: {
       date: new Date(`${input.date}T00:00:00.000Z`),
     },
   });
+}
+
+// Stores a token the way the app does: the SHA-256 hash and the last 4
+// characters, never the token itself. Returns the token so tests can use it.
+export async function insertApiToken(input: {
+  userId: string;
+  name?: string;
+  token?: string;
+  createdAt?: Date;
+  lastUsedAt?: Date | null;
+}) {
+  const n = recordSeq++;
+  // Same length as a real token (43 characters after the prefix), with a
+  // last 4 that differs per token.
+  const token =
+    input.token ?? `spk_live_${"x".repeat(39)}${String(n).padStart(4, "0")}`;
+  const record = await db.apiToken.create({
+    data: {
+      userId: input.userId,
+      name: input.name ?? `Token ${n}`,
+      tokenHash: crypto.createHash("sha256").update(token).digest("hex"),
+      last4: token.slice(-4),
+      createdAt: input.createdAt,
+      lastUsedAt: input.lastUsedAt ?? null,
+    },
+  });
+  return { token, record };
 }
