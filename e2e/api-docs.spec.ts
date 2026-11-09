@@ -35,6 +35,24 @@ test.describe("API docs", () => {
     await expectNoBlockingViolations(page);
   });
 
+  test("keeps every operation accessible once it's opened", async ({
+    page,
+  }) => {
+    // Arrange
+    await page.goto("/api-docs");
+    const operations = page.locator(".opblock-summary-control");
+    await expect(operations.first()).toBeVisible();
+
+    // Act: open each operation, as someone reading the reference would
+    for (const operation of await operations.all()) {
+      await operation.click();
+    }
+    await expect(page.locator(".opblock-body").first()).toBeVisible();
+
+    // Assert: parameter fields, example pickers and code samples included
+    await expectNoBlockingViolations(page);
+  });
+
   test("links to the raw OpenAPI file", async ({ page }) => {
     // Act
     await page.goto("/api-docs");
