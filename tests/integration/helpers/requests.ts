@@ -15,6 +15,23 @@ export function apiRequest(
   });
 }
 
+// A GET as an API client sends it. `authorization` is the raw header value, so
+// tests can send malformed ones too; leave it out to send no header at all.
+export function apiGetRequest(
+  path: string,
+  { authorization }: { authorization?: string } = {}
+): Request {
+  const headers = new Headers();
+  if (authorization !== undefined) {
+    headers.set("authorization", authorization);
+  }
+  return new Request(`${API_BASE}${path}`, { method: "GET", headers });
+}
+
+export function bearer(token: string): string {
+  return `Bearer ${token}`;
+}
+
 export function routeContext<Params>(params: Params): {
   params: Promise<Params>;
 } {
