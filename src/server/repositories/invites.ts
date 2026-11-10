@@ -1,3 +1,4 @@
+import { databaseTextSchema } from "@/lib/validation/text";
 import { randomBytes } from "node:crypto";
 import { db } from "@/server/db";
 import { getInviteExpiry, type InviteRole } from "@/lib/invites/invite-link";
@@ -24,6 +25,8 @@ export async function createInvite({
 }) {
   const token = randomBytes(TOKEN_BYTES).toString("base64url");
   return db.$transaction(async (tx) => {
+    const key = `invites:${teamId}`;
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${key}))`;
     await tx.invite.updateMany({
       where: { teamId, role, revokedAt: null, expiresAt: { gt: now } },
       data: { revokedAt: now },
@@ -51,6 +54,7 @@ export async function revokeInvite({
   inviteId: string;
   now: Date;
 }): Promise<boolean> {
+  if (!databaseTextSchema.safeParse(inviteId).success) return false;
   // Scoped to the team, so a lead can't revoke another team's link by id.
   const invite = await db.invite.findFirst({
     where: { id: inviteId, teamId },
@@ -69,6 +73,7 @@ export async function revokeInvite({
 }
 
 export async function findInviteByToken({ token }: { token: string }) {
+  if (!databaseTextSchema.safeParse(token).success) return null;
   return db.invite.findUnique({
     where: { token },
     select: {

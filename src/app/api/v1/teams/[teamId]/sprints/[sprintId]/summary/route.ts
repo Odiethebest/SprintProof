@@ -66,10 +66,10 @@ export async function GET(
       githubLogin: user.githubLogin,
       role,
     })),
-    standups: standups.map(({ id, userId, createdAt }) => ({
+    standups: standups.map(({ id, userId, date }) => ({
       id,
       userId,
-      createdAt,
+      date,
     })),
     activities,
     now: new Date(),

@@ -5,14 +5,9 @@ import { toSignInPath } from "@/lib/auth/sign-in-redirect";
 import { getCurrentSprint, selectSprint } from "@/lib/sprints";
 import { groupStandupsByDay } from "@/lib/standups/group-standups";
 import { getStandupDate } from "@/lib/standups/standup-date";
-import { AppHeader } from "@/components/layout/app-header";
 import { PageHeader } from "@/components/layout/page-header";
 import { PageLoading } from "@/components/layout/page-loading";
-import {
-  buildSprintSelector,
-  readRequestedSprintId,
-} from "@/components/layout/sprint-navigation";
-import { TeamLiveProvider } from "@/components/realtime/team-live-provider";
+import { readRequestedSprintId } from "@/components/layout/sprint-navigation";
 import { StandupForm } from "@/components/standups/standup-form";
 import {
   StandupHistory,
@@ -134,26 +129,7 @@ async function TeamStandups({
 
   // Teammates' standups show up in History without a reload.
   return (
-    <TeamLiveProvider teamId={team.id}>
-      <AppHeader
-        team={team}
-        user={user}
-        role={access.role}
-        teamNav={{
-          teamId: team.id,
-          current: "standups",
-          requestedSprintId:
-            historySprint !== null && historySprint.id === requestedSprintId
-              ? requestedSprintId
-              : null,
-        }}
-        sprintSelector={buildSprintSelector({
-          sprints,
-          selectedId: historySprint?.id ?? null,
-          now,
-          timeZone: team.timezone,
-        })}
-      />
+    <>
       <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-8 md:px-6">
         <PageHeader
           title="Standups"
@@ -164,6 +140,7 @@ async function TeamStandups({
         <div className="grid items-start gap-4 lg:grid-cols-3">
           {canPost && (
             <StandupForm
+              formDate={today}
               teamId={team.id}
               dateLabel={formatDay(today)}
               sprintName={sprint?.name ?? null}
@@ -188,6 +165,6 @@ async function TeamStandups({
           </div>
         </div>
       </main>
-    </TeamLiveProvider>
+    </>
   );
 }

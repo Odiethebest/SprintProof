@@ -1,9 +1,5 @@
 import { z } from "zod";
-import {
-  updateSprintSchema,
-  validateSprint,
-  type SprintInput,
-} from "@/lib/sprints";
+import { updateSprintSchema } from "@/lib/sprints";
 import {
   accessDeniedResponse,
   errorResponse,
@@ -13,8 +9,8 @@ import {
 import { requireTeamRole } from "@/server/auth";
 import {
   findSprintById,
-  listSprints,
   updateSprint,
+  SprintValidationFailure,
 } from "@/server/repositories/sprints";
 
 const paramsSchema = z.object({
@@ -54,28 +50,27 @@ export async function PATCH(
   if (!parsedBody.isValid) {
     return parsedBody.response;
   }
-  const changes = parsedBody.data;
-  const sprintInput: SprintInput = {
-    id: sprintId,
-    name: changes.name ?? existingSprint.name,
-    startDate: changes.startDate ?? existingSprint.startDate,
-    endDate: changes.endDate ?? existingSprint.endDate,
-    standupsPerPerson:
-      changes.standupsPerPerson ?? existingSprint.standupsPerPerson,
-    reviewsPerPerson:
-      changes.reviewsPerPerson ?? existingSprint.reviewsPerPerson,
-  };
-
-  const existingSprints = await listSprints({ teamId });
-  const errors = validateSprint({ sprint: sprintInput, existingSprints });
-  if (errors.length > 0) {
-    return errorResponse({
-      status: 400,
-      code: "VALIDATION_ERROR",
-      message: errors[0].message,
+  try {
+    const updated = await updateSprint({
+      teamId,
+      sprintId,
+      ...parsedBody.data,
     });
+    if (updated === null)
+      return errorResponse({
+        status: 404,
+        code: "SPRINT_NOT_FOUND",
+        message: "Sprint not found.",
+      });
+    return Response.json(updated, { status: 200 });
+  } catch (error) {
+    if (error instanceof SprintValidationFailure) {
+      return errorResponse({
+        status: 400,
+        code: "VALIDATION_ERROR",
+        message: error.message,
+      });
+    }
+    throw error;
   }
-
-  const updated = await updateSprint({ teamId, sprintId, ...sprintInput });
-  return Response.json(updated, { status: 200 });
 }

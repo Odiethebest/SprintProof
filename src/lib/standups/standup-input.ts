@@ -1,3 +1,4 @@
+import { noNul } from "@/lib/validation/text";
 import { countStandupCharacters } from "./character-count";
 import { z } from "zod";
 
@@ -16,12 +17,14 @@ function requiredField(message: string) {
     .refine(
       (value) => countStandupCharacters({ value }) <= MAX_STANDUP_FIELD_LENGTH,
       TOO_LONG
-    );
+    )
+    .check(noNul);
 }
 
 // Shared by the standups API and the StandupForm, so both show the same errors.
-// The server picks the sprint and the date (rule R2), so the schema has no field for either.
+// The server picks the stored date; formDate only detects a stale page.
 export const createStandupSchema = z.object({
+  formDate: z.iso.date().optional(),
   yesterday: requiredField(YESTERDAY_REQUIRED),
   today: requiredField(TODAY_REQUIRED),
   blockers: z
@@ -31,6 +34,7 @@ export const createStandupSchema = z.object({
       (value) => countStandupCharacters({ value }) <= MAX_STANDUP_FIELD_LENGTH,
       TOO_LONG
     )
+    .check(noNul)
     .nullish()
     // Blockers are optional; an empty answer is stored as null so the history shows "None".
     .transform((blockers) => (blockers ? blockers : null)),

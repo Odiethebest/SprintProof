@@ -110,9 +110,11 @@ function StandupField({
 }
 
 function StandupFields({
+  formDate,
   teamId,
   saved,
 }: {
+  formDate: string;
   teamId: string;
   saved: SavedStandupView | null;
 }) {
@@ -125,6 +127,7 @@ function StandupFields({
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [hasDayChanged, setHasDayChanged] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
@@ -162,7 +165,7 @@ function StandupFields({
       const response = await fetch(`/api/v1/teams/${teamId}/standups`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify(parsed.data),
+        body: JSON.stringify({ ...parsed.data, formDate }),
       });
       if (response.ok) {
         setToast(
@@ -170,7 +173,9 @@ function StandupFields({
         );
         router.refresh();
       } else {
-        setFormError((await readApiError(response)).message);
+        const error = await readApiError(response);
+        setFormError(error.message);
+        setHasDayChanged(error.code === "STANDUP_DAY_CHANGED");
       }
     } catch {
       setFormError(NETWORK_ERROR_MESSAGE);
@@ -224,10 +229,19 @@ function StandupFields({
             {formError}
           </p>
         )}
+        {hasDayChanged && (
+          <button
+            type="button"
+            className={BUTTON_CLASSES.secondary}
+            onClick={() => window.location.reload()}
+          >
+            Load today&apos;s form
+          </button>
+        )}
         <div>
           <button
             type="submit"
-            disabled={isSubmitting}
+            disabled={isSubmitting || hasDayChanged}
             className={BUTTON_CLASSES.primary}
           >
             {saved ? "Update today's standup" : "Post standup"}
@@ -242,11 +256,13 @@ function StandupFields({
 // AGENTS.md §2 StandupForm. It always files under the current sprint; with no
 // current sprint it explains why in place of the fields.
 export function StandupForm({
+  formDate,
   teamId,
   dateLabel,
   sprintName,
   saved,
 }: {
+  formDate: string;
   teamId: string;
   dateLabel: string;
   sprintName: string | null;
@@ -281,7 +297,12 @@ export function StandupForm({
           .
         </p>
       ) : (
-        <StandupFields teamId={teamId} saved={saved} />
+        <StandupFields
+          key={formDate}
+          formDate={formDate}
+          teamId={teamId}
+          saved={saved}
+        />
       )}
     </section>
   );

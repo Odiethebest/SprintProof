@@ -50,6 +50,11 @@ tags:
     description: Session only. Post today's standup.
   - name: API tokens
     description: Session only. Create and revoke personal API tokens.
+# Validation (#74): user text rejects NUL with 400 VALIDATION_ERROR.
+# NUL URL ids follow the same 403/404 behavior as unknown ids. NUL inviteToken
+# in the JSON body is a validation error; NUL invite-link URL tokens are absent.
+# Sprint dates must be within 2000-01-01 and 2100-12-31 inclusive.
+# Sprint names are trimmed and limited to 100 characters.
 paths:
   /teams:
     post:
@@ -409,7 +414,7 @@ paths:
                   code: NOT_FOUND
                   message: This team doesn't exist.
         "409":
-          description: Today isn't inside any of the team's sprints.
+          description: Today isn't inside any sprint (NO_CURRENT_SPRINT), or formDate differs from today in the team timezone (STANDUP_DAY_CHANGED). Nothing is saved in either case.
           content:
             application/json:
               schema:
@@ -527,7 +532,7 @@ components:
         minLength: 1
   responses:
     ValidationError:
-      description: The request body isn't valid. The message names the first problem.
+      description: The request body isn't valid, including NUL characters in user text. The message names the first problem.
       content:
         application/json:
           schema:
@@ -538,8 +543,8 @@ components:
               message: Send the request body as JSON.
     SprintValidationError:
       description: |
-        The sprint isn't valid: a missing name, a date that isn't YYYY-MM-DD, an end
-        date before the start date, dates that overlap another sprint, or a
+        The sprint isn't valid: a missing name, a name over 100 characters or containing NUL, a date outside years 2000–2100 or not YYYY-MM-DD, an end
+        date before the start date, dates that overlap another sprint (including concurrent creates and edits), or a
         requirement outside 1–20.
       content:
         application/json:
@@ -745,12 +750,16 @@ components:
       properties:
         name:
           type: string
+          maxLength: 100
+          description: Trimmed; NUL characters are rejected.
         startDate:
           type: string
           format: date
+          description: Calendar date in years 2000 through 2100.
         endDate:
           type: string
           format: date
+          description: Calendar date in years 2000 through 2100.
         standupsPerPerson:
           type: integer
           minimum: 1
@@ -766,12 +775,16 @@ components:
       properties:
         name:
           type: string
+          maxLength: 100
+          description: Trimmed; NUL characters are rejected.
         startDate:
           type: string
           format: date
+          description: Calendar date in years 2000 through 2100.
         endDate:
           type: string
           format: date
+          description: Calendar date in years 2000 through 2100.
         standupsPerPerson:
           type: integer
           minimum: 1
@@ -792,10 +805,10 @@ components:
           type: integer
           description: How many to go; 0 once met.
         status:
-          type: string
-          enum: [MET, ON_TRACK, AT_RISK, MISSED]
+          type: [string, "null"]
+          enum: [MET, ON_TRACK, AT_RISK, MISSED, null]
           description: |
-            `MET`: count reached the requirement. `ON_TRACK`: not met, more than 2 days
+            `null`: the sprint has not started. `MET`: count reached the requirement. `ON_TRACK`: not met, more than 2 days
             left. `AT_RISK`: not met, 2 or fewer days left. `MISSED`: not met, the
             sprint has ended.
     MemberSummary:
@@ -882,6 +895,10 @@ components:
       type: object
       required: [yesterday, today]
       properties:
+        formDate:
+          type: string
+          format: date
+          description: Day displayed when the form rendered. Optional; if different from today in the team timezone, returns 409 STANDUP_DAY_CHANGED and saves nothing. The server always chooses the stored date.
         yesterday:
           type: string
           minLength: 1

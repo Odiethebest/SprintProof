@@ -59,6 +59,27 @@ describe("POST /api/v1/teams/{teamId}/standups", () => {
     vi.useRealTimers();
   });
 
+  it("rejects a form from yesterday without saving and accepts today's formDate", async () => {
+    const team = await insertTeam();
+    await insertSprint({ teamId: team.id });
+    await signInAs(team.id, "MEMBER");
+    setNow("2026-11-03T08:05:00Z");
+    const stale = await postStandup(team.id, {
+      ...standupBody,
+      formDate: "2026-11-02",
+    });
+    expect(stale.status).toBe(409);
+    expect(await stale.json()).toMatchObject({
+      error: { code: "STANDUP_DAY_CHANGED" },
+    });
+    expect(await db.standup.count()).toBe(0);
+    const current = await postStandup(team.id, {
+      ...standupBody,
+      formDate: "2026-11-03",
+    });
+    expect(current.status).toBe(201);
+  });
+
   describe("create", () => {
     it.each(["MEMBER", "LEAD"] as const)(
       "files a %s's standup under the current sprint and today's date",

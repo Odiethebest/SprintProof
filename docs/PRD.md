@@ -64,7 +64,7 @@ As a team lead, I want to create a team linked to our GitHub repo and invite my 
 
 **US-3. Plan sprints with requirements** · Issue #8
 As a team lead, I want to create sprints with dates and the course's requirements, so the checks match our syllabus.
-- Sprint has name, start date, end date, standups per person (default 3), PR reviews per person (default 5).
+- Sprint has name, start date, end date, standups per person (default 3), PR reviews per person (default 5). The name is trimmed and at most 100 characters, like a team name; dates fall in the years 2000–2100 (#74).
 - Sprints in one team cannot overlap; end date is on or after start date.
 - The current sprint is the one containing today in the team's timezone.
 - Changing a sprint's dates moves standups with their days: each standup shows and counts in the sprint whose dates contain it (#56).
@@ -73,6 +73,7 @@ As a team lead, I want to create sprints with dates and the course's requirement
 As someone who forgets standups, I want a quick three-question check-in that files itself under the right sprint, so the record builds on its own.
 - Yesterday and Today required, Blockers optional.
 - One standup per person per day; submitting again the same day updates it.
+- A form left open past midnight doesn't file under the new day; it says the day changed and offers today's form (#73).
 - Standups are listed by day, newest first, visible to the whole team.
 
 ### Epic C — Contribution tracking
@@ -134,8 +135,8 @@ As someone who builds my own tools, I want a documented API for our sprint data,
 
 These rules are the source of truth for `src/lib/` and are mirrored in `AGENTS.md` §1.
 
-- **R1. Timezone.** Timestamps are stored in UTC. Sprint boundaries are computed in the team's timezone. A sprint runs from 00:00 on its start date through 23:59:59.999 on its end date, inclusive.
-- **R2. Standups.** At most one standup counts per person per calendar day in the team's timezone. A standup counts in the sprint whose dates contain its day, so it moves with its day when sprint dates change; one on a day outside every sprint is kept but not counted.
+- **R1. Timezone.** Timestamps are stored in UTC. Sprint boundaries are computed in the team's timezone. A sprint runs from 00:00 on its start date through 23:59:59.999 on its end date, inclusive. The end is computed as the start of the next day minus 1 ms, so it stays right in timezones where a DST change skips midnight.
+- **R2. Standups.** At most one standup counts per person per calendar day in the team's timezone. A standup counts on its stored day, never by when it was saved. A form opened on an earlier day doesn't file under today: the API rejects it (409 `STANDUP_DAY_CHANGED`) and the form offers today's form. A standup counts in the sprint whose dates contain its day, so it moves with its day when sprint dates change; one on a day outside every sprint is kept but not counted.
 - **R3. Reviews.** A review counts when a member submits a review (approved, changes requested, or commented) on a PR authored by someone else. Count distinct PRs per reviewer. Reviews on your own PR never count.
 - **R4. Commits.** Count commits from `push` events on any branch, so commits on a feature branch are recorded before a merge or squash can hide them (decision 001). Deduplicate by SHA. Attribute by the commit author's GitHub login mapped to a team member, never the committer or the pusher; skip commits whose author isn't linked to a GitHub account. Commits from fork PRs and commits pushed before the webhook was connected aren't counted. Bots (logins ending in `[bot]`) are ignored for every activity type, not only commits.
 - **R5. Requirement status.**
@@ -143,6 +144,7 @@ These rules are the source of truth for `src/lib/` and are mirrored in `AGENTS.m
   - `ON_TRACK`: not met, sprint running, more than 2 days left
   - `AT_RISK`: not met, sprint running, 2 or fewer days left
   - `MISSED`: not met, sprint ended
+  - No status before the sprint starts: the sprint summary API returns `null` for an upcoming sprint.
   - Days left = the sprint's end date minus today's date, both in the team timezone, plus 1 (today counts). With a Nov 4 end: Nov 2 has 3 days left (`ON_TRACK`), Nov 3 has 2 (`AT_RISK`), Nov 4 has 1 (`AT_RISK`).
 - **R6. Retro votes.** 3 votes per member per retro, max 1 per item. The top 3 "To improve" items by votes (ties broken by earliest created) become action items for the next sprint.
 - **R7. Peer feedback visibility.** Readable only by `INSTRUCTOR`. Never returned to `LEAD` or `MEMBER` in any page, API response or export.
