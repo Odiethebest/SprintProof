@@ -16,8 +16,8 @@ Two Supabase projects on the free plan, in a dedicated SprintProof organization 
 
 ## Consequences
 - The Supabase Data API is turned off on both projects, so no table is exposed through Supabase's REST API.
-- Migrations are applied with `prisma migrate deploy` by hand after each merged migration. As of 2026-11-09, every migration through #16 is applied to both databases. #16's reached production about three hours after #64 merged, and production's Settings page failed until then, so run `migrate status` on both databases right after a merge that adds a migration. Automating this is a follow-up.
-- Connection strings live in Vercel environment variables. Whoever applies migrations keeps the two database passwords in their local, git-ignored `.env` as `SUPABASE_PROD_DB_PASSWORD` and `SUPABASE_PREVIEW_DB_PASSWORD`. Passwords are shared between partners privately, never in the repo, PRs or docs.
+- Migrations are applied with `prisma migrate deploy` by hand after each merged migration. As of 2026-11-10, every migration through #56 is applied to both databases. #16's reached production about three hours after #64 merged, and production's Settings page failed until then; #56's reached it about six hours after #69 merged. So run `migrate status` on both databases right after a merge that adds a migration. Automating this is a follow-up.
+- Connection strings live in Vercel environment variables. Whoever applies migrations keeps the two database passwords in their local, git-ignored `.env` as `SUPABASE_PROD_DB_PASSWORD` and `SUPABASE_PREVIEW_DB_PASSWORD`, next to each project's Session pooler URI as `SUPABASE_PROD_DB_URL` and `SUPABASE_PREVIEW_DB_URL`, with `[YOUR-PASSWORD]` left in. Passwords are shared between partners privately, never in the repo, PRs or docs.
 - A paused project must be resumed from the Supabase dashboard; the data is kept.
 - Supabase runs PostgreSQL 17.11. CI moved to 17 in #17 so the check that gates merges matches production; local Docker stays on 16. The schema uses no version-specific features.
 - All PR previews share one preview database, so they can see each other's data.

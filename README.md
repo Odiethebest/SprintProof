@@ -210,7 +210,8 @@ Open http://localhost:3000.
 | `NEXT_PUBLIC_PUSHER_KEY` / `NEXT_PUBLIC_PUSHER_CLUSTER` | Client-side Pusher config |
 | `NEXT_PUBLIC_PUSHER_HOST` / `NEXT_PUBLIC_PUSHER_PORT` | Local only: a Pusher-compatible server such as Soketi (`localhost`, `6001`). Leave empty on Vercel so the app uses Pusher Channels. |
 | `E2E_TEST_AUTH` | Enables the test-only sign-in provider for Playwright. Never set in production. |
-| `SUPABASE_PROD_DB_PASSWORD` / `SUPABASE_PREVIEW_DB_PASSWORD` | Local only, for applying migrations by hand ([decision 002](docs/decisions/002-database-hosting.md)): the database passwords of sprintproof-prod and sprintproof-preview, filled into each project's Session pooler URI. The app doesn't read them; don't set them on Vercel. |
+| `SUPABASE_PROD_DB_PASSWORD` / `SUPABASE_PREVIEW_DB_PASSWORD` | Local only, for applying migrations by hand ([decision 002](docs/decisions/002-database-hosting.md)): the database passwords of sprintproof-prod and sprintproof-preview, filled into the matching `SUPABASE_*_DB_URL` in place of `[YOUR-PASSWORD]`. The app doesn't read them; don't set them on Vercel. |
+| `SUPABASE_PROD_DB_URL` / `SUPABASE_PREVIEW_DB_URL` | Local only, used with the passwords above: each project's Session pooler URI (Connect → Session pooler, port 5432), copied as it is with the `[YOUR-PASSWORD]` placeholder. The app doesn't read them; don't set them on Vercel. |
 
 Never commit real values. [`.env.example`](.env.example) lists names only.
 
