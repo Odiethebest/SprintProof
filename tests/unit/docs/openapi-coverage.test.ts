@@ -13,7 +13,8 @@ interface Operation {
 }
 
 function readSpec(): string {
-  return fs.readFileSync(SPEC_PATH, "utf8");
+  // Windows checkouts with core.autocrlf=true give CRLF; the regexes below expect LF (#68)
+  return fs.readFileSync(SPEC_PATH, "utf8").replace(/\r\n/g, "\n");
 }
 
 // "teams/[teamId]/sprints/route.ts" → "/teams/{teamId}/sprints"
