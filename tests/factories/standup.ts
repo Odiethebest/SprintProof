@@ -11,7 +11,7 @@ export function createStandup(overrides: Partial<Standup> = {}): Standup {
   return {
     id: `standup-${id}`,
     userId: "user-1",
-    createdAt: new Date("2026-10-30T17:00:00Z"),
+    date: "2026-10-30",
     ...overrides,
   };
 }

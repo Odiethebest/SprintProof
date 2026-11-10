@@ -224,10 +224,10 @@ async function SprintDashboard({
       reviewsPerPerson: sprint.reviewsPerPerson,
     },
     members,
-    standups: standups.map(({ id, userId, createdAt }) => ({
+    standups: standups.map(({ id, userId, date }) => ({
       id,
       userId,
-      createdAt,
+      date,
     })),
     activities: activities.map((activity) => ({
       id: activity.id,

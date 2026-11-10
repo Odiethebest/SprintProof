@@ -18,8 +18,9 @@ function requiredField(message: string) {
 }
 
 // Shared by the standups API and the StandupForm, so both show the same errors.
-// The server picks the sprint and the date (rule R2), so the schema has no field for either.
+// The server picks the stored date; formDate only detects a stale page.
 export const createStandupSchema = z.object({
+  formDate: z.iso.date().optional(),
   yesterday: requiredField(YESTERDAY_REQUIRED),
   today: requiredField(TODAY_REQUIRED),
   blockers: z

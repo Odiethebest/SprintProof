@@ -42,8 +42,12 @@ export interface BuildSprintSummaryOptions {
 export interface MemberSummary extends SummaryMemberInput {
   commits: number;
   pullRequests: number;
-  standups: RequirementProgress;
-  reviews: RequirementProgress;
+  standups: Omit<RequirementProgress, "status"> & {
+    status: RequirementProgress["status"] | null;
+  };
+  reviews: Omit<RequirementProgress, "status"> & {
+    status: RequirementProgress["status"] | null;
+  };
 }
 
 export interface SprintSummary {
@@ -102,6 +106,7 @@ export function buildSprintSummary({
     activities,
   });
 
+  const state = getSprintState({ sprint, now, timeZone });
   return {
     sprint: {
       id: sprint.id,
@@ -110,7 +115,7 @@ export function buildSprintSummary({
       endDate: sprint.endDate,
       standupsPerPerson: sprint.standupsPerPerson,
       reviewsPerPerson: sprint.reviewsPerPerson,
-      state: getSprintState({ sprint, now, timeZone }),
+      state,
       daysLeft: getDaysLeft({ sprint, now, timeZone }),
     },
     countsAsOf: now,
@@ -121,8 +126,14 @@ export function buildSprintSummary({
       role: member.role,
       commits: counts[index].commits,
       pullRequests: counts[index].pullRequests,
-      standups: statuses[index].standups,
-      reviews: statuses[index].reviews,
+      standups: {
+        ...statuses[index].standups,
+        status: state === "UPCOMING" ? null : statuses[index].standups.status,
+      },
+      reviews: {
+        ...statuses[index].reviews,
+        status: state === "UPCOMING" ? null : statuses[index].reviews.status,
+      },
     })),
   };
 }

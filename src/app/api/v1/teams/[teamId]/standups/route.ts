@@ -55,6 +55,17 @@ export async function POST(
   }
   // The server picks the sprint and the date, so a standup can't be filed elsewhere.
   const now = new Date();
+  const date = getStandupDate({ now, timezone: team.timezone });
+  if (
+    parsedBody.data.formDate !== undefined &&
+    parsedBody.data.formDate !== date
+  ) {
+    return errorResponse({
+      status: 409,
+      code: "STANDUP_DAY_CHANGED",
+      message: "The day has changed. Load today's form before saving.",
+    });
+  }
   const sprint = getCurrentSprint({ sprints, now, timeZone: team.timezone });
   if (sprint === null) {
     return errorResponse({
@@ -67,7 +78,7 @@ export async function POST(
   const { standup, isNew } = await saveStandup({
     sprint,
     userId: access.userId,
-    date: getStandupDate({ now, timezone: team.timezone }),
+    date,
     ...parsedBody.data,
   });
   await triggerTeamEvent({
