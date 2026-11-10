@@ -47,15 +47,15 @@ describe("buildSprintSummary", () => {
     const standups = [
       createStandup({
         userId: "user-1",
-        createdAt: new Date("2026-10-30T17:00:00Z"),
+        date: "2026-10-30",
       }),
       createStandup({
         userId: "user-1",
-        createdAt: new Date("2026-10-31T17:00:00Z"),
+        date: "2026-10-31",
       }),
       createStandup({
         userId: "user-2",
-        createdAt: new Date("2026-11-02T17:00:00Z"),
+        date: "2026-11-02",
       }),
     ];
     const activities = [

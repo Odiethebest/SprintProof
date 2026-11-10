@@ -62,14 +62,24 @@ describe("computeRequirementStatus", () => {
 
   it("computes status for a member with no activity when others have activity", () => {
     // Arrange
-    const sprint = createSprint({ timezone, standupsPerPerson: 3, reviewsPerPerson: 5 });
-    const activeMember = createMember({ userId: "user-1", githubLogin: "alice" });
-    const inactiveMember = createMember({ userId: "user-2", githubLogin: "bob" });
+    const sprint = createSprint({
+      timezone,
+      standupsPerPerson: 3,
+      reviewsPerPerson: 5,
+    });
+    const activeMember = createMember({
+      userId: "user-1",
+      githubLogin: "alice",
+    });
+    const inactiveMember = createMember({
+      userId: "user-2",
+      githubLogin: "bob",
+    });
     const now = new TZDate(2026, 10, 2, 12, 0, timezone);
 
     const standup = createStandup({
       userId: activeMember.userId,
-      createdAt: new TZDate(2026, 9, 30, 9, 0, timezone),
+      date: "2026-10-30",
     });
     const review = createActivity({
       actorLogin: activeMember.githubLogin!,
@@ -88,7 +98,9 @@ describe("computeRequirementStatus", () => {
     });
 
     // Assert
-    const inactiveResult = results.find((r) => r.userId === inactiveMember.userId);
+    const inactiveResult = results.find(
+      (r) => r.userId === inactiveMember.userId
+    );
     expect(inactiveResult).toBeDefined();
     expect(inactiveResult?.standups).toEqual({
       count: 0,
@@ -174,8 +186,14 @@ describe("computeRequirementStatus", () => {
   it("ignores activity from bot logins ending in [bot]", () => {
     // Arrange: Activities from bot accounts
     const sprint = createSprint({ timezone, reviewsPerPerson: 5 });
-    const botMember = createMember({ userId: "bot-1", githubLogin: "dependabot[bot]" });
-    const humanMember = createMember({ userId: "user-1", githubLogin: "alice" });
+    const botMember = createMember({
+      userId: "bot-1",
+      githubLogin: "dependabot[bot]",
+    });
+    const humanMember = createMember({
+      userId: "user-1",
+      githubLogin: "alice",
+    });
     const now = new TZDate(2026, 10, 2, 12, 0, timezone);
 
     const activities = [
@@ -222,7 +240,7 @@ describe("computeRequirementStatus", () => {
 
     const standupBefore = createStandup({
       userId: member.userId,
-      createdAt: new TZDate(2026, 9, 28, 23, 59, 59, timezone), // Oct 28 23:59:59 PDT
+      date: "2026-10-28", // Oct 28 23:59:59 PDT
     });
 
     // Act
@@ -251,7 +269,7 @@ describe("computeRequirementStatus", () => {
 
     const standupAtStart = createStandup({
       userId: member.userId,
-      createdAt: new TZDate(2026, 9, 29, 0, 0, 0, timezone), // Oct 29 00:00:00 PDT
+      date: "2026-10-29", // Oct 29 00:00:00 PDT
     });
 
     // Act
@@ -280,7 +298,7 @@ describe("computeRequirementStatus", () => {
 
     const standupAtEnd = createStandup({
       userId: member.userId,
-      createdAt: new TZDate(2026, 10, 4, 23, 59, 0, timezone), // Nov 4 23:59:00 PST
+      date: "2026-11-04", // Nov 4 23:59:00 PST
     });
 
     // Act
@@ -309,7 +327,7 @@ describe("computeRequirementStatus", () => {
 
     const standupAfter = createStandup({
       userId: member.userId,
-      createdAt: new TZDate(2026, 10, 5, 0, 0, 0, timezone), // Nov 5 00:00:00 PST
+      date: "2026-11-05", // Nov 5 00:00:00 PST
     });
 
     // Act
@@ -333,11 +351,11 @@ describe("computeRequirementStatus", () => {
 
     const morningStandup = createStandup({
       userId: member.userId,
-      createdAt: new TZDate(2026, 9, 30, 9, 0, 0, timezone),
+      date: "2026-10-30",
     });
     const eveningStandup = createStandup({
       userId: member.userId,
-      createdAt: new TZDate(2026, 9, 30, 17, 0, 0, timezone),
+      date: "2026-10-30",
     });
 
     // Act
@@ -361,11 +379,11 @@ describe("computeRequirementStatus", () => {
 
     const standupDay1 = createStandup({
       userId: member.userId,
-      createdAt: new TZDate(2026, 9, 30, 23, 50, 0, timezone),
+      date: "2026-10-30",
     });
     const standupDay2 = createStandup({
       userId: member.userId,
-      createdAt: new TZDate(2026, 9, 31, 0, 10, 0, timezone),
+      date: "2026-10-31",
     });
 
     // Act
@@ -383,19 +401,38 @@ describe("computeRequirementStatus", () => {
 
   it("computes MET status when count meets or exceeds required", () => {
     // Arrange: 3 standups submitted, required 3
-    const sprint = createSprint({ timezone, standupsPerPerson: 3, reviewsPerPerson: 2 });
+    const sprint = createSprint({
+      timezone,
+      standupsPerPerson: 3,
+      reviewsPerPerson: 2,
+    });
     const member = createMember({ userId: "user-1", githubLogin: "alice" });
     const now = new TZDate(2026, 10, 2, 12, 0, timezone);
 
     const standups = [
-      createStandup({ userId: member.userId, createdAt: new TZDate(2026, 9, 29, 9, 0, timezone) }),
-      createStandup({ userId: member.userId, createdAt: new TZDate(2026, 9, 30, 9, 0, timezone) }),
-      createStandup({ userId: member.userId, createdAt: new TZDate(2026, 10, 1, 9, 0, timezone) }),
+      createStandup({ userId: member.userId, date: "2026-10-29" }),
+      createStandup({ userId: member.userId, date: "2026-10-30" }),
+      createStandup({ userId: member.userId, date: "2026-11-01" }),
     ];
     const reviews = [
-      createActivity({ actorLogin: "alice", prNumber: 1, prAuthorLogin: "bob", createdAt: new TZDate(2026, 9, 29, 10, 0, timezone) }),
-      createActivity({ actorLogin: "alice", prNumber: 2, prAuthorLogin: "bob", createdAt: new TZDate(2026, 9, 30, 10, 0, timezone) }),
-      createActivity({ actorLogin: "alice", prNumber: 3, prAuthorLogin: "bob", createdAt: new TZDate(2026, 10, 1, 10, 0, timezone) }),
+      createActivity({
+        actorLogin: "alice",
+        prNumber: 1,
+        prAuthorLogin: "bob",
+        createdAt: new TZDate(2026, 9, 29, 10, 0, timezone),
+      }),
+      createActivity({
+        actorLogin: "alice",
+        prNumber: 2,
+        prAuthorLogin: "bob",
+        createdAt: new TZDate(2026, 9, 30, 10, 0, timezone),
+      }),
+      createActivity({
+        actorLogin: "alice",
+        prNumber: 3,
+        prAuthorLogin: "bob",
+        createdAt: new TZDate(2026, 10, 1, 10, 0, timezone),
+      }),
     ];
 
     // Act
@@ -520,13 +557,17 @@ describe("computeRequirementStatus", () => {
 
   it("handles a member with no GitHub login (cannot attribute GitHub reviews)", () => {
     // Arrange: Member with githubLogin = null
-    const sprint = createSprint({ timezone, standupsPerPerson: 3, reviewsPerPerson: 5 });
+    const sprint = createSprint({
+      timezone,
+      standupsPerPerson: 3,
+      reviewsPerPerson: 5,
+    });
     const member = createMember({ userId: "user-1", githubLogin: null });
     const now = new TZDate(2026, 10, 2, 12, 0, timezone);
 
     const standup = createStandup({
       userId: member.userId,
-      createdAt: new TZDate(2026, 9, 30, 9, 0, timezone),
+      date: "2026-10-30",
     });
     const activity = createActivity({
       actorLogin: "unknown-login",
@@ -590,15 +631,19 @@ describe("computeRequirementStatus", () => {
 
   it("calculates remaining count correctly without negative values", () => {
     // Arrange: Required 3, count 5 -> remaining should be 0, not -2
-    const sprint = createSprint({ timezone, standupsPerPerson: 3, reviewsPerPerson: 2 });
+    const sprint = createSprint({
+      timezone,
+      standupsPerPerson: 3,
+      reviewsPerPerson: 2,
+    });
     const member = createMember({ userId: "user-1", githubLogin: "alice" });
     const now = new TZDate(2026, 10, 2, 12, 0, timezone);
 
     const standups = [
-      createStandup({ userId: member.userId, createdAt: new TZDate(2026, 9, 29, 9, 0, timezone) }),
-      createStandup({ userId: member.userId, createdAt: new TZDate(2026, 9, 30, 9, 0, timezone) }),
-      createStandup({ userId: member.userId, createdAt: new TZDate(2026, 10, 1, 9, 0, timezone) }),
-      createStandup({ userId: member.userId, createdAt: new TZDate(2026, 10, 2, 9, 0, timezone) }),
+      createStandup({ userId: member.userId, date: "2026-10-29" }),
+      createStandup({ userId: member.userId, date: "2026-10-30" }),
+      createStandup({ userId: member.userId, date: "2026-11-01" }),
+      createStandup({ userId: member.userId, date: "2026-11-02" }),
     ];
 
     // Act

@@ -126,6 +126,30 @@ describe("GET /api/v1/teams/{teamId}/sprints/{sprintId}/summary", () => {
     vi.useRealTimers();
   });
 
+  it("counts a last-day standup whose createdAt is after the sprint", async () => {
+    const { team, sprint, alice } = await setUpSprint();
+    await insertStandup({
+      teamId: team.id,
+      userId: alice.id,
+      date: "2026-11-04",
+      createdAt: new Date("2026-11-05T08:00:00.050Z"),
+    });
+    const { token } = await insertApiToken({ userId: alice.id });
+    vi.setSystemTime(new Date("2026-11-05T08:01:00Z"));
+    const response = await getSummary({
+      teamId: team.id,
+      sprintId: sprint.id,
+      token,
+    });
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(
+      body.members.find(
+        (member: { userId: string }) => member.userId === alice.id
+      ).standups.count
+    ).toBe(3);
+  });
+
   it("returns the sprint, when the counts were taken and each member's counts", async () => {
     // Arrange: Nov 3, noon in Los Angeles, 2 days left
     const { team, sprint, alice, bob } = await setUpSprint();
