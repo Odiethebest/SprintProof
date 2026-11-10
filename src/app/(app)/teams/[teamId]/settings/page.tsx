@@ -10,10 +10,12 @@ import {
   ApiTokensCard,
   type ApiTokenView,
 } from "@/components/api-tokens/api-tokens-card";
-import { AppHeader } from "@/components/layout/app-header";
 import { PageHeader } from "@/components/layout/page-header";
 import { PageLoading } from "@/components/layout/page-loading";
-import { SprintsCard, type SprintView } from "@/components/sprints/sprints-card";
+import {
+  SprintsCard,
+  type SprintView,
+} from "@/components/sprints/sprints-card";
 import type { InviteLinkView } from "@/components/teams/invite-links";
 import { MembersCard } from "@/components/teams/members-card";
 import { RepositoryCard } from "@/components/teams/repository-card";
@@ -121,17 +123,6 @@ async function TeamSettings({ params }: { params: Params }) {
 
   return (
     <>
-      <AppHeader
-        team={team}
-        user={user}
-        role={access.role}
-        teamNav={{
-          teamId: team.id,
-          current: "settings",
-          requestedSprintId: null,
-        }}
-        sprintSelector={null}
-      />
       <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-8 md:px-6">
         <PageHeader
           title="Settings"
@@ -164,7 +155,11 @@ async function TeamSettings({ params }: { params: Params }) {
             inviteLinks={inviteLinks}
           />
         </div>
-        <SprintsCard teamId={team.id} role={access.role} sprints={sprintViews} />
+        <SprintsCard
+          teamId={team.id}
+          role={access.role}
+          sprints={sprintViews}
+        />
         <ApiTokensCard
           tokens={toApiTokenViews({ apiTokens, timezone: team.timezone })}
         />
