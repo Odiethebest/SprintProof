@@ -1,4 +1,4 @@
-import { createApiTokenSchema } from "@/lib/api-tokens/api-token";
+import { createApiTokenSchema } from "@/lib/api-tokens/api-token-name";
 import { parseJsonBody, unauthenticatedResponse } from "@/server/api-response";
 import { createPersonalApiToken } from "@/server/api-tokens";
 import { getSessionUserId } from "@/server/auth-session";

@@ -6,14 +6,9 @@ import { getCurrentSprint, selectSprint } from "@/lib/sprints";
 import { groupStandupsByDay } from "@/lib/standups/group-standups";
 import { getStandupDate } from "@/lib/standups/standup-date";
 import { LiveAnnouncer } from "@/components/dashboard/live-announcer";
-import { AppHeader } from "@/components/layout/app-header";
 import { PageHeader } from "@/components/layout/page-header";
 import { PageLoading } from "@/components/layout/page-loading";
-import {
-  buildSprintSelector,
-  readRequestedSprintId,
-} from "@/components/layout/sprint-navigation";
-import { TeamLiveProvider } from "@/components/realtime/team-live-provider";
+import { readRequestedSprintId } from "@/components/layout/sprint-navigation";
 import { StandupForm } from "@/components/standups/standup-form";
 import { buildStandupLiveUpdates } from "@/components/standups/standup-live-updates";
 import {
@@ -150,69 +145,46 @@ async function TeamStandups({
 
   // Teammates' standups show up in History without a reload.
   return (
-    <TeamLiveProvider teamId={team.id}>
-      <AppHeader
-        team={team}
-        user={user}
-        role={access.role}
-        teamNav={{
-          teamId: team.id,
-          current: "standups",
-          requestedSprintId:
-            historySprint !== null && historySprint.id === requestedSprintId
-              ? requestedSprintId
-              : null,
-        }}
-        sprintSelector={buildSprintSelector({
-          sprints,
-          selectedId: historySprint?.id ?? null,
-          now,
-          timeZone: team.timezone,
-        })}
-      />
-      <PageAnnouncer>
-        <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-8 md:px-6">
-          <PageHeader
-            title="Standups"
-            meta={`One standup per person per day · Days follow ${team.timezone}`}
-            action={null}
-          />
-          {/* DESIGN.md §6 Standups: form 1 column, history 2; instructors get the history only. */}
-          <div className="grid items-start gap-4 lg:grid-cols-3">
-            {canPost && (
-              <StandupForm
-                teamId={team.id}
-                dateLabel={formatDay(today)}
-                sprintName={sprint?.name ?? null}
-                saved={
-                  saved === null
-                    ? null
-                    : {
-                        yesterday: saved.yesterday,
-                        today: saved.today,
-                        blockers: saved.blockers,
-                        postedAtLabel: timeFormat.format(saved.createdAt),
-                      }
-                }
-              />
-            )}
-            <div className={canPost ? "lg:col-span-2" : "lg:col-span-3"}>
-              <StandupHistory
-                sprintName={historySprint?.name ?? null}
-                days={days}
-                canPost={canPost && sprint !== null && historySprint === sprint}
-              />
-            </div>
-          </div>
-        </main>
-        {/* Teammates' new standups are announced politely, instructors included
-          (AGENTS.md §2 LiveIndicator). A new history sprint remounts it, so
-          switching sprints announces nothing. */}
-        <LiveAnnouncer
-          key={historySprint?.id ?? "none"}
-          updates={liveUpdates}
+    <PageAnnouncer>
+      <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-8 md:px-6">
+        <PageHeader
+          title="Standups"
+          meta={`One standup per person per day · Days follow ${team.timezone}`}
+          action={null}
         />
-      </PageAnnouncer>
-    </TeamLiveProvider>
+        {/* DESIGN.md §6 Standups: form 1 column, history 2; instructors get the history only. */}
+        <div className="grid items-start gap-4 lg:grid-cols-3">
+          {canPost && (
+            <StandupForm
+              formDate={today}
+              teamId={team.id}
+              dateLabel={formatDay(today)}
+              sprintName={sprint?.name ?? null}
+              saved={
+                saved === null
+                  ? null
+                  : {
+                      yesterday: saved.yesterday,
+                      today: saved.today,
+                      blockers: saved.blockers,
+                      postedAtLabel: timeFormat.format(saved.createdAt),
+                    }
+              }
+            />
+          )}
+          <div className={canPost ? "lg:col-span-2" : "lg:col-span-3"}>
+            <StandupHistory
+              sprintName={historySprint?.name ?? null}
+              days={days}
+              canPost={canPost && sprint !== null && historySprint === sprint}
+            />
+          </div>
+        </div>
+      </main>
+      {/* Teammates' new standups are announced politely, instructors included
+        (AGENTS.md §2 LiveIndicator). A new history sprint remounts it, so
+        switching sprints announces nothing. */}
+      <LiveAnnouncer key={historySprint?.id ?? "none"} updates={liveUpdates} />
+    </PageAnnouncer>
   );
 }

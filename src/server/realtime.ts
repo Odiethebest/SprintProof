@@ -33,7 +33,14 @@ function createPusherClient(): Pusher | null {
   }
   const { appId, secret, key, cluster, host, port } = parsed.data;
   if (host === undefined) {
-    return new Pusher({ appId, key, secret, cluster, useTLS: true });
+    return new Pusher({
+      appId,
+      key,
+      secret,
+      cluster,
+      useTLS: true,
+      timeout: 2000,
+    });
   }
   // A local Pusher-compatible server (Soketi) in development and E2E.
   return new Pusher({
@@ -43,6 +50,7 @@ function createPusherClient(): Pusher | null {
     host,
     ...(port === undefined ? {} : { port }),
     useTLS: false,
+    timeout: 2000,
   });
 }
 
@@ -56,16 +64,16 @@ export async function triggerTeamEvent({
   teamId: string;
   event: TeamEvent;
 }): Promise<void> {
-  const pusher = createPusherClient();
-  if (pusher === null) {
-    return;
-  }
-  const channel = getTeamChannel({ teamId });
   try {
+    const pusher = createPusherClient();
+    if (pusher === null) {
+      return;
+    }
+    const channel = getTeamChannel({ teamId });
     await pusher.trigger(channel, event, {});
   } catch (error) {
     console.error(
-      `Couldn't send ${event} to ${channel}:`,
+      `Couldn't send ${event}:`,
       error instanceof Error ? error.message : error
     );
   }

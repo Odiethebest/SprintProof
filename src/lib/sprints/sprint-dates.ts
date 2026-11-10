@@ -1,5 +1,5 @@
 import { TZDate } from "@date-fns/tz";
-import { endOfDay, startOfDay } from "date-fns";
+import { startOfDay } from "date-fns";
 
 export interface SprintDateRange {
   startDate: string;
@@ -34,7 +34,7 @@ function getSprintStartBoundary(startDateStr: string, timeZone: string): Date {
 
 function getSprintEndBoundary(endDateStr: string, timeZone: string): Date {
   const [year, month, day] = parseDateParts(endDateStr);
-  return endOfDay(new TZDate(year, month - 1, day, timeZone));
+  return new Date(new TZDate(year, month - 1, day + 1, timeZone).getTime() - 1);
 }
 
 export interface GetSprintWindowOptions {

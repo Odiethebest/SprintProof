@@ -1,5 +1,5 @@
 import { TZDate } from "@date-fns/tz";
-import { differenceInCalendarDays, endOfDay, startOfDay } from "date-fns";
+import { differenceInCalendarDays, startOfDay } from "date-fns";
 
 export type RequirementStatus = "MET" | "ON_TRACK" | "AT_RISK" | "MISSED";
 
@@ -33,7 +33,7 @@ export interface Member {
 export interface Standup {
   id: string;
   userId: string;
-  createdAt: Date;
+  date: string;
 }
 
 export type ActivityType = "COMMIT" | "PR_OPENED" | "PR_MERGED" | "REVIEW";
@@ -65,7 +65,12 @@ function getSprintStartBoundary(date: Date, timezone: string): TZDate {
     dateInTz.getDate() !== date.getUTCDate()
   ) {
     return startOfDay(
-      new TZDate(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), timezone),
+      new TZDate(
+        date.getUTCFullYear(),
+        date.getUTCMonth(),
+        date.getUTCDate(),
+        timezone
+      )
     );
   }
   return startOfDay(dateInTz);
@@ -73,18 +78,18 @@ function getSprintStartBoundary(date: Date, timezone: string): TZDate {
 
 // Counting rule: sprint boundaries in team timezone (AGENTS.md §1, R1)
 function getSprintEndBoundary(date: Date, timezone: string): TZDate {
-  const dateInTz = new TZDate(date, timezone);
-  if (
-    date.getUTCHours() === 0 &&
-    date.getUTCMinutes() === 0 &&
-    date.getUTCSeconds() === 0 &&
-    dateInTz.getDate() !== date.getUTCDate()
-  ) {
-    return endOfDay(
-      new TZDate(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), timezone),
-    );
-  }
-  return endOfDay(dateInTz);
+  const start = getSprintStartBoundary(date, timezone);
+  const nextDay = new TZDate(
+    start.getFullYear(),
+    start.getMonth(),
+    start.getDate() + 1,
+    timezone
+  );
+  return new TZDate(nextDay.getTime() - 1, timezone);
+}
+
+function calendarDate(date: TZDate): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
 // Requirement status: MET, ON_TRACK, AT_RISK (<= 2 days left), MISSED (AGENTS.md §1, R5)
@@ -92,7 +97,7 @@ function computeRequirementProgress(
   count: number,
   required: number,
   daysLeft: number,
-  isSprintEnded: boolean,
+  isSprintEnded: boolean
 ): RequirementProgress {
   const remaining = Math.max(0, required - count);
 
@@ -112,7 +117,7 @@ function computeRequirementProgress(
 }
 
 export function computeRequirementStatus(
-  options: ComputeRequirementStatusOptions,
+  options: ComputeRequirementStatusOptions
 ): MemberRequirementStatus[] {
   const { sprint, members, standups, activities, now } = options;
 
@@ -127,6 +132,8 @@ export function computeRequirementStatus(
 
   const startTime = sprintStart.getTime();
   const endTime = sprintEnd.getTime();
+  const firstDate = calendarDate(sprintStart);
+  const lastDate = calendarDate(sprintEnd);
 
   return members.map((member) => {
     // Counting rule: at most one standup per person per calendar day in team timezone (AGENTS.md §1, R2)
@@ -134,11 +141,8 @@ export function computeRequirementStatus(
     const standupDays = new Set<string>();
 
     for (const standup of memberStandups) {
-      const standupTime = standup.createdAt.getTime();
-      if (standupTime >= startTime && standupTime <= endTime) {
-        const d = new TZDate(standup.createdAt, sprint.timezone);
-        const dayKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-        standupDays.add(dayKey);
+      if (standup.date >= firstDate && standup.date <= lastDate) {
+        standupDays.add(standup.date);
       }
     }
     const standupCount = standupDays.size;
@@ -187,13 +191,13 @@ export function computeRequirementStatus(
         standupCount,
         sprint.standupsPerPerson,
         daysLeft,
-        isSprintEnded,
+        isSprintEnded
       ),
       reviews: computeRequirementProgress(
         reviewCount,
         sprint.reviewsPerPerson,
         daysLeft,
-        isSprintEnded,
+        isSprintEnded
       ),
     };
   });

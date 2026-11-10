@@ -1,3 +1,4 @@
+import { databaseTextSchema } from "@/lib/validation/text";
 import { db } from "@/server/db";
 
 // A token as Settings shows it. The hash never leaves this module.
@@ -47,6 +48,7 @@ export async function deleteApiToken({
   userId: string;
   tokenId: string;
 }): Promise<boolean> {
+  if (!databaseTextSchema.safeParse(tokenId).success) return false;
   const { count } = await db.apiToken.deleteMany({
     where: { id: tokenId, userId },
   });

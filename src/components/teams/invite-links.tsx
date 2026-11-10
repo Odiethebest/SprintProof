@@ -43,7 +43,7 @@ export function InviteLinks({
   const [announcement, setAnnouncement] = useState("");
   const [errors, setErrors] = useState<Partial<Record<InviteRole, string>>>({});
   const [busyRole, setBusyRole] = useState<InviteRole | null>(null);
-  const [copiedRole, setCopiedRole] = useState<InviteRole | null>(null);
+  const [copiedUrl, setCopiedUrl] = useState<string | null>(null);
   // The clicked button goes away, and its replacement only arrives with the
   // refreshed links, so its ref callback moves focus when it mounts.
   const pendingFocus = useRef<FocusTarget | null>(null);
@@ -72,6 +72,7 @@ export function InviteLinks({
     try {
       const response = await request();
       if (response.ok) {
+        setCopiedUrl(null);
         setAnnouncement(done.message);
         pendingFocus.current = { role, button: done.focus };
         router.refresh();
@@ -112,7 +113,7 @@ export function InviteLinks({
   async function copyLink(role: InviteRole, url: string) {
     try {
       await navigator.clipboard.writeText(url);
-      setCopiedRole(role);
+      setCopiedUrl(url);
       setAnnouncement(`${ROLE_TITLES[role]} copied.`);
     } catch {
       setErrors((current) => ({
@@ -153,7 +154,7 @@ export function InviteLinks({
                   className={BUTTON_CLASSES.secondary}
                 >
                   <Copy size={16} aria-hidden="true" />
-                  {copiedRole === role ? "Copied" : "Copy link"}
+                  {copiedUrl === invite.url ? "Copied" : "Copy link"}
                 </button>
                 <button
                   type="button"

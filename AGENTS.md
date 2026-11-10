@@ -91,6 +91,7 @@ src/
 │   ├── retro/                    # vote tallying, action item selection
 │   ├── github/                   # GitHub login and profile rules, webhook payload → Activity mapping
 │   ├── realtime/                 # team channel name (team-{teamId}) and the events it carries
+│   ├── validation/               # shared text rules: noNul for user text, databaseTextSchema for ids from the URL
 │   └── export/                   # sprint summary → Markdown
 ├── server/                       # everything with side effects
 │   ├── db.ts                     # single Prisma client
@@ -136,8 +137,8 @@ e2e/                              # Playwright specs
 
 Main Prisma models: `User`, `Team`, `Membership` (role: `LEAD` | `MEMBER` | `INSTRUCTOR`), `Sprint` (start/end dates, `standupsPerPerson`, `reviewsPerPerson`), `Standup`, `Activity` (type: `COMMIT` | `PR_OPENED` | `PR_MERGED` | `REVIEW`), `Retro`, `RetroItem`, `RetroVote`, `ActionItem`, `PeerFeedback`, `ApiToken`.
 
-- **Timezone:** each team has a timezone (default `America/Los_Angeles`). Store timestamps in UTC; compute sprint boundaries in the team timezone. A sprint runs from 00:00 on its start date through 23:59:59.999 on its end date, inclusive.
-- **Standups:** at most one counts per person per calendar day (team timezone). Editing the same day's standup updates it; it does not add a second one. A standup counts in the sprint whose dates contain its day, so it moves with its day when sprint dates change; one on a day outside every sprint is kept but not counted.
+- **Timezone:** each team has a timezone (default `America/Los_Angeles`). Store timestamps in UTC; compute sprint boundaries in the team timezone. A sprint runs from 00:00 on its start date through 23:59:59.999 on its end date, inclusive. The end is computed as the start of the next day minus 1 ms, so it stays right in timezones where a DST change skips midnight.
+- **Standups:** at most one counts per person per calendar day (team timezone). A standup counts on its stored day (`date`), never by when it was saved (`createdAt`). Editing the same day's standup updates it; it does not add a second one. A form opened on an earlier day doesn't file under today: when the request's `formDate` isn't today, nothing is saved (409 `STANDUP_DAY_CHANGED`). A standup counts in the sprint whose dates contain its day, so it moves with its day when sprint dates change; one on a day outside every sprint is kept but not counted.
 - **Reviews:** a review counts when a member submits a review (approved, changes requested, or commented) on a PR authored by someone else. Count distinct PRs per reviewer: three review submissions on the same PR count as one. Reviews on your own PR never count.
 - **Commits:** count commits from `push` events on any branch, so commits on a feature branch are recorded before a merge or squash can hide them (decision 001). Deduplicate by SHA. Attribute by the commit author's GitHub login mapped to a team member, never the committer or the pusher; skip commits whose author isn't linked to a GitHub account. Commits from fork PRs and commits pushed before the webhook was connected aren't counted.
 - **Bots:** ignore activity of every type (commits, opened and merged PRs, reviews) from logins ending in `[bot]`.
@@ -146,6 +147,7 @@ Main Prisma models: `User`, `Team`, `Membership` (role: `LEAD` | `MEMBER` | `INS
   - `ON_TRACK`: not met, sprint still running, more than 2 days left
   - `AT_RISK`: not met, sprint still running, 2 or fewer days left
   - `MISSED`: not met, sprint has ended
+  - No status before the sprint starts: the sprint summary API returns `null` for an upcoming sprint.
   - Days left = the sprint's end date minus today's date, both in the team timezone, plus 1 (today counts). With a Nov 4 end: Nov 2 has 3 days left (`ON_TRACK`), Nov 3 has 2 (`AT_RISK`), Nov 4 has 1 (`AT_RISK`).
 - **Retro votes:** each member gets 3 votes per retro, max 1 per item. The top 3 items in "To improve" by vote count (ties broken by earliest created) become `ActionItem`s for the next sprint.
 - **Peer feedback** is visible only to users with the `INSTRUCTOR` role. Never return it to `LEAD` or `MEMBER`, in any page, API response or export.
@@ -310,7 +312,7 @@ Standups, planning notes and retros for our own team are recorded in SprintProof
 
 ### Do
 
-- Validate every external input with Zod: request bodies, query params, route params, webhook payloads.
+- Validate every external input with Zod: request bodies, query params, route params, webhook payloads. User text uses the shared `noNul` check from `lib/validation/text.ts`, because PostgreSQL can't store a NUL character. An id from the URL that can't be valid is treated as unknown (the same 403 or 404), never a 500.
 - Call `requireTeamRole(teamId, roles)` at the top of every route handler and server page that touches team data (`requireApiTeamRole(request, teamId, roles)` in the three token endpoints).
 - Put logic in `src/lib/` as pure functions and test it first.
 - Use design tokens from `DESIGN.md` through Tailwind classes.
@@ -396,3 +398,5 @@ Standups, planning notes and retros for our own team are recorded in SprintProof
 | 2026-11-08 | Ziqi (Odie) Yang | Architecture tree lists the API token files added in #16: `api/v1/tokens/`, `lib/api-tokens/`, `server/api-tokens.ts`, `repositories/api-tokens.ts`, `components/api-tokens/` and `ConfirmDialog` in `components/ui/` (#16) | Yunhong's review of PR #44: the rules should match the code |
 | 2026-11-09 | Ziqi (Odie) Yang | Architecture tree lists the public API files added in #16 (`app/api-docs/`, the summary and standups routes, `lib/api/`, `server/openapi-spec.ts`, `components/api-docs/`); Key patterns: `requireApiTeamRole()` and `parsePaginationQuery()`, tokens only read, routes and `openapi.yaml` change together (#16) | Issue #16: public API v1. The rules should match the code |
 | 2026-11-09 | Ziqi (Odie) Yang | Standups: a standup counts in the sprint whose dates contain its day and moves with it when sprint dates change (§1, PRD R2 and US-3, README Counting Rules) (#56) | Issue #56, from Yunhong's review of PR #51: editing sprint dates left standups outside their sprint and allowed two on one day. Standups now belong to a team and a day, not a stored sprint |
+| 2026-11-09 | Ziqi (Odie) Yang | §4: user text rejects NUL through `lib/validation/text.ts`, and an invalid id from the URL is treated as unknown; architecture tree lists `lib/validation/`. PRD US-3: sprint names are trimmed and at most 100 characters, sprint dates fall in 2000–2100 (#74) | Issue #74, from the Nov 9 bug audit: a NUL character, a year like 0026 or a very long sprint name passed validation and then returned 500 |
+| 2026-11-09 | Ziqi (Odie) Yang | Standups count on their stored day; a form opened on an earlier day is rejected with 409 `STANDUP_DAY_CHANGED`; a sprint ends at the start of the next day minus 1 ms; no requirement status before a sprint starts (§1, PRD R1, R2 and R5, README Counting Rules) (#73) | Issue #73, from the Nov 9 bug audit: a standup saved just after midnight was counted on the next day, a form left open overnight filed under the new day, a DST change at midnight moved sprint ends, and the summary API showed upcoming sprints as at risk |

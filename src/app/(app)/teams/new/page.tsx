@@ -1,3 +1,4 @@
+import { getTimezoneOptions } from "@/lib/teams/timezone-options";
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
@@ -24,7 +25,9 @@ async function NewTeam() {
     redirect(toSignInPath({ callbackPath: "/teams/new" }));
   }
   // Read on the server and passed down, so the server and client lists match.
-  const timezones = Intl.supportedValuesOf("timeZone");
+  const timezones = getTimezoneOptions({
+    timezones: Intl.supportedValuesOf("timeZone"),
+  });
 
   return (
     <>

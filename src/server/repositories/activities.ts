@@ -1,5 +1,4 @@
 import { db } from "@/server/db";
-import { isUniqueViolation } from "@/server/prisma-errors";
 import type { MappedActivity } from "@/lib/github/webhook-events";
 import type { ActivityRecord } from "@/lib/stats/member-activity";
 
@@ -14,79 +13,44 @@ export async function recordWebhookEvent({
   deliveryId: string;
   activities: MappedActivity[];
 }): Promise<{ alreadyProcessed: boolean; activitiesCreated: number }> {
-  const existing = await db.webhookDelivery.findUnique({
-    where: { id: deliveryId },
-    select: { id: true },
-  });
-  if (existing !== null) {
-    return { alreadyProcessed: true, activitiesCreated: 0 };
-  }
-
-  try {
-    return await db.$transaction(async (tx) => {
-      await tx.webhookDelivery.create({
-        data: {
-          id: deliveryId,
-          teamId,
-          event,
-        },
-      });
-
-      if (teamId !== null && activities.length > 0) {
-        for (const activity of activities) {
-          if (activity.type === "COMMIT" && activity.sha) {
-            await tx.activity.upsert({
-              where: {
-                teamId_type_sha: {
-                  teamId,
-                  type: "COMMIT",
-                  sha: activity.sha,
-                },
-              },
-              create: {
-                teamId,
-                type: activity.type,
-                actorLogin: activity.actorLogin,
-                prNumber: activity.prNumber,
-                prAuthorLogin: activity.prAuthorLogin,
-                sha: activity.sha,
-                title: activity.title,
-                occurredAt: activity.occurredAt,
-              },
-              update: {},
-            });
-          } else {
-            await tx.activity.create({
-              data: {
-                teamId,
-                type: activity.type,
-                actorLogin: activity.actorLogin,
-                prNumber: activity.prNumber,
-                prAuthorLogin: activity.prAuthorLogin,
-                sha: activity.sha,
-                title: activity.title,
-                occurredAt: activity.occurredAt,
-              },
-            });
-          }
-        }
-      }
-
-      return { alreadyProcessed: false, activitiesCreated: activities.length };
+  return db.$transaction(async (tx) => {
+    const delivery = await tx.webhookDelivery.createMany({
+      data: [{ id: deliveryId, teamId, event }],
+      skipDuplicates: true,
     });
-  } catch (error) {
-    if (isUniqueViolation(error)) {
+    if (delivery.count === 0) {
       return { alreadyProcessed: true, activitiesCreated: 0 };
     }
-    throw error;
-  }
+    if (teamId === null || activities.length === 0) {
+      return { alreadyProcessed: false, activitiesCreated: 0 };
+    }
+    const data = activities.map((activity) => ({
+      teamId,
+      type: activity.type,
+      actorLogin: activity.actorLogin,
+      prNumber: activity.prNumber,
+      prAuthorLogin: activity.prAuthorLogin,
+      sha: activity.sha,
+      title: activity.title,
+      occurredAt: activity.occurredAt,
+    }));
+    // Counting rule: commits deduplicate by SHA, across deliveries (AGENTS.md §1).
+    const commits = data.filter((activity) => activity.type === "COMMIT");
+    const other = data.filter((activity) => activity.type !== "COMMIT");
+    const insertedCommits = commits.length
+      ? await tx.activity.createMany({ data: commits, skipDuplicates: true })
+      : { count: 0 };
+    const insertedOther = other.length
+      ? await tx.activity.createMany({ data: other })
+      : { count: 0 };
+    return {
+      alreadyProcessed: false,
+      activitiesCreated: insertedCommits.count + insertedOther.count,
+    };
+  });
 }
 
-export async function getLastWebhookDelivery({
-  teamId,
-}: {
-  teamId: string;
-}) {
+export async function getLastWebhookDelivery({ teamId }: { teamId: string }) {
   return db.webhookDelivery.findFirst({
     where: { teamId },
     orderBy: { deliveredAt: "desc" },

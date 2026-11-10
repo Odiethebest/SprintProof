@@ -216,6 +216,49 @@ describe("real-time events", () => {
       expect(triggerTeamEvent).not.toHaveBeenCalled();
     });
 
+    it("doesn't trigger for a new delivery containing only existing commits", async () => {
+      await connectedTeam();
+      await sendWebhook({
+        event: "push",
+        payload: pushPayload,
+        deliveryId: "original",
+      });
+      vi.mocked(triggerTeamEvent).mockClear();
+      const response = await sendWebhook({
+        event: "push",
+        payload: pushPayload,
+        deliveryId: "duplicate-shas",
+      });
+      expect(response.status).toBe(200);
+      expect(triggerTeamEvent).not.toHaveBeenCalled();
+    });
+
+    it("returns 500 when storing an activity fails so GitHub can retry", async () => {
+      await connectedTeam();
+      const payload = structuredClone(pushPayload);
+      payload.commits[0].message = "bad\u0000text";
+      const response = await sendWebhook({
+        event: "push",
+        payload,
+        deliveryId: "failed-write",
+      });
+      expect(response.status).toBe(500);
+      expect(triggerTeamEvent).not.toHaveBeenCalled();
+    });
+
+    it("logs which delivery failed without logging its payload", async () => {
+      await connectedTeam();
+      const log = vi.spyOn(console, "error").mockImplementation(() => {});
+      const payload = structuredClone(pushPayload);
+      payload.commits[0].message = "private-commit-message\u0000";
+      await sendWebhook({ event: "push", payload, deliveryId: "logged-write" });
+      expect(log).toHaveBeenCalledTimes(1);
+      const line = log.mock.calls[0].map(String).join(" ");
+      expect(line).toContain("logged-write");
+      expect(line).not.toContain("private-commit-message");
+      log.mockRestore();
+    });
+
     it("doesn't trigger an event for a ping", async () => {
       await connectedTeam();
 

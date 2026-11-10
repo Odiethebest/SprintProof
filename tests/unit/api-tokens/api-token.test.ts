@@ -1,8 +1,8 @@
+import { createApiTokenSchema } from "@/lib/api-tokens/api-token-name";
 import crypto from "node:crypto";
 import { describe, expect, it } from "vitest";
 import {
   API_TOKEN_PREFIX,
-  createApiTokenSchema,
   hashApiToken,
   maskApiToken,
   toStoredApiToken,
