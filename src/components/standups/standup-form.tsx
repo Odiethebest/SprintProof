@@ -7,6 +7,7 @@ import {
   type FormEvent,
   type ReactNode,
 } from "react";
+import { countStandupCharacters } from "@/lib/standups/character-count";
 import { flushSync } from "react-dom";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -63,7 +64,8 @@ function StandupField({
   const id = useId();
   const errorId = `${id}-error`;
   const counterId = `${id}-counter`;
-  const isOverLimit = value.length > MAX_STANDUP_FIELD_LENGTH;
+  const characterCount = countStandupCharacters({ value });
+  const isOverLimit = characterCount > MAX_STANDUP_FIELD_LENGTH;
   return (
     <div className="flex flex-col gap-1">
       <label htmlFor={id} className="text-sm font-medium">
@@ -100,7 +102,7 @@ function StandupField({
               : "shrink-0 font-mono text-xs tabular-nums text-text-muted"
           }
         >
-          {value.length} / {MAX_STANDUP_FIELD_LENGTH}
+          {characterCount} / {MAX_STANDUP_FIELD_LENGTH}
         </p>
       </div>
     </div>
