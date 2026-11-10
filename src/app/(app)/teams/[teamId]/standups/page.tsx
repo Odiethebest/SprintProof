@@ -104,11 +104,9 @@ async function TeamStandups({
   // Instructors read standups but don't post them (AGENTS.md §2 Standups).
   const canPost = access.role !== "INSTRUCTOR";
   const [standups, saved] = await Promise.all([
-    historySprint === null
-      ? []
-      : listSprintStandups({ sprintId: historySprint.id }),
+    historySprint === null ? [] : listSprintStandups({ sprint: historySprint }),
     canPost && sprint !== null
-      ? findStandup({ sprintId: sprint.id, userId: user.id, date: today })
+      ? findStandup({ sprint, userId: user.id, date: today })
       : null,
   ]);
 

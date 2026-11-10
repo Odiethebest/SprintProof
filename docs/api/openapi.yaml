@@ -275,7 +275,9 @@ paths:
     patch:
       tags: [Sprints]
       summary: Edit a sprint
-      description: Lead only. Fields you leave out keep their stored values.
+      description: |
+        Lead only. Fields you leave out keep their stored values. Standups stay
+        with their days, so new dates move standups into or out of this sprint.
       operationId: updateSprint
       security:
         - sessionCookie: []
@@ -909,6 +911,9 @@ components:
           type: string
         sprintId:
           type: string
+          description: |
+            The sprint it's listed under: the one whose dates contain its day. It
+            changes when a lead moves that day into another sprint.
         userId:
           type: string
         date:

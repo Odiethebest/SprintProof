@@ -1,9 +1,19 @@
 import { db } from "@/server/db";
 import { isUniqueViolation } from "@/server/prisma-errors";
 import { toPage, type Page } from "@/lib/api/pagination";
+import type { SprintRecord } from "@/lib/sprints";
+
+// The sprint a standup is listed under. A standup belongs to its team and day,
+// and a sprint lists the ones whose day falls inside its dates, so standups
+// follow their days when sprint dates change (#56).
+export type StandupSprint = Pick<
+  SprintRecord,
+  "id" | "teamId" | "startDate" | "endDate"
+>;
 
 export interface StandupRecord {
   id: string;
+  // The sprint it's listed under, not a stored field.
   sprintId: string;
   userId: string;
   date: string;
@@ -25,7 +35,7 @@ export interface StandupWithAuthor extends StandupRecord {
 }
 
 export interface StandupKey {
-  sprintId: string;
+  sprint: StandupSprint;
   userId: string;
   date: string;
 }
@@ -38,7 +48,6 @@ export interface SaveStandupInput extends StandupKey {
 
 const STANDUP_FIELDS = {
   id: true,
-  sprintId: true,
   userId: true,
   date: true,
   yesterday: true,
@@ -48,24 +57,41 @@ const STANDUP_FIELDS = {
   updatedAt: true,
 } as const;
 
-type StandupRow = Omit<StandupRecord, "date"> & { date: Date };
+type StandupRow = Omit<StandupRecord, "sprintId" | "date"> & { date: Date };
 
 // `date` is a Postgres DATE, which Prisma reads and writes as midnight UTC.
 function toDbDate(date: string): Date {
   return new Date(`${date}T00:00:00.000Z`);
 }
 
-function toStandupRecord(row: StandupRow): StandupRecord {
-  return { ...row, date: row.date.toISOString().slice(0, 10) };
-}
-
-function uniqueKey({ sprintId, userId, date }: StandupKey) {
+function toStandupRecord(
+  row: StandupRow,
+  sprint: StandupSprint
+): StandupRecord {
   return {
-    sprintId_userId_date: { sprintId, userId, date: toDbDate(date) },
+    ...row,
+    sprintId: sprint.id,
+    date: row.date.toISOString().slice(0, 10),
   };
 }
 
-// Rule R2: one standup per person per day, so saving again the same day updates it.
+// The team's standups on the sprint's days, first and last day included.
+function sprintStandupsWhere(sprint: StandupSprint) {
+  return {
+    teamId: sprint.teamId,
+    date: { gte: toDbDate(sprint.startDate), lte: toDbDate(sprint.endDate) },
+  };
+}
+
+function uniqueKey({ sprint, userId, date }: StandupKey) {
+  return {
+    teamId_userId_date: { teamId: sprint.teamId, userId, date: toDbDate(date) },
+  };
+}
+
+// Rule R2: one standup per person per team per day, so saving again the same
+// day updates it. `date` must be one of the sprint's days; the route picks both
+// from today.
 export async function saveStandup(
   input: SaveStandupInput
 ): Promise<{ standup: StandupRecord; isNew: boolean }> {
@@ -85,7 +111,7 @@ export async function saveStandup(
     try {
       const row = await db.standup.create({
         data: {
-          sprintId: input.sprintId,
+          teamId: input.sprint.teamId,
           userId: input.userId,
           date: toDbDate(input.date),
           ...content,
@@ -94,7 +120,7 @@ export async function saveStandup(
         },
         select: STANDUP_FIELDS,
       });
-      return { standup: toStandupRecord(row), isNew: true };
+      return { standup: toStandupRecord(row, input.sprint), isNew: true };
     } catch (error) {
       // Another request (a double click) created it between the check and the insert.
       if (!isUniqueViolation(error)) {
@@ -107,17 +133,23 @@ export async function saveStandup(
     data: content,
     select: STANDUP_FIELDS,
   });
-  return { standup: toStandupRecord(row), isNew: false };
+  return { standup: toStandupRecord(row, input.sprint), isNew: false };
 }
 
-export async function findStandup(
-  key: StandupKey
-): Promise<StandupRecord | null> {
-  const row = await db.standup.findUnique({
-    where: uniqueKey(key),
+// Returns null when the person hasn't posted that day, or the day isn't one of
+// the sprint's days.
+export async function findStandup({
+  sprint,
+  userId,
+  date,
+}: StandupKey): Promise<StandupRecord | null> {
+  const row = await db.standup.findFirst({
+    where: {
+      AND: [sprintStandupsWhere(sprint), { userId, date: toDbDate(date) }],
+    },
     select: STANDUP_FIELDS,
   });
-  return row === null ? null : toStandupRecord(row);
+  return row === null ? null : toStandupRecord(row, sprint);
 }
 
 // Newest first. The id breaks ties, so paging never skips or repeats a standup.
@@ -132,40 +164,40 @@ const STANDUP_WITH_AUTHOR_FIELDS = {
   user: { select: { name: true, githubLogin: true, avatarUrl: true } },
 } as const;
 
-function toStandupWithAuthor({
-  user,
-  ...row
-}: StandupRow & { user: StandupAuthor }): StandupWithAuthor {
-  return { ...toStandupRecord(row), author: user };
+function toStandupWithAuthor(
+  { user, ...row }: StandupRow & { user: StandupAuthor },
+  sprint: StandupSprint
+): StandupWithAuthor {
+  return { ...toStandupRecord(row, sprint), author: user };
 }
 
 export async function listSprintStandups({
-  sprintId,
+  sprint,
 }: {
-  sprintId: string;
+  sprint: StandupSprint;
 }): Promise<StandupWithAuthor[]> {
   const rows = await db.standup.findMany({
-    where: { sprintId },
+    where: sprintStandupsWhere(sprint),
     orderBy: [...HISTORY_ORDER],
     select: STANDUP_WITH_AUTHOR_FIELDS,
   });
-  return rows.map(toStandupWithAuthor);
+  return rows.map((row) => toStandupWithAuthor(row, sprint));
 }
 
 // One page of a sprint's standups. Returns null when the cursor isn't one of
 // this sprint's standups.
 export async function listSprintStandupsPage({
-  sprintId,
+  sprint,
   limit,
   cursor,
 }: {
-  sprintId: string;
+  sprint: StandupSprint;
   limit: number;
   cursor?: string;
 }): Promise<Page<StandupWithAuthor> | null> {
   if (cursor !== undefined) {
     const cursorRow = await db.standup.findFirst({
-      where: { id: cursor, sprintId },
+      where: { id: cursor, ...sprintStandupsWhere(sprint) },
       select: { id: true },
     });
     if (cursorRow === null) {
@@ -173,11 +205,14 @@ export async function listSprintStandupsPage({
     }
   }
   const rows = await db.standup.findMany({
-    where: { sprintId },
+    where: sprintStandupsWhere(sprint),
     orderBy: [...HISTORY_ORDER],
     take: limit + 1,
     ...(cursor === undefined ? {} : { cursor: { id: cursor }, skip: 1 }),
     select: STANDUP_WITH_AUTHOR_FIELDS,
   });
-  return toPage({ rows: rows.map(toStandupWithAuthor), limit });
+  return toPage({
+    rows: rows.map((row) => toStandupWithAuthor(row, sprint)),
+    limit,
+  });
 }

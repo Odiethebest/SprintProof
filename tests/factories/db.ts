@@ -133,8 +133,25 @@ export async function insertSprint(input: {
   });
 }
 
+// The sprint fields the standups repository takes, from an inserted sprint.
+// A standup is listed under the sprint whose dates contain its day (#56).
+export function toStandupSprint(sprint: {
+  id: string;
+  teamId: string;
+  startDate: Date;
+  endDate: Date;
+}) {
+  return {
+    id: sprint.id,
+    teamId: sprint.teamId,
+    startDate: sprint.startDate.toISOString().slice(0, 10),
+    endDate: sprint.endDate.toISOString().slice(0, 10),
+  };
+}
+
+// A standup belongs to its team and day; no sprint is stored with it (#56).
 export async function insertStandup(input: {
-  sprintId: string;
+  teamId: string;
   userId: string;
   date: string;
   yesterday?: string;

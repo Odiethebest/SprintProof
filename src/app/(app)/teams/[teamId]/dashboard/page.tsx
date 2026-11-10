@@ -223,7 +223,7 @@ async function SprintDashboard({
   const timeZone = team.timezone;
   const window = getSprintWindow({ sprint, timeZone });
   const [standups, activities] = await Promise.all([
-    listSprintStandups({ sprintId: sprint.id }),
+    listSprintStandups({ sprint }),
     listTeamActivities({ teamId: team.id, from: window.start, to: window.end }),
   ]);
 

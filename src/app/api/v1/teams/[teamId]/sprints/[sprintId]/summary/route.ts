@@ -53,7 +53,7 @@ export async function GET(
   const window = getSprintWindow({ sprint, timeZone });
   const [memberships, standups, activities] = await Promise.all([
     listTeamMembers({ teamId }),
-    listSprintStandups({ sprintId }),
+    listSprintStandups({ sprint }),
     listTeamActivities({ teamId, from: window.start, to: window.end }),
   ]);
 

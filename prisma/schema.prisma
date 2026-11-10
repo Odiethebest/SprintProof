@@ -51,6 +51,7 @@ model Team {
   activities   Activity[]
   invites      Invite[]
   deliveries   WebhookDelivery[]
+  standups     Standup[]
 
   @@map("teams")
 }
@@ -89,25 +90,26 @@ model Invite {
 }
 
 model Sprint {
-  id                String    @id @default(cuid())
-  teamId            String    @map("team_id")
+  id                String   @id @default(cuid())
+  teamId            String   @map("team_id")
   name              String
-  startDate         DateTime  @db.Date @map("start_date")
-  endDate           DateTime  @db.Date @map("end_date")
-  standupsPerPerson Int       @default(3) @map("standups_per_person")
-  reviewsPerPerson  Int       @default(5) @map("reviews_per_person")
-  createdAt         DateTime  @default(now()) @map("created_at")
-  updatedAt         DateTime  @updatedAt @map("updated_at")
-  team              Team      @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  standups          Standup[]
+  startDate         DateTime @map("start_date") @db.Date
+  endDate           DateTime @map("end_date") @db.Date
+  standupsPerPerson Int      @default(3) @map("standups_per_person")
+  reviewsPerPerson  Int      @default(5) @map("reviews_per_person")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+  team              Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
 
   @@index([teamId])
   @@map("sprints")
 }
 
+// A standup belongs to its team and day. It's listed under the sprint whose
+// dates contain that day, so it follows its day when sprint dates change (#56).
 model Standup {
   id        String   @id @default(cuid())
-  sprintId  String   @map("sprint_id")
+  teamId    String   @map("team_id")
   userId    String   @map("user_id")
   date      DateTime @db.Date
   yesterday String
@@ -115,11 +117,11 @@ model Standup {
   blockers  String?
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
-  sprint    Sprint   @relation(fields: [sprintId], references: [id], onDelete: Cascade)
+  team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@unique([sprintId, userId, date])
-  @@index([sprintId])
+  @@unique([teamId, userId, date])
+  @@index([teamId, date])
   @@index([userId])
   @@map("standups")
 }

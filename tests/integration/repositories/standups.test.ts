@@ -11,16 +11,19 @@ import {
   insertStandup,
   insertTeam,
   insertUser,
+  toStandupSprint,
 } from "../../factories/db";
 import { clearDatabase } from "../setup/test-setup";
 
 async function teamWithSprint() {
   const team = await insertTeam();
-  const sprint = await insertSprint({
-    teamId: team.id,
-    startDate: "2026-10-29",
-    endDate: "2026-11-04",
-  });
+  const sprint = toStandupSprint(
+    await insertSprint({
+      teamId: team.id,
+      startDate: "2026-10-29",
+      endDate: "2026-11-04",
+    })
+  );
   const user = await insertUser({
     githubLogin: "Odiethebest",
     name: "Ziqi (Odie) Yang",
@@ -48,7 +51,7 @@ describe("standups repository", () => {
 
       // Act
       const { standup, isNew } = await saveStandup({
-        sprintId: sprint.id,
+        sprint,
         userId: user.id,
         date: "2026-11-03",
         ...standupFields,
@@ -56,6 +59,7 @@ describe("standups repository", () => {
 
       // Assert
       expect(isNew).toBe(true);
+      expect(standup.sprintId).toBe(sprint.id);
       expect(standup.date).toBe("2026-11-03");
       expect(standup.updatedAt).toEqual(standup.createdAt);
     });
@@ -64,7 +68,7 @@ describe("standups repository", () => {
     it("stores one standup when the same person saves twice at the same moment", async () => {
       // Arrange
       const { sprint, user } = await teamWithSprint();
-      const key = { sprintId: sprint.id, userId: user.id, date: "2026-11-03" };
+      const key = { sprint, userId: user.id, date: "2026-11-03" };
 
       // Act
       const results = await Promise.all([
@@ -79,14 +83,65 @@ describe("standups repository", () => {
       ]);
       expect(await db.standup.count()).toBe(1);
     });
+
+    it("keeps a separate standup for each team the person posts to on the same day", async () => {
+      // Arrange
+      const { sprint, user } = await teamWithSprint();
+      const otherTeam = await insertTeam();
+      await insertMembership({
+        userId: user.id,
+        teamId: otherTeam.id,
+        role: "MEMBER",
+      });
+      const otherSprint = toStandupSprint(
+        await insertSprint({
+          teamId: otherTeam.id,
+          startDate: "2026-10-29",
+          endDate: "2026-11-04",
+        })
+      );
+      const day = { userId: user.id, date: "2026-11-03", ...standupFields };
+
+      // Act
+      const first = await saveStandup({ sprint, ...day });
+      const second = await saveStandup({ sprint: otherSprint, ...day });
+
+      // Assert
+      expect([first.isNew, second.isNew]).toEqual([true, true]);
+      expect(await db.standup.count()).toBe(2);
+    });
+  });
+
+  // Rule R2, enforced by the database too: one standup per person per team per day.
+  describe("uniqueness", () => {
+    it("rejects a second standup for the same person, team and day", async () => {
+      // Arrange
+      const { team, user } = await teamWithSprint();
+      await insertStandup({
+        teamId: team.id,
+        userId: user.id,
+        date: "2026-11-03",
+      });
+
+      // Act
+      const second = insertStandup({
+        teamId: team.id,
+        userId: user.id,
+        date: "2026-11-03",
+      });
+
+      // Assert
+      await expect(second).rejects.toThrow();
+      expect(await db.standup.count()).toBe(1);
+    });
   });
 
   describe("findStandup", () => {
-    it("returns the person's standup for that sprint and date", async () => {
+    it("returns the person's standup for that day, listed under the sprint", async () => {
       // Arrange
-      const { sprint, user } = await teamWithSprint();
+      const { team, sprint, user } = await teamWithSprint();
       const stored = await insertStandup({
-        sprintId: sprint.id,
+        teamId: team.id,
         userId: user.id,
         date: "2026-11-03",
         blockers: "Waiting on #107.",
@@ -94,7 +149,7 @@ describe("standups repository", () => {
 
       // Act
       const standup = await findStandup({
-        sprintId: sprint.id,
+        sprint,
         userId: user.id,
         date: "2026-11-03",
       });
@@ -115,18 +170,38 @@ describe("standups repository", () => {
 
     it("returns null when the person hasn't posted that day", async () => {
       // Arrange
-      const { sprint, user } = await teamWithSprint();
+      const { team, sprint, user } = await teamWithSprint();
       await insertStandup({
-        sprintId: sprint.id,
+        teamId: team.id,
         userId: user.id,
         date: "2026-11-02",
       });
 
       // Act
       const standup = await findStandup({
-        sprintId: sprint.id,
+        sprint,
         userId: user.id,
         date: "2026-11-03",
+      });
+
+      // Assert
+      expect(standup).toBeNull();
+    });
+
+    it("returns null for a day outside the sprint's dates", async () => {
+      // Arrange
+      const { team, sprint, user } = await teamWithSprint();
+      await insertStandup({
+        teamId: team.id,
+        userId: user.id,
+        date: "2026-11-05",
+      });
+
+      // Act
+      const standup = await findStandup({
+        sprint,
+        userId: user.id,
+        date: "2026-11-05",
       });
 
       // Assert
@@ -143,14 +218,14 @@ describe("standups repository", () => {
         role: "MEMBER",
       });
       await insertStandup({
-        sprintId: sprint.id,
+        teamId: team.id,
         userId: teammate.id,
         date: "2026-11-03",
       });
 
       // Act
       const standup = await findStandup({
-        sprintId: sprint.id,
+        sprint,
         userId: user.id,
         date: "2026-11-03",
       });
@@ -163,15 +238,15 @@ describe("standups repository", () => {
   describe("listSprintStandups", () => {
     it("returns the sprint's standups with each author's name, login and avatar", async () => {
       // Arrange
-      const { sprint, user } = await teamWithSprint();
+      const { team, sprint, user } = await teamWithSprint();
       const stored = await insertStandup({
-        sprintId: sprint.id,
+        teamId: team.id,
         userId: user.id,
         date: "2026-11-03",
       });
 
       // Act
-      const standups = await listSprintStandups({ sprintId: sprint.id });
+      const standups = await listSprintStandups({ sprint });
 
       // Assert
       expect(standups).toEqual([
@@ -194,38 +269,60 @@ describe("standups repository", () => {
       ]);
     });
 
+    it("includes standups on the sprint's first and last days and leaves out the days around it", async () => {
+      // Arrange: Sprint 1 runs Oct 29 – Nov 4
+      const { team, sprint, user } = await teamWithSprint();
+      for (const date of [
+        "2026-10-28",
+        "2026-10-29",
+        "2026-11-04",
+        "2026-11-05",
+      ]) {
+        await insertStandup({ teamId: team.id, userId: user.id, date });
+      }
+
+      // Act
+      const standups = await listSprintStandups({ sprint });
+
+      // Assert
+      expect(standups.map((standup) => standup.date)).toEqual([
+        "2026-11-04",
+        "2026-10-29",
+      ]);
+    });
+
     it("leaves out standups from the team's other sprints and from other teams", async () => {
       // Arrange
       const { team, sprint, user } = await teamWithSprint();
-      const nextSprint = await insertSprint({
+      await insertSprint({
         teamId: team.id,
         startDate: "2026-11-05",
         endDate: "2026-11-11",
       });
       const otherTeam = await insertTeam();
-      const otherSprint = await insertSprint({
+      await insertSprint({
         teamId: otherTeam.id,
         startDate: "2026-10-29",
         endDate: "2026-11-04",
       });
       const inSprint = await insertStandup({
-        sprintId: sprint.id,
+        teamId: team.id,
         userId: user.id,
         date: "2026-11-03",
       });
       await insertStandup({
-        sprintId: nextSprint.id,
+        teamId: team.id,
         userId: user.id,
         date: "2026-11-05",
       });
       await insertStandup({
-        sprintId: otherSprint.id,
+        teamId: otherTeam.id,
         userId: user.id,
         date: "2026-11-03",
       });
 
       // Act
-      const standups = await listSprintStandups({ sprintId: sprint.id });
+      const standups = await listSprintStandups({ sprint });
 
       // Assert
       expect(standups.map((standup) => standup.id)).toEqual([inSprint.id]);
@@ -236,7 +333,7 @@ describe("standups repository", () => {
       const { sprint } = await teamWithSprint();
 
       // Act
-      const standups = await listSprintStandups({ sprintId: sprint.id });
+      const standups = await listSprintStandups({ sprint });
 
       // Assert
       expect(standups).toEqual([]);
