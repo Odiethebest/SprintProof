@@ -64,7 +64,7 @@ As a team lead, I want to create a team linked to our GitHub repo and invite my 
 
 **US-3. Plan sprints with requirements** · Issue #8
 As a team lead, I want to create sprints with dates and the course's requirements, so the checks match our syllabus.
-- Sprint has name, start date, end date, standups per person (default 3), PR reviews per person (default 5).
+- Sprint has name, start date, end date, standups per person (default 3), PR reviews per person (default 5). The name is trimmed and at most 100 characters, like a team name; dates fall in the years 2000–2100 (#74).
 - Sprints in one team cannot overlap; end date is on or after start date.
 - The current sprint is the one containing today in the team's timezone.
 - Changing a sprint's dates moves standups with their days: each standup shows and counts in the sprint whose dates contain it (#56).

@@ -50,6 +50,11 @@ tags:
     description: Session only. Post today's standup.
   - name: API tokens
     description: Session only. Create and revoke personal API tokens.
+# Validation (#74): user text rejects NUL with 400 VALIDATION_ERROR.
+# NUL URL ids follow the same 403/404 behavior as unknown ids. NUL inviteToken
+# in the JSON body is a validation error; NUL invite-link URL tokens are absent.
+# Sprint dates must be within 2000-01-01 and 2100-12-31 inclusive.
+# Sprint names are trimmed and limited to 100 characters.
 paths:
   /teams:
     post:
@@ -525,7 +530,7 @@ components:
         minLength: 1
   responses:
     ValidationError:
-      description: The request body isn't valid. The message names the first problem.
+      description: The request body isn't valid, including NUL characters in user text. The message names the first problem.
       content:
         application/json:
           schema:
@@ -536,7 +541,7 @@ components:
               message: Send the request body as JSON.
     SprintValidationError:
       description: |
-        The sprint isn't valid: a missing name, a date that isn't YYYY-MM-DD, an end
+        The sprint isn't valid: a missing name, a name over 100 characters or containing NUL, a date outside years 2000–2100 or not YYYY-MM-DD, an end
         date before the start date, dates that overlap another sprint (including concurrent creates and edits), or a
         requirement outside 1–20.
       content:
@@ -743,12 +748,16 @@ components:
       properties:
         name:
           type: string
+          maxLength: 100
+          description: Trimmed; NUL characters are rejected.
         startDate:
           type: string
           format: date
+          description: Calendar date in years 2000 through 2100.
         endDate:
           type: string
           format: date
+          description: Calendar date in years 2000 through 2100.
         standupsPerPerson:
           type: integer
           minimum: 1
@@ -764,12 +773,16 @@ components:
       properties:
         name:
           type: string
+          maxLength: 100
+          description: Trimmed; NUL characters are rejected.
         startDate:
           type: string
           format: date
+          description: Calendar date in years 2000 through 2100.
         endDate:
           type: string
           format: date
+          description: Calendar date in years 2000 through 2100.
         standupsPerPerson:
           type: integer
           minimum: 1

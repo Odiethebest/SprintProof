@@ -1,3 +1,4 @@
+import { noNul } from "@/lib/validation/text";
 import { z } from "zod";
 import type { TeamRole } from "@/lib/auth/team-access";
 
@@ -38,7 +39,8 @@ export const createInviteSchema = z.object({
 export const joinTeamSchema = z.object({
   inviteToken: z
     .string({ error: "Add the invite token." })
-    .min(1, "Add the invite token."),
+    .min(1, "Add the invite token.")
+    .check(noNul),
 });
 
 // An exact 7 × 24 hours, so daylight saving changes never shorten a link.
