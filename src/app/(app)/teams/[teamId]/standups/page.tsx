@@ -164,6 +164,7 @@ async function TeamStandups({
         <div className="grid items-start gap-4 lg:grid-cols-3">
           {canPost && (
             <StandupForm
+              formDate={today}
               teamId={team.id}
               dateLabel={formatDay(today)}
               sprintName={sprint?.name ?? null}

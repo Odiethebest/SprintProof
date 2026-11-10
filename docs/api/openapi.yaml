@@ -409,7 +409,7 @@ paths:
                   code: NOT_FOUND
                   message: This team doesn't exist.
         "409":
-          description: Today isn't inside any of the team's sprints.
+          description: Today isn't inside any sprint (NO_CURRENT_SPRINT), or formDate differs from today in the team timezone (STANDUP_DAY_CHANGED). Nothing is saved in either case.
           content:
             application/json:
               schema:
@@ -790,10 +790,10 @@ components:
           type: integer
           description: How many to go; 0 once met.
         status:
-          type: string
-          enum: [MET, ON_TRACK, AT_RISK, MISSED]
+          type: [string, "null"]
+          enum: [MET, ON_TRACK, AT_RISK, MISSED, null]
           description: |
-            `MET`: count reached the requirement. `ON_TRACK`: not met, more than 2 days
+            `null`: the sprint has not started. `MET`: count reached the requirement. `ON_TRACK`: not met, more than 2 days
             left. `AT_RISK`: not met, 2 or fewer days left. `MISSED`: not met, the
             sprint has ended.
     MemberSummary:
@@ -880,6 +880,10 @@ components:
       type: object
       required: [yesterday, today]
       properties:
+        formDate:
+          type: string
+          format: date
+          description: Day displayed when the form rendered. Optional; if different from today in the team timezone, returns 409 STANDUP_DAY_CHANGED and saves nothing. The server always chooses the stored date.
         yesterday:
           type: string
           minLength: 1
