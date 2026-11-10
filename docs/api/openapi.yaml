@@ -537,7 +537,7 @@ components:
     SprintValidationError:
       description: |
         The sprint isn't valid: a missing name, a date that isn't YYYY-MM-DD, an end
-        date before the start date, dates that overlap another sprint, or a
+        date before the start date, dates that overlap another sprint (including concurrent creates and edits), or a
         requirement outside 1–20.
       content:
         application/json:

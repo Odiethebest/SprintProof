@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { createSprintSchema, validateSprint } from "@/lib/sprints";
+import { createSprintSchema } from "@/lib/sprints";
 import {
   accessDeniedResponse,
   errorResponse,
@@ -11,7 +11,7 @@ import {
 import { requireApiTeamRole, requireTeamRole } from "@/server/auth";
 import {
   createSprint,
-  listSprints,
+  SprintValidationFailure,
   listSprintsPage,
 } from "@/server/repositories/sprints";
 
@@ -74,18 +74,17 @@ export async function POST(
   if (!parsedBody.isValid) {
     return parsedBody.response;
   }
-  const sprintInput = parsedBody.data;
-
-  const existingSprints = await listSprints({ teamId });
-  const errors = validateSprint({ sprint: sprintInput, existingSprints });
-  if (errors.length > 0) {
-    return errorResponse({
-      status: 400,
-      code: "VALIDATION_ERROR",
-      message: errors[0].message,
-    });
+  try {
+    const created = await createSprint({ ...parsedBody.data, teamId });
+    return Response.json(created, { status: 201 });
+  } catch (error) {
+    if (error instanceof SprintValidationFailure) {
+      return errorResponse({
+        status: 400,
+        code: "VALIDATION_ERROR",
+        message: error.message,
+      });
+    }
+    throw error;
   }
-
-  const created = await createSprint({ ...sprintInput, teamId });
-  return Response.json(created, { status: 201 });
 }
