@@ -1,6 +1,7 @@
 "use client";
 
 import { useId, useState, type FormEvent, type ReactNode } from "react";
+import { flushSync } from "react-dom";
 import { useRouter } from "next/navigation";
 import { CircleAlert } from "lucide-react";
 import { z } from "zod";
@@ -17,19 +18,22 @@ import { BUTTON_CLASSES } from "@/components/ui/button-styles";
 type FieldName = "name" | "repoFullName" | "timezone";
 type FieldErrors = Partial<Record<FieldName, string[]>>;
 
+// The fields in the order they're shown, so focus lands on the first invalid one.
+const FIELD_ORDER: FieldName[] = ["name", "repoFullName", "timezone"];
+
 const createdTeamSchema = z.object({ id: z.string() });
 
 // DESIGN.md §7 Forms: the border turns `missed` on error. Repos use the mono font.
 const INPUT_CLASSES = {
   sans: {
     valid:
-      "h-9 w-full rounded-md border border-border bg-surface px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface",
+      "h-9 w-full rounded-md border border-form-control-border bg-surface px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface",
     invalid:
       "h-9 w-full rounded-md border border-missed bg-surface px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface",
   },
   mono: {
     valid:
-      "h-9 w-full rounded-md border border-border bg-surface px-3 font-mono text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface",
+      "h-9 w-full rounded-md border border-form-control-border bg-surface px-3 font-mono text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface",
     invalid:
       "h-9 w-full rounded-md border border-missed bg-surface px-3 font-mono text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface",
   },
@@ -91,9 +95,26 @@ export function CreateTeamForm({ timezones }: { timezones: string[] }) {
   const [formError, setFormError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Render the errors first, so a screen reader hears them when the field gets
+  // focus (#77). StandupForm does the same.
+  function showFieldErrors(formElement: HTMLFormElement, errors: FieldErrors) {
+    flushSync(() => setFieldErrors(errors));
+    const firstInvalid = FIELD_ORDER.find((name) => errors[name]);
+    const field = firstInvalid
+      ? formElement.elements.namedItem(firstInvalid)
+      : null;
+    if (
+      field instanceof HTMLInputElement ||
+      field instanceof HTMLSelectElement
+    ) {
+      field.focus();
+    }
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     // The same schema as the API, so the form shows its errors before sending.
     const parsed = createTeamSchema.safeParse({
       name: form.get("name"),
@@ -101,7 +122,7 @@ export function CreateTeamForm({ timezones }: { timezones: string[] }) {
       timezone: form.get("timezone"),
     });
     if (!parsed.success) {
-      setFieldErrors(z.flattenError(parsed.error).fieldErrors);
+      showFieldErrors(formElement, z.flattenError(parsed.error).fieldErrors);
       return;
     }
     setFieldErrors({});
@@ -120,7 +141,7 @@ export function CreateTeamForm({ timezones }: { timezones: string[] }) {
       }
       const error = await readApiError(response);
       if (error.code === "REPO_ALREADY_CONNECTED") {
-        setFieldErrors({ repoFullName: [error.message] });
+        showFieldErrors(formElement, { repoFullName: [error.message] });
       } else {
         setFormError(error.message);
       }

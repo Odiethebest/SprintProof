@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CircleAlert, Copy, Plus } from "lucide-react";
 import type { InviteRole } from "@/lib/invites/invite-link";
@@ -21,6 +21,10 @@ const ROLE_TITLES: Record<InviteRole, string> = {
   INSTRUCTOR: "Instructor invite link",
 };
 
+// The button that takes focus once the refreshed panel shows it: Copy after
+// Create, Create after Revoke (WCAG 2.4.3, #77).
+type FocusTarget = { role: InviteRole; button: "copy" | "create" };
+
 const ROLE_NAMES: Record<InviteRole, string> = {
   MEMBER: "member",
   INSTRUCTOR: "instructor",
@@ -40,18 +44,36 @@ export function InviteLinks({
   const [errors, setErrors] = useState<Partial<Record<InviteRole, string>>>({});
   const [busyRole, setBusyRole] = useState<InviteRole | null>(null);
   const [copiedRole, setCopiedRole] = useState<InviteRole | null>(null);
+  // The clicked button goes away, and its replacement only arrives with the
+  // refreshed links, so its ref callback moves focus when it mounts.
+  const pendingFocus = useRef<FocusTarget | null>(null);
+
+  function focusWhenShown(target: FocusTarget) {
+    return (element: HTMLButtonElement | null) => {
+      const pending = pendingFocus.current;
+      if (
+        element !== null &&
+        pending?.role === target.role &&
+        pending.button === target.button
+      ) {
+        pendingFocus.current = null;
+        element.focus();
+      }
+    };
+  }
 
   async function send(
     role: InviteRole,
     request: () => Promise<Response>,
-    doneMessage: string
+    done: { message: string; focus: FocusTarget["button"] }
   ) {
     setErrors((current) => ({ ...current, [role]: undefined }));
     setBusyRole(role);
     try {
       const response = await request();
       if (response.ok) {
-        setAnnouncement(doneMessage);
+        setAnnouncement(done.message);
+        pendingFocus.current = { role, button: done.focus };
         router.refresh();
       } else {
         const { message } = await readApiError(response);
@@ -72,7 +94,7 @@ export function InviteLinks({
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ role }),
         }),
-      `New ${ROLE_NAMES[role]} invite link created.`
+      { message: `New ${ROLE_NAMES[role]} invite link created.`, focus: "copy" }
     );
   }
 
@@ -83,7 +105,7 @@ export function InviteLinks({
         fetch(`/api/v1/teams/${teamId}/invites/${inviteId}`, {
           method: "DELETE",
         }),
-      `${ROLE_TITLES[role]} revoked.`
+      { message: `${ROLE_TITLES[role]} revoked.`, focus: "create" }
     );
   }
 
@@ -125,6 +147,7 @@ export function InviteLinks({
               </p>
               <div className="flex flex-wrap gap-2">
                 <button
+                  ref={focusWhenShown({ role, button: "copy" })}
                   type="button"
                   onClick={() => copyLink(role, invite.url)}
                   className={BUTTON_CLASSES.secondary}
@@ -146,6 +169,7 @@ export function InviteLinks({
             <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="text-sm text-text-muted">No active link.</p>
               <button
+                ref={focusWhenShown({ role, button: "create" })}
                 type="button"
                 onClick={() => createLink(role)}
                 disabled={busyRole === role}

@@ -1,6 +1,7 @@
 "use client";
 
-import { useId, useState, type FormEvent, type ReactNode } from "react";
+import { useId, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { flushSync } from "react-dom";
 import { useRouter } from "next/navigation";
 import { CircleAlert, Pencil, Plus } from "lucide-react";
 import {
@@ -49,9 +50,37 @@ function toDateInputValue(value: string | undefined): string | undefined {
   return value.includes("T") ? value.slice(0, 10) : value;
 }
 
+// The fields in the order they're shown, so focus lands on the first invalid one.
+const FIELD_ORDER: SprintErrorField[] = [
+  "name",
+  "startDate",
+  "endDate",
+  "standupsPerPerson",
+  "reviewsPerPerson",
+];
+
+type SprintErrors = Partial<Record<SprintErrorField, string>>;
+
+function focusField(form: HTMLFormElement | null, name: SprintErrorField) {
+  const field = form?.elements.namedItem(name);
+  if (field instanceof HTMLInputElement) {
+    field.focus();
+  }
+}
+
+function toErrorMap(
+  errors: { field: SprintErrorField; message: string }[]
+): SprintErrors {
+  const errorMap: SprintErrors = {};
+  for (const error of errors) {
+    errorMap[error.field] ??= error.message;
+  }
+  return errorMap;
+}
+
 const INPUT_CLASSES = {
   valid:
-    "h-9 w-full rounded-md border border-border bg-surface px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface",
+    "h-9 w-full rounded-md border border-form-control-border bg-surface px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface",
   invalid:
     "h-9 w-full rounded-md border border-missed bg-surface px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface",
 } as const;
@@ -120,17 +149,20 @@ export function SprintsCard({
   const [isAdding, setIsAdding] = useState(false);
   const [editingSprintId, setEditingSprintId] = useState<string | null>(null);
 
+  // Focus moves with the forms, so it never drops to the page body when the
+  // focused control goes away (WCAG 2.4.3, #77).
+  const addButtonRef = useRef<HTMLButtonElement>(null);
+  const editButtonRefs = useRef(new Map<string, HTMLButtonElement>());
+  const addFormRef = useRef<HTMLFormElement>(null);
+  const editFormRef = useRef<HTMLFormElement>(null);
+
   // Add form state
-  const [addErrors, setAddErrors] = useState<
-    Partial<Record<SprintErrorField, string>>
-  >({});
+  const [addErrors, setAddErrors] = useState<SprintErrors>({});
   const [addFormError, setAddFormError] = useState<string | null>(null);
   const [isSubmittingAdd, setIsSubmittingAdd] = useState(false);
 
   // Edit form state
-  const [editErrors, setEditErrors] = useState<
-    Partial<Record<SprintErrorField, string>>
-  >({});
+  const [editErrors, setEditErrors] = useState<SprintErrors>({});
   const [editFormError, setEditFormError] = useState<string | null>(null);
   const [isSubmittingEdit, setIsSubmittingEdit] = useState(false);
 
@@ -141,9 +173,60 @@ export function SprintsCard({
     endDate: s.endDate,
   }));
 
+  // flushSync renders the form before it takes focus.
+  function openAddForm() {
+    flushSync(() => {
+      setIsAdding(true);
+      setEditingSprintId(null);
+    });
+    focusField(addFormRef.current, "name");
+  }
+
+  function closeAddForm() {
+    flushSync(() => {
+      setIsAdding(false);
+      setAddErrors({});
+      setAddFormError(null);
+    });
+    addButtonRef.current?.focus();
+  }
+
+  function openEditForm(sprintId: string) {
+    flushSync(() => {
+      setEditingSprintId(sprintId);
+      setIsAdding(false);
+      setEditErrors({});
+      setEditFormError(null);
+    });
+    focusField(editFormRef.current, "name");
+  }
+
+  function closeEditForm(sprintId: string) {
+    flushSync(() => {
+      setEditingSprintId(null);
+      setEditErrors({});
+      setEditFormError(null);
+    });
+    editButtonRefs.current.get(sprintId)?.focus();
+  }
+
+  // Render the errors first, so a screen reader hears them when the field gets focus.
+  function showFieldErrors(
+    formElement: HTMLFormElement,
+    errors: SprintErrors,
+    setErrors: (errors: SprintErrors) => void
+  ) {
+    flushSync(() => setErrors(errors));
+    const firstInvalid = FIELD_ORDER.find((field) => errors[field]);
+    if (firstInvalid !== undefined) {
+      focusField(formElement, firstInvalid);
+    }
+  }
+
   async function handleAddSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     const rawStartDate = String(form.get("startDate") ?? "").trim();
     const rawEndDate = String(form.get("endDate") ?? "").trim();
     const sprintInput = {
@@ -160,13 +243,7 @@ export function SprintsCard({
     });
 
     if (validationErrors.length > 0) {
-      const errorMap: Partial<Record<SprintErrorField, string>> = {};
-      for (const err of validationErrors) {
-        if (!errorMap[err.field]) {
-          errorMap[err.field] = err.message;
-        }
-      }
-      setAddErrors(errorMap);
+      showFieldErrors(formElement, toErrorMap(validationErrors), setAddErrors);
       return;
     }
 
@@ -182,7 +259,7 @@ export function SprintsCard({
       });
 
       if (response.ok) {
-        setIsAdding(false);
+        closeAddForm();
         router.refresh();
       } else {
         const error = await readApiError(response);
@@ -200,7 +277,8 @@ export function SprintsCard({
     event: FormEvent<HTMLFormElement>
   ) {
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     const rawStartDate = String(form.get("startDate") ?? "").trim();
     const rawEndDate = String(form.get("endDate") ?? "").trim();
     const sprintInput = {
@@ -218,13 +296,7 @@ export function SprintsCard({
     });
 
     if (validationErrors.length > 0) {
-      const errorMap: Partial<Record<SprintErrorField, string>> = {};
-      for (const err of validationErrors) {
-        if (!errorMap[err.field]) {
-          errorMap[err.field] = err.message;
-        }
-      }
-      setEditErrors(errorMap);
+      showFieldErrors(formElement, toErrorMap(validationErrors), setEditErrors);
       return;
     }
 
@@ -243,7 +315,7 @@ export function SprintsCard({
       );
 
       if (response.ok) {
-        setEditingSprintId(null);
+        closeEditForm(sprintId);
         router.refresh();
       } else {
         const error = await readApiError(response);
@@ -272,11 +344,9 @@ export function SprintsCard({
         </div>
         {isLead && !isAdding && (
           <button
+            ref={addButtonRef}
             type="button"
-            onClick={() => {
-              setIsAdding(true);
-              setEditingSprintId(null);
-            }}
+            onClick={openAddForm}
             className={BUTTON_CLASSES.secondary}
           >
             <Plus size={16} aria-hidden="true" />
@@ -287,6 +357,7 @@ export function SprintsCard({
 
       {isAdding && (
         <form
+          ref={addFormRef}
           onSubmit={handleAddSubmit}
           noValidate
           className="flex flex-col gap-4 rounded-md border border-border bg-surface p-4"
@@ -411,11 +482,7 @@ export function SprintsCard({
             </button>
             <button
               type="button"
-              onClick={() => {
-                setIsAdding(false);
-                setAddErrors({});
-                setAddFormError(null);
-              }}
+              onClick={closeAddForm}
               className={BUTTON_CLASSES.secondary}
             >
               Cancel
@@ -464,6 +531,7 @@ export function SprintsCard({
                     <tr key={sprint.id} className="bg-canvas">
                       <td colSpan={isLead ? 6 : 5} className="py-4">
                         <form
+                          ref={editFormRef}
                           onSubmit={(e) => handleEditSubmit(sprint.id, e)}
                           noValidate
                           className="flex flex-col gap-4 rounded-md border border-border bg-surface p-4"
@@ -503,7 +571,9 @@ export function SprintsCard({
                                   aria-describedby={props.describedBy}
                                   aria-invalid={props["aria-invalid"]}
                                   className={props.className}
-                                  defaultValue={toDateInputValue(sprint.startDate)}
+                                  defaultValue={toDateInputValue(
+                                    sprint.startDate
+                                  )}
                                   required
                                 />
                               )}
@@ -522,7 +592,9 @@ export function SprintsCard({
                                   aria-describedby={props.describedBy}
                                   aria-invalid={props["aria-invalid"]}
                                   className={props.className}
-                                  defaultValue={toDateInputValue(sprint.endDate)}
+                                  defaultValue={toDateInputValue(
+                                    sprint.endDate
+                                  )}
                                   required
                                 />
                               )}
@@ -589,11 +661,7 @@ export function SprintsCard({
                             </button>
                             <button
                               type="button"
-                              onClick={() => {
-                                setEditingSprintId(null);
-                                setEditErrors({});
-                                setEditFormError(null);
-                              }}
+                              onClick={() => closeEditForm(sprint.id)}
                               className={BUTTON_CLASSES.secondary}
                             >
                               Cancel
@@ -610,9 +678,7 @@ export function SprintsCard({
                     key={sprint.id}
                     data-current={isCurrent ? "true" : undefined}
                     className={
-                      isCurrent
-                        ? ROW_CLASSES.current
-                        : ROW_CLASSES.default
+                      isCurrent ? ROW_CLASSES.current : ROW_CLASSES.default
                     }
                   >
                     <td className="py-3">
@@ -649,13 +715,17 @@ export function SprintsCard({
                     {isLead && (
                       <td className="py-3 text-right">
                         <button
-                          type="button"
-                          onClick={() => {
-                            setEditingSprintId(sprint.id);
-                            setIsAdding(false);
-                            setEditErrors({});
-                            setEditFormError(null);
+                          ref={(element) => {
+                            if (element === null) {
+                              return;
+                            }
+                            editButtonRefs.current.set(sprint.id, element);
+                            return () => {
+                              editButtonRefs.current.delete(sprint.id);
+                            };
                           }}
+                          type="button"
+                          onClick={() => openEditForm(sprint.id)}
                           className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs text-text-muted hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                         >
                           <Pencil size={14} aria-hidden="true" />
