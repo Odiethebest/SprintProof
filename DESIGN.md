@@ -22,6 +22,7 @@ Defined as CSS variables in `src/app/globals.css` and exposed to Tailwind v4 thr
 | `canvas` | `bg-canvas` | `#FAFAF9` | `#0C0A09` | Page background |
 | `surface` | `bg-surface` | `#FFFFFF` | `#1C1917` | Cards, panels, inputs |
 | `border` | `border-border` | `#E7E5E4` | `#292524` | Dividers, card borders |
+| `form-control-border` | `border-form-control-border` | `#8F8984` | `#78716C` | Edges of inputs, selects and textareas |
 | `text` | `text-text` | `#1C1917` | `#F5F5F4` | Primary text |
 | `text-muted` | `text-text-muted` | `#57534E` | `#A8A29E` | Secondary text, labels |
 | `primary` | `bg-primary` | `#0F766E` | `#2DD4BF` | Primary buttons, links, focus ring |
@@ -34,6 +35,8 @@ Defined as CSS variables in `src/app/globals.css` and exposed to Tailwind v4 thr
 
 All text tokens meet 4.5:1 contrast against `canvas` and `surface` in their mode. `primary-fg` meets it on `primary` (5.47:1 light, 7.77:1 dark) and on `primary-hover` (7.58:1, 9.78:1). The hover color sits further from `primary-fg` than `primary` does, so every color in the hover transition passes too. Don't use an opacity like `bg-primary/90` for hover: blended toward white, it drops to 4.48:1 (#62).
 
+A form control's border is its only visible edge, so `form-control-border` meets the 3:1 non-text contrast of WCAG 1.4.11 against `surface` (3.45:1 light, 3.65:1 dark) and `canvas` (3.31:1, 4.12:1). `border` (1.26:1 on `surface`) is for dividers and card borders only (#77).
+
 An embedded tool with light styles only (Swagger UI on `/api-docs`) sits in a `.theme-light` container, which keeps the light token values inside it in dark mode. Its own colors are mapped to these tokens in `components/api-docs/swagger-overrides.css`; don't add new hex values there (#16).
 
 ### `globals.css` starting point
@@ -43,6 +46,7 @@ An embedded tool with light styles only (Swagger UI on `/api-docs`) sits in a `.
 
 :root {
   --canvas: #FAFAF9;  --surface: #FFFFFF;  --border: #E7E5E4;
+  --form-control-border: #8F8984;
   --text: #1C1917;    --text-muted: #57534E;
   --primary: #0F766E; --primary-hover: #115E59; --primary-fg: #FFFFFF;
   --met: #15803D; --on-track: #1D4ED8; --at-risk: #B45309; --missed: #B91C1C;
@@ -52,6 +56,7 @@ An embedded tool with light styles only (Swagger UI on `/api-docs`) sits in a `.
 @media (prefers-color-scheme: dark) {
   :root {
     --canvas: #0C0A09;  --surface: #1C1917;  --border: #292524;
+    --form-control-border: #78716C;
     --text: #F5F5F4;    --text-muted: #A8A29E;
     --primary: #2DD4BF; --primary-hover: #5EEAD4; --primary-fg: #042F2E;
     --met: #4ADE80; --on-track: #60A5FA; --at-risk: #FBBF24; --missed: #F87171;
@@ -63,6 +68,7 @@ An embedded tool with light styles only (Swagger UI on `/api-docs`) sits in a `.
   --color-canvas: var(--canvas);
   --color-surface: var(--surface);
   --color-border: var(--border);
+  --color-form-control-border: var(--form-control-border);
   --color-text: var(--text);
   --color-text-muted: var(--text-muted);
   --color-primary: var(--primary);
@@ -142,12 +148,12 @@ Never use font sizes outside this table.
 | `RetroColumn` | Column title, item count, item list sorted by votes (each item `rounded-md border border-border p-3`), "Add item" input with an "Add" button at the bottom. |
 | `VoteButton` | `ThumbsUp` icon + count, 36 px. When the user has voted: filled icon, `border-primary bg-primary/10 text-primary`. With no votes left: `aria-disabled`, 60% opacity, tooltip "No votes left". |
 | `Table` | `text-sm`, header row `text-xs font-medium text-text-muted` with a bottom border, rows split by `divide-border`, numbers `font-mono tabular-nums`. Wrapped in `overflow-x-auto` so it never widens the page. |
-| `Select` | Same as inputs: 36 px high, `rounded-md border border-border bg-surface px-2 text-sm`. |
+| `Select` | Same as inputs: 36 px high, `rounded-md border border-form-control-border bg-surface px-2 text-sm`. |
 | `Dialog` | Native `<dialog>`, `rounded-lg border border-border bg-surface shadow-lg`, at most 36rem wide, backdrop `canvas` at 75% opacity. Title `text-lg font-semibold`, actions right-aligned: Cancel first, then the primary or destructive action. Focus returns to the trigger on close. |
 | `Toast` | The page's single `aria-live="polite"` region: bottom center, `rounded-md bg-text text-canvas px-4 py-3 text-sm`, clears after about 4.5 s. Used for confirmations ("Standup posted.") and live update announcements. |
 | `Tooltip` | `rounded-md bg-text text-canvas px-2 py-1 text-xs`, shown on hover and keyboard focus, linked with `aria-describedby`. |
 | `EmptyState` | Bordered box (`rounded-md border border-border p-6`), centered 24 px muted icon, one-line explanation, at most one action link. |
-| Forms | Visible label above every field; inputs 36 px high, `rounded-md border border-border bg-surface px-3 text-sm`, border turns `missed` on error; error text below in `missed` color with an icon, linked by `aria-describedby`. "(optional)" in `text-text-muted` after optional labels. |
+| Forms | Visible label above every field; inputs 36 px high, `rounded-md border border-form-control-border bg-surface px-3 text-sm` (textareas too), border turns `missed` on error; error text below in `missed` color with an icon, linked by `aria-describedby`. "(optional)" in `text-text-muted` after optional labels. |
 | Secrets and codes | URLs, tokens and SHAs in `font-mono text-xs`; copyable values in `rounded-md border border-border bg-canvas px-2 py-1` with a "Copy" button. A newly created token sits in `rounded-md border border-primary bg-primary/10 p-3` until dismissed. |
 
 ## 8. Motion
