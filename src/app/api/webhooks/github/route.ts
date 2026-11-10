@@ -9,6 +9,18 @@ import { recordWebhookEvent } from "@/server/repositories/activities";
 import { triggerTeamEvent } from "@/server/realtime";
 
 export async function POST(request: Request): Promise<Response> {
+  try {
+    return await handleWebhook(request);
+  } catch {
+    return errorResponse({
+      status: 500,
+      code: "WEBHOOK_STORAGE_FAILED",
+      message: "Couldn't store this delivery. Please retry.",
+    });
+  }
+}
+
+async function handleWebhook(request: Request): Promise<Response> {
   const secret = process.env.GITHUB_WEBHOOK_SECRET;
   // Fail closed: without a secret, no signature can prove the sender is GitHub.
   if (!secret) {
@@ -110,7 +122,7 @@ export async function POST(request: Request): Promise<Response> {
 
   // One event per delivery, however many commits it carried. A redelivery or
   // a delivery with nothing stored (a bot's review) changes nothing on screen.
-  if (!result.alreadyProcessed && mapping.activities.length > 0) {
+  if (result.activitiesCreated > 0) {
     await triggerTeamEvent({ teamId: team.id, event: "activity.created" });
   }
 
