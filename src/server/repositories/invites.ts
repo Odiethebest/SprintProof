@@ -24,6 +24,8 @@ export async function createInvite({
 }) {
   const token = randomBytes(TOKEN_BYTES).toString("base64url");
   return db.$transaction(async (tx) => {
+    const key = `invites:${teamId}`;
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${key}))`;
     await tx.invite.updateMany({
       where: { teamId, role, revokedAt: null, expiresAt: { gt: now } },
       data: { revokedAt: now },

@@ -1,5 +1,4 @@
 import { db } from "@/server/db";
-import { isUniqueViolation } from "@/server/prisma-errors";
 import type { CreateTeamInput } from "@/lib/teams/create-team";
 
 const TEAM_FIELDS = {
@@ -17,31 +16,25 @@ export async function createTeamWithLead({
   input: CreateTeamInput;
   leadUserId: string;
 }) {
-  // GitHub repo names ignore case, so "odie/app" and "Odie/App" are one repo.
-  const existing = await db.team.findFirst({
-    where: {
-      repoFullName: { equals: input.repoFullName, mode: "insensitive" },
-    },
-    select: { id: true },
-  });
-  if (existing !== null) {
-    return null;
-  }
-  try {
-    return await db.team.create({
+  return db.$transaction(async (tx) => {
+    // GitHub repository names ignore case; serialize all claims for that name.
+    const key = `repo:${input.repoFullName.toLowerCase()}`;
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${key}))`;
+    const existing = await tx.team.findFirst({
+      where: {
+        repoFullName: { equals: input.repoFullName, mode: "insensitive" },
+      },
+      select: { id: true },
+    });
+    if (existing !== null) return null;
+    return tx.team.create({
       data: {
         ...input,
         memberships: { create: { userId: leadUserId, role: "LEAD" } },
       },
       select: TEAM_FIELDS,
     });
-  } catch (error) {
-    // Another request connected the same repo between the check and the insert.
-    if (isUniqueViolation(error)) {
-      return null;
-    }
-    throw error;
-  }
+  });
 }
 
 export async function findTeam({ teamId }: { teamId: string }) {
@@ -73,6 +66,13 @@ export async function findTeamByRepo({
   });
 
   if (byFullName !== null) {
+    if (
+      repoId !== undefined &&
+      repoId !== null &&
+      byFullName.repoId !== null &&
+      byFullName.repoId !== repoId
+    )
+      return null;
     if (repoId !== undefined && repoId !== null && byFullName.repoId === null) {
       await db.team.update({
         where: { id: byFullName.id },
