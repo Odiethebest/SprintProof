@@ -7,6 +7,7 @@
   --canvas: #fafaf9;
   --surface: #ffffff;
   --border: #e7e5e4;
+  --form-control-border: #8f8984;
   --text: #1c1917;
   --text-muted: #57534e;
   --primary: #0f766e;
@@ -24,6 +25,7 @@
     --canvas: #0c0a09;
     --surface: #1c1917;
     --border: #292524;
+    --form-control-border: #78716c;
     --text: #f5f5f4;
     --text-muted: #a8a29e;
     --primary: #2dd4bf;
@@ -41,6 +43,7 @@
   --color-canvas: var(--canvas);
   --color-surface: var(--surface);
   --color-border: var(--border);
+  --color-form-control-border: var(--form-control-border);
   --color-text: var(--text);
   --color-text-muted: var(--text-muted);
   --color-primary: var(--primary);

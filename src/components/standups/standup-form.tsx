@@ -1,12 +1,6 @@
 "use client";
 
-import {
-  useEffect,
-  useId,
-  useState,
-  type FormEvent,
-  type ReactNode,
-} from "react";
+import { useId, useState, type FormEvent, type ReactNode } from "react";
 import { countStandupCharacters } from "@/lib/standups/character-count";
 import { flushSync } from "react-dom";
 import Link from "next/link";
@@ -22,7 +16,7 @@ import {
   readApiError,
 } from "@/components/teams/api-error";
 import { BUTTON_CLASSES } from "@/components/ui/button-styles";
-import { TOAST_DURATION_MS, Toast } from "@/components/ui/toast";
+import { useAnnounce } from "@/components/ui/page-announcer";
 
 type FieldName = "yesterday" | "today" | "blockers";
 type FieldValues = Record<FieldName, string>;
@@ -34,7 +28,7 @@ const FIELD_ORDER: FieldName[] = ["yesterday", "today", "blockers"];
 // DESIGN.md §7 Forms: the border turns `missed` on error.
 const TEXTAREA_CLASSES = {
   valid:
-    "w-full resize-y rounded-md border border-border bg-surface px-3 py-2 text-sm placeholder:text-text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface",
+    "w-full resize-y rounded-md border border-form-control-border bg-surface px-3 py-2 text-sm placeholder:text-text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface",
   invalid:
     "w-full resize-y rounded-md border border-missed bg-surface px-3 py-2 text-sm placeholder:text-text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface",
 } as const;
@@ -126,17 +120,10 @@ function StandupFields({
   });
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
-  const [toast, setToast] = useState<string | null>(null);
   const [hasDayChanged, setHasDayChanged] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  useEffect(() => {
-    if (toast === null) {
-      return;
-    }
-    const timer = setTimeout(() => setToast(null), TOAST_DURATION_MS);
-    return () => clearTimeout(timer);
-  }, [toast]);
+  // The Standups page's single live region, shared with teammates' updates.
+  const announce = useAnnounce();
 
   function setField(name: FieldName, value: string) {
     setValues((current) => ({ ...current, [name]: value }));
@@ -168,7 +155,7 @@ function StandupFields({
         body: JSON.stringify({ ...parsed.data, formDate }),
       });
       if (response.ok) {
-        setToast(
+        announce(
           response.status === 201 ? "Standup posted." : "Standup updated."
         );
         router.refresh();
@@ -184,72 +171,66 @@ function StandupFields({
   }
 
   return (
-    <>
-      <form noValidate onSubmit={handleSubmit} className="flex flex-col gap-4">
-        {saved && (
-          <p className="flex items-center gap-2 text-sm">
-            <CircleCheck size={16} aria-hidden="true" className="text-met" />
-            Posted at {saved.postedAtLabel}. Saving again updates it.
-          </p>
-        )}
-        <StandupField
-          name="yesterday"
-          label="Yesterday"
-          placeholder="What you worked on"
-          value={values.yesterday}
-          error={fieldErrors.yesterday?.[0]}
-          onChange={(value) => setField("yesterday", value)}
-        />
-        <StandupField
-          name="today"
-          label="Today"
-          placeholder="What you plan to work on"
-          value={values.today}
-          error={fieldErrors.today?.[0]}
-          onChange={(value) => setField("today", value)}
-        />
-        <StandupField
-          name="blockers"
-          label={
-            <>
-              Blockers <span className="text-text-muted">(optional)</span>
-            </>
-          }
-          placeholder="Anything slowing you down"
-          value={values.blockers}
-          error={fieldErrors.blockers?.[0]}
-          onChange={(value) => setField("blockers", value)}
-        />
-        {formError && (
-          <p
-            role="alert"
-            className="flex items-center gap-2 text-sm text-missed"
-          >
-            <CircleAlert size={16} aria-hidden="true" />
-            {formError}
-          </p>
-        )}
-        {hasDayChanged && (
-          <button
-            type="button"
-            className={BUTTON_CLASSES.secondary}
-            onClick={() => window.location.reload()}
-          >
-            Load today&apos;s form
-          </button>
-        )}
-        <div>
-          <button
-            type="submit"
-            disabled={isSubmitting || hasDayChanged}
-            className={BUTTON_CLASSES.primary}
-          >
-            {saved ? "Update today's standup" : "Post standup"}
-          </button>
-        </div>
-      </form>
-      <Toast message={toast} />
-    </>
+    <form noValidate onSubmit={handleSubmit} className="flex flex-col gap-4">
+      {saved && (
+        <p className="flex items-center gap-2 text-sm">
+          <CircleCheck size={16} aria-hidden="true" className="text-met" />
+          Posted at {saved.postedAtLabel}. Saving again updates it.
+        </p>
+      )}
+      <StandupField
+        name="yesterday"
+        label="Yesterday"
+        placeholder="What you worked on"
+        value={values.yesterday}
+        error={fieldErrors.yesterday?.[0]}
+        onChange={(value) => setField("yesterday", value)}
+      />
+      <StandupField
+        name="today"
+        label="Today"
+        placeholder="What you plan to work on"
+        value={values.today}
+        error={fieldErrors.today?.[0]}
+        onChange={(value) => setField("today", value)}
+      />
+      <StandupField
+        name="blockers"
+        label={
+          <>
+            Blockers <span className="text-text-muted">(optional)</span>
+          </>
+        }
+        placeholder="Anything slowing you down"
+        value={values.blockers}
+        error={fieldErrors.blockers?.[0]}
+        onChange={(value) => setField("blockers", value)}
+      />
+      {formError && (
+        <p role="alert" className="flex items-center gap-2 text-sm text-missed">
+          <CircleAlert size={16} aria-hidden="true" />
+          {formError}
+        </p>
+      )}
+      {hasDayChanged && (
+        <button
+          type="button"
+          className={BUTTON_CLASSES.secondary}
+          onClick={() => window.location.reload()}
+        >
+          Load today&apos;s form
+        </button>
+      )}
+      <div>
+        <button
+          type="submit"
+          disabled={isSubmitting || hasDayChanged}
+          className={BUTTON_CLASSES.primary}
+        >
+          {saved ? "Update today's standup" : "Post standup"}
+        </button>
+      </div>
+    </form>
   );
 }
 

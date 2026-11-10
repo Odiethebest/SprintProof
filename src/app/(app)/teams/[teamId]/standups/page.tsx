@@ -5,14 +5,17 @@ import { toSignInPath } from "@/lib/auth/sign-in-redirect";
 import { getCurrentSprint, selectSprint } from "@/lib/sprints";
 import { groupStandupsByDay } from "@/lib/standups/group-standups";
 import { getStandupDate } from "@/lib/standups/standup-date";
+import { LiveAnnouncer } from "@/components/dashboard/live-announcer";
 import { PageHeader } from "@/components/layout/page-header";
 import { PageLoading } from "@/components/layout/page-loading";
 import { readRequestedSprintId } from "@/components/layout/sprint-navigation";
 import { StandupForm } from "@/components/standups/standup-form";
+import { buildStandupLiveUpdates } from "@/components/standups/standup-live-updates";
 import {
   StandupHistory,
   type StandupEntryView,
 } from "@/components/standups/standup-history";
+import { PageAnnouncer } from "@/components/ui/page-announcer";
 import { requireTeamRole } from "@/server/auth";
 import { getCurrentUser } from "@/server/current-user";
 import { listSprints } from "@/server/repositories/sprints";
@@ -111,12 +114,15 @@ async function TeamStandups({
     minute: "2-digit",
     timeZone: team.timezone,
   });
+  const authorName = (standup: StandupWithAuthor): string =>
+    standup.author.name ?? standup.author.githubLogin ?? "GitHub user";
+  const isEdited = (standup: StandupWithAuthor): boolean =>
+    standup.updatedAt.getTime() !== standup.createdAt.getTime();
   const toEntryView = (standup: StandupWithAuthor): StandupEntryView => ({
     id: standup.id,
-    authorName:
-      standup.author.name ?? standup.author.githubLogin ?? "GitHub user",
+    authorName: authorName(standup),
     timeLabel: timeFormat.format(standup.createdAt),
-    isEdited: standup.updatedAt.getTime() !== standup.createdAt.getTime(),
+    isEdited: isEdited(standup),
     yesterday: standup.yesterday,
     today: standup.today,
     blockers: standup.blockers,
@@ -126,10 +132,20 @@ async function TeamStandups({
     dayLabel: formatDay(day.date),
     standups: day.standups.map(toEntryView),
   }));
+  const liveUpdates = buildStandupLiveUpdates({
+    standups: standups.map((standup) => ({
+      id: standup.id,
+      userId: standup.userId,
+      authorName: authorName(standup),
+      updatedAt: standup.updatedAt,
+      isEdited: isEdited(standup),
+    })),
+    viewerId: user.id,
+  });
 
   // Teammates' standups show up in History without a reload.
   return (
-    <>
+    <PageAnnouncer>
       <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-8 md:px-6">
         <PageHeader
           title="Standups"
@@ -165,6 +181,10 @@ async function TeamStandups({
           </div>
         </div>
       </main>
-    </>
+      {/* Teammates' new standups are announced politely, instructors included
+        (AGENTS.md §2 LiveIndicator). A new history sprint remounts it, so
+        switching sprints announces nothing. */}
+      <LiveAnnouncer key={historySprint?.id ?? "none"} updates={liveUpdates} />
+    </PageAnnouncer>
   );
 }

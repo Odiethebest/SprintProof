@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState, type FormEvent } from "react";
+import { flushSync } from "react-dom";
 import { z } from "zod";
 import { useRouter } from "next/navigation";
 import { CircleAlert, Copy, KeyRound, Plus } from "lucide-react";
@@ -25,7 +26,7 @@ export interface ApiTokenView {
 // DESIGN.md §7 Forms: the border turns `missed` on error.
 const INPUT_CLASSES = {
   valid:
-    "h-9 w-full rounded-md border border-border bg-surface px-3 text-sm placeholder:text-text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface",
+    "h-9 w-full rounded-md border border-form-control-border bg-surface px-3 text-sm placeholder:text-text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface",
   invalid:
     "h-9 w-full rounded-md border border-missed bg-surface px-3 text-sm placeholder:text-text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface",
 } as const;
@@ -57,8 +58,16 @@ export function ApiTokensCard({ tokens }: { tokens: ApiTokenView[] }) {
   const [revokeError, setRevokeError] = useState<string | null>(null);
   const [isRevoking, setIsRevoking] = useState(false);
 
+  // Render the error first, so aria-describedby points at it when the field
+  // gets focus and a screen reader reads it (#77).
   function showNameError(message: string) {
-    setNameError(message);
+    flushSync(() => setNameError(message));
+    nameRef.current?.focus();
+  }
+
+  // Done goes away with the token box, so focus moves to the name field.
+  function dismissNewToken() {
+    setNewToken(null);
     nameRef.current?.focus();
   }
 
@@ -183,7 +192,7 @@ export function ApiTokensCard({ tokens }: { tokens: ApiTokenView[] }) {
             </button>
             <button
               type="button"
-              onClick={() => setNewToken(null)}
+              onClick={dismissNewToken}
               className={BUTTON_CLASSES.secondary}
             >
               Done

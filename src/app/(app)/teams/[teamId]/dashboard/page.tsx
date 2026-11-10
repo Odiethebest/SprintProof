@@ -37,6 +37,7 @@ import {
   EMPTY_STATE_LINK_CLASSES,
   EmptyState,
 } from "@/components/ui/empty-state";
+import { PageAnnouncer } from "@/components/ui/page-announcer";
 import { Pill } from "@/components/ui/pill";
 import { requireTeamRole } from "@/server/auth";
 import { getCurrentUser } from "@/server/current-user";
@@ -165,7 +166,7 @@ async function TeamDashboard({
   // The empty state above has nothing a teammate's standup or push could
   // change, so only a sprint's dashboard listens for live updates.
   return (
-    <>
+    <PageAnnouncer>
       <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-8 md:px-6">
         {/* A new sprint remounts it: no count highlights or announcements for the switch. */}
         <SprintDashboard
@@ -177,7 +178,7 @@ async function TeamDashboard({
           now={now}
         />
       </main>
-    </>
+    </PageAnnouncer>
   );
 }
 
