@@ -1,3 +1,4 @@
+import { noNul } from "@/lib/validation/text";
 import crypto from "node:crypto";
 import { z } from "zod";
 
@@ -15,7 +16,8 @@ export const createApiTokenSchema = z.object({
     .string({ error: NAME_REQUIRED })
     .trim()
     .min(1, NAME_REQUIRED)
-    .max(MAX_API_TOKEN_NAME_LENGTH, NAME_TOO_LONG),
+    .max(MAX_API_TOKEN_NAME_LENGTH, NAME_TOO_LONG)
+    .check(noNul),
 });
 
 export type CreateApiTokenInput = z.output<typeof createApiTokenSchema>;

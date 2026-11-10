@@ -1,9 +1,10 @@
+import { noNul } from "@/lib/validation/text";
 import { z } from "zod";
 import { GITHUB_LOGIN_PATTERN } from "@/lib/github/login";
 
 export const DEFAULT_TEAM_TIMEZONE = "America/Los_Angeles";
 
-const MAX_TEAM_NAME_LENGTH = 100;
+export const MAX_TEAM_NAME_LENGTH = 100;
 // GitHub repo names: up to 100 letters, digits, ".", "_" and "-".
 const REPO_NAME_PATTERN = /^[A-Za-z0-9._-]{1,100}$/;
 // GitHub reserves these two names for the current and parent directory.
@@ -47,14 +48,17 @@ export const createTeamSchema = z.object({
     .string({ error: NAME_REQUIRED })
     .trim()
     .min(1, NAME_REQUIRED)
-    .max(MAX_TEAM_NAME_LENGTH, NAME_TOO_LONG),
+    .max(MAX_TEAM_NAME_LENGTH, NAME_TOO_LONG)
+    .check(noNul),
   repoFullName: z
     .string({ error: REPO_FORMAT })
     .trim()
-    .refine(isRepoFullName, REPO_FORMAT),
+    .refine(isRepoFullName, REPO_FORMAT)
+    .check(noNul),
   timezone: z
     .string({ error: TIMEZONE_UNKNOWN })
     .refine(isKnownTimeZone, TIMEZONE_UNKNOWN)
+    .check(noNul)
     .default(DEFAULT_TEAM_TIMEZONE),
 });
 

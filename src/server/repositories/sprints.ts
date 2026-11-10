@@ -1,3 +1,4 @@
+import { databaseTextSchema } from "@/lib/validation/text";
 import { db } from "@/server/db";
 import { toPage, type Page } from "@/lib/api/pagination";
 import type { SprintRecord } from "@/lib/sprints";
@@ -142,6 +143,7 @@ export async function findSprintById({
   teamId: string;
   sprintId: string;
 }): Promise<SprintRecord | null> {
+  if (!databaseTextSchema.safeParse(sprintId).success) return null;
   const row = await db.sprint.findFirst({
     where: { id: sprintId, teamId },
     select: SPRINT_FIELDS,

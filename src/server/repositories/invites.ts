@@ -1,3 +1,4 @@
+import { databaseTextSchema } from "@/lib/validation/text";
 import { randomBytes } from "node:crypto";
 import { db } from "@/server/db";
 import { getInviteExpiry, type InviteRole } from "@/lib/invites/invite-link";
@@ -51,6 +52,7 @@ export async function revokeInvite({
   inviteId: string;
   now: Date;
 }): Promise<boolean> {
+  if (!databaseTextSchema.safeParse(inviteId).success) return false;
   // Scoped to the team, so a lead can't revoke another team's link by id.
   const invite = await db.invite.findFirst({
     where: { id: inviteId, teamId },
@@ -69,6 +71,7 @@ export async function revokeInvite({
 }
 
 export async function findInviteByToken({ token }: { token: string }) {
+  if (!databaseTextSchema.safeParse(token).success) return null;
   return db.invite.findUnique({
     where: { token },
     select: {
