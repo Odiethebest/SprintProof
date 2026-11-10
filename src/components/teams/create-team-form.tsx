@@ -1,6 +1,7 @@
 "use client";
 
 import { useId, useState, type FormEvent, type ReactNode } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { CircleAlert } from "lucide-react";
 import { z } from "zod";
@@ -89,6 +90,7 @@ export function CreateTeamForm({ timezones }: { timezones: string[] }) {
   const router = useRouter();
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
+  const [hasCreatedTeam, setHasCreatedTeam] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -114,8 +116,18 @@ export function CreateTeamForm({ timezones }: { timezones: string[] }) {
         body: JSON.stringify(parsed.data),
       });
       if (response.ok) {
-        const team = createdTeamSchema.parse(await response.json());
-        router.push(`/teams/${team.id}/settings`);
+        setHasCreatedTeam(true);
+        const team = createdTeamSchema.safeParse(
+          await response.json().catch(() => null)
+        );
+        if (team.success) {
+          router.push(`/teams/${team.data.id}/settings`);
+          return;
+        }
+        setFormError(
+          "Team created, but its details couldn't be shown. Open your teams to continue."
+        );
+        setIsSubmitting(false);
         return;
       }
       const error = await readApiError(response);
@@ -199,10 +211,15 @@ export function CreateTeamForm({ timezones }: { timezones: string[] }) {
           {formError}
         </p>
       )}
+      {hasCreatedTeam && formError && (
+        <Link href="/" className={BUTTON_CLASSES.secondary}>
+          View your teams
+        </Link>
+      )}
       <div>
         <button
           type="submit"
-          disabled={isSubmitting}
+          disabled={isSubmitting || hasCreatedTeam}
           className={BUTTON_CLASSES.primary}
         >
           Create team

@@ -427,6 +427,8 @@ paths:
     post:
       tags: [API tokens]
       summary: Create a personal API token
+      # A successful creation is final even if the client cannot read the response.
+      # A lost one-time secret requires revoking the token and creating another.
       description: |
         The response is the only time the token is shown; SprintProof keeps only
         its SHA-256 hash. Session only: a token can't create tokens.

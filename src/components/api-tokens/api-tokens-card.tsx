@@ -1,9 +1,10 @@
 "use client";
 
 import { useRef, useState, type FormEvent } from "react";
+import { z } from "zod";
 import { useRouter } from "next/navigation";
 import { CircleAlert, Copy, KeyRound, Plus } from "lucide-react";
-import { createApiTokenSchema } from "@/lib/api-tokens/api-token";
+import { createApiTokenSchema } from "@/lib/api-tokens/api-token-name";
 import {
   NETWORK_ERROR_MESSAGE,
   readApiError,
@@ -28,6 +29,11 @@ const INPUT_CLASSES = {
   invalid:
     "h-9 w-full rounded-md border border-missed bg-surface px-3 text-sm placeholder:text-text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface",
 } as const;
+
+const createdTokenSchema = z.object({
+  id: z.string().min(1),
+  token: z.string().min(1),
+});
 
 const NAME_INPUT_ID = "new-api-token-name";
 const NAME_ERROR_ID = "new-api-token-name-error";
@@ -73,14 +79,19 @@ export function ApiTokensCard({ tokens }: { tokens: ApiTokenView[] }) {
         body: JSON.stringify(parsed.data),
       });
       if (response.ok) {
-        const created = (await response.json()) as {
-          id: string;
-          token: string;
-        };
-        setNewToken({ id: created.id, token: created.token });
+        const created = createdTokenSchema.safeParse(
+          await response.json().catch(() => null)
+        );
+        setNewToken(created.success ? created.data : null);
         setIsCopied(false);
         setName("");
-        setAnnouncement("Token created. Copy it now.");
+        if (created.success) {
+          setAnnouncement("Token created. Copy it now.");
+        } else {
+          setFormError(
+            "Token created, but it couldn't be shown. Revoke it and create another."
+          );
+        }
         router.refresh();
       } else {
         const { code, message } = await readApiError(response);

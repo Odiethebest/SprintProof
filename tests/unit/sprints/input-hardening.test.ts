@@ -1,7 +1,7 @@
 import { expect, it } from "vitest";
 import { createSprintSchema, validateSprint } from "@/lib/sprints";
 import { createTeamSchema } from "@/lib/teams/create-team";
-import { createApiTokenSchema } from "@/lib/api-tokens/api-token";
+import { createApiTokenSchema } from "@/lib/api-tokens/api-token-name";
 import { createStandupSchema } from "@/lib/standups/standup-input";
 import { joinTeamSchema } from "@/lib/invites/invite-link";
 import { toSafeCallbackPath } from "@/lib/auth/sign-in-redirect";
