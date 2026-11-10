@@ -1,7 +1,11 @@
 import { databaseTextSchema } from "@/lib/validation/text";
 import { db } from "@/server/db";
 import { toPage, type Page } from "@/lib/api/pagination";
-import type { SprintRecord } from "@/lib/sprints";
+import {
+  validateSprint,
+  type SprintRecord,
+  type SprintInput,
+} from "@/lib/sprints";
 
 export interface CreateSprintInput {
   teamId: string;
@@ -12,14 +16,18 @@ export interface CreateSprintInput {
   reviewsPerPerson: number;
 }
 
-export interface UpdateSprintInput {
-  teamId: string;
+export type UpdateSprintInput = Pick<CreateSprintInput, "teamId"> & {
   sprintId: string;
-  name: string;
-  startDate: string;
-  endDate: string;
-  standupsPerPerson: number;
-  reviewsPerPerson: number;
+} & Partial<Omit<CreateSprintInput, "teamId">>;
+
+export class SprintValidationFailure extends Error {}
+
+function assertValidSprint(
+  sprint: SprintInput,
+  existingSprints: SprintRecord[]
+) {
+  const errors = validateSprint({ sprint, existingSprints });
+  if (errors.length > 0) throw new SprintValidationFailure(errors[0].message);
 }
 
 const SPRINT_FIELDS = {
@@ -122,18 +130,24 @@ export async function listSprintsPage({
 export async function createSprint(
   input: CreateSprintInput
 ): Promise<SprintRecord> {
-  const row = await db.sprint.create({
-    data: {
-      teamId: input.teamId,
-      name: input.name,
-      startDate: parseDbDate(input.startDate),
-      endDate: parseDbDate(input.endDate),
-      standupsPerPerson: input.standupsPerPerson,
-      reviewsPerPerson: input.reviewsPerPerson,
-    },
-    select: SPRINT_FIELDS,
+  return db.$transaction(async (tx) => {
+    const key = `sprints:${input.teamId}`;
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${key}))`;
+    const existing = await tx.sprint.findMany({
+      where: { teamId: input.teamId },
+      select: SPRINT_FIELDS,
+    });
+    assertValidSprint(input, existing.map(toSprintRecord));
+    const row = await tx.sprint.create({
+      data: {
+        ...input,
+        startDate: parseDbDate(input.startDate),
+        endDate: parseDbDate(input.endDate),
+      },
+      select: SPRINT_FIELDS,
+    });
+    return toSprintRecord(row);
   });
-  return toSprintRecord(row);
 }
 
 export async function findSprintById({
@@ -154,23 +168,36 @@ export async function findSprintById({
 export async function updateSprint(
   input: UpdateSprintInput
 ): Promise<SprintRecord | null> {
-  const existing = await db.sprint.findFirst({
-    where: { id: input.sprintId, teamId: input.teamId },
-    select: { id: true },
+  return db.$transaction(async (tx) => {
+    const key = `sprints:${input.teamId}`;
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${key}))`;
+    const rows = await tx.sprint.findMany({
+      where: { teamId: input.teamId },
+      select: SPRINT_FIELDS,
+    });
+    const existing = rows.find((row) => row.id === input.sprintId);
+    if (existing === undefined) return null;
+    // Merge partial edits only after acquiring the lock, to keep concurrent changes.
+    const sprint: SprintInput = {
+      id: input.sprintId,
+      name: input.name ?? existing.name,
+      startDate: input.startDate ?? formatDate(existing.startDate),
+      endDate: input.endDate ?? formatDate(existing.endDate),
+      standupsPerPerson: input.standupsPerPerson ?? existing.standupsPerPerson,
+      reviewsPerPerson: input.reviewsPerPerson ?? existing.reviewsPerPerson,
+    };
+    assertValidSprint(sprint, rows.map(toSprintRecord));
+    const row = await tx.sprint.update({
+      where: { id: input.sprintId },
+      data: {
+        name: sprint.name,
+        startDate: parseDbDate(sprint.startDate),
+        endDate: parseDbDate(sprint.endDate),
+        standupsPerPerson: sprint.standupsPerPerson,
+        reviewsPerPerson: sprint.reviewsPerPerson,
+      },
+      select: SPRINT_FIELDS,
+    });
+    return toSprintRecord(row);
   });
-  if (existing === null) {
-    return null;
-  }
-  const row = await db.sprint.update({
-    where: { id: input.sprintId },
-    data: {
-      name: input.name,
-      startDate: parseDbDate(input.startDate),
-      endDate: parseDbDate(input.endDate),
-      standupsPerPerson: input.standupsPerPerson,
-      reviewsPerPerson: input.reviewsPerPerson,
-    },
-    select: SPRINT_FIELDS,
-  });
-  return toSprintRecord(row);
 }
