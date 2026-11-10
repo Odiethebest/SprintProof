@@ -246,6 +246,19 @@ describe("real-time events", () => {
       expect(triggerTeamEvent).not.toHaveBeenCalled();
     });
 
+    it("logs which delivery failed without logging its payload", async () => {
+      await connectedTeam();
+      const log = vi.spyOn(console, "error").mockImplementation(() => {});
+      const payload = structuredClone(pushPayload);
+      payload.commits[0].message = "private-commit-message\u0000";
+      await sendWebhook({ event: "push", payload, deliveryId: "logged-write" });
+      expect(log).toHaveBeenCalledTimes(1);
+      const line = log.mock.calls[0].map(String).join(" ");
+      expect(line).toContain("logged-write");
+      expect(line).not.toContain("private-commit-message");
+      log.mockRestore();
+    });
+
     it("doesn't trigger an event for a ping", async () => {
       await connectedTeam();
 
