@@ -46,7 +46,11 @@ export function toSafeCallbackPath({
   }
   // "//host" and "/\host" start with "/" but resolve to another origin.
   const url = new URL(parsed.data, PLACEHOLDER_ORIGIN);
-  if (url.origin !== PLACEHOLDER_ORIGIN || url.pathname === SIGN_IN_PATH) {
+  if (
+    url.origin !== PLACEHOLDER_ORIGIN ||
+    url.pathname.startsWith("//") ||
+    url.pathname === SIGN_IN_PATH
+  ) {
     return HOME_PATH;
   }
   return `${url.pathname}${url.search}${url.hash}`;

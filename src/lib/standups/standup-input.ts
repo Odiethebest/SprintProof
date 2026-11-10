@@ -1,3 +1,4 @@
+import { noNul } from "@/lib/validation/text";
 import { z } from "zod";
 
 export const MAX_STANDUP_FIELD_LENGTH = 1000;
@@ -12,7 +13,8 @@ function requiredField(message: string) {
     .string({ error: message })
     .trim()
     .min(1, message)
-    .max(MAX_STANDUP_FIELD_LENGTH, TOO_LONG);
+    .max(MAX_STANDUP_FIELD_LENGTH, TOO_LONG)
+    .check(noNul);
 }
 
 // Shared by the standups API and the StandupForm, so both show the same errors.
@@ -24,6 +26,7 @@ export const createStandupSchema = z.object({
     .string({ error: BLOCKERS_NOT_TEXT })
     .trim()
     .max(MAX_STANDUP_FIELD_LENGTH, TOO_LONG)
+    .check(noNul)
     .nullish()
     // Blockers are optional; an empty answer is stored as null so the history shows "None".
     .transform((blockers) => (blockers ? blockers : null)),

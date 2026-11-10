@@ -1,3 +1,4 @@
+import { databaseTextSchema } from "@/lib/validation/text";
 import type { TeamRole } from "@/lib/auth/team-access";
 import { db } from "@/server/db";
 
@@ -8,6 +9,7 @@ export async function findMembershipRole({
   userId: string;
   teamId: string;
 }) {
+  if (!databaseTextSchema.safeParse(teamId).success) return null;
   return db.membership.findUnique({
     where: { userId_teamId: { userId, teamId } },
     select: { role: true },

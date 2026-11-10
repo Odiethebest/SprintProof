@@ -1,3 +1,4 @@
+import { noNul } from "@/lib/validation/text";
 import { z } from "zod";
 
 export const DEFAULT_PAGE_SIZE = 20;
@@ -14,7 +15,11 @@ export const paginationQuerySchema = z.object({
     .min(1, LIMIT_MESSAGE)
     .max(MAX_PAGE_SIZE, LIMIT_MESSAGE)
     .default(DEFAULT_PAGE_SIZE),
-  cursor: z.string({ error: CURSOR_MESSAGE }).min(1, CURSOR_MESSAGE).optional(),
+  cursor: z
+    .string({ error: CURSOR_MESSAGE })
+    .min(1, CURSOR_MESSAGE)
+    .check(noNul)
+    .optional(),
 });
 
 export type PaginationQuery = z.output<typeof paginationQuerySchema>;

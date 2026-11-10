@@ -1,9 +1,8 @@
+import { MAX_TEAM_NAME_LENGTH } from "@/lib/teams/create-team";
+import { databaseTextSchema } from "@/lib/validation/text";
+
 export type SprintErrorField =
-  | "name"
-  | "startDate"
-  | "endDate"
-  | "standupsPerPerson"
-  | "reviewsPerPerson";
+  "name" | "startDate" | "endDate" | "standupsPerPerson" | "reviewsPerPerson";
 
 export interface SprintValidationError {
   field: SprintErrorField;
@@ -70,7 +69,7 @@ function isValidCalendarDate(dateStr: unknown): boolean {
   const month = Number(monthStr);
   const day = Number(dayStr);
 
-  if (month < 1 || month > 12) {
+  if (year < 2000 || year > 2100 || month < 1 || month > 12) {
     return false;
   }
   const maxDays = getDaysInMonth(year, month);
@@ -78,7 +77,7 @@ function isValidCalendarDate(dateStr: unknown): boolean {
 }
 
 export function validateSprint(
-  options: ValidateSprintOptions,
+  options: ValidateSprintOptions
 ): SprintValidationError[] {
   const { sprint, existingSprints } = options;
   const errors: SprintValidationError[] = [];
@@ -88,6 +87,18 @@ export function validateSprint(
       field: "name",
       code: "REQUIRED",
       message: "Sprint name is required.",
+    });
+  }
+
+  if (
+    sprint.name &&
+    (!databaseTextSchema.safeParse(sprint.name).success ||
+      [...sprint.name.trim()].length > MAX_TEAM_NAME_LENGTH)
+  ) {
+    errors.push({
+      field: "name",
+      code: "INVALID_NAME",
+      message: `Use ${MAX_TEAM_NAME_LENGTH} characters or fewer, without NUL characters.`,
     });
   }
 

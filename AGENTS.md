@@ -91,6 +91,7 @@ src/
 │   ├── retro/                    # vote tallying, action item selection
 │   ├── github/                   # GitHub login and profile rules, webhook payload → Activity mapping
 │   ├── realtime/                 # team channel name (team-{teamId}) and the events it carries
+│   ├── validation/               # shared text rules: noNul for user text, databaseTextSchema for ids from the URL
 │   └── export/                   # sprint summary → Markdown
 ├── server/                       # everything with side effects
 │   ├── db.ts                     # single Prisma client
@@ -310,7 +311,7 @@ Standups, planning notes and retros for our own team are recorded in SprintProof
 
 ### Do
 
-- Validate every external input with Zod: request bodies, query params, route params, webhook payloads.
+- Validate every external input with Zod: request bodies, query params, route params, webhook payloads. User text uses the shared `noNul` check from `lib/validation/text.ts`, because PostgreSQL can't store a NUL character. An id from the URL that can't be valid is treated as unknown (the same 403 or 404), never a 500.
 - Call `requireTeamRole(teamId, roles)` at the top of every route handler and server page that touches team data (`requireApiTeamRole(request, teamId, roles)` in the three token endpoints).
 - Put logic in `src/lib/` as pure functions and test it first.
 - Use design tokens from `DESIGN.md` through Tailwind classes.
@@ -396,3 +397,4 @@ Standups, planning notes and retros for our own team are recorded in SprintProof
 | 2026-11-08 | Ziqi (Odie) Yang | Architecture tree lists the API token files added in #16: `api/v1/tokens/`, `lib/api-tokens/`, `server/api-tokens.ts`, `repositories/api-tokens.ts`, `components/api-tokens/` and `ConfirmDialog` in `components/ui/` (#16) | Yunhong's review of PR #44: the rules should match the code |
 | 2026-11-09 | Ziqi (Odie) Yang | Architecture tree lists the public API files added in #16 (`app/api-docs/`, the summary and standups routes, `lib/api/`, `server/openapi-spec.ts`, `components/api-docs/`); Key patterns: `requireApiTeamRole()` and `parsePaginationQuery()`, tokens only read, routes and `openapi.yaml` change together (#16) | Issue #16: public API v1. The rules should match the code |
 | 2026-11-09 | Ziqi (Odie) Yang | Standups: a standup counts in the sprint whose dates contain its day and moves with it when sprint dates change (§1, PRD R2 and US-3, README Counting Rules) (#56) | Issue #56, from Yunhong's review of PR #51: editing sprint dates left standups outside their sprint and allowed two on one day. Standups now belong to a team and a day, not a stored sprint |
+| 2026-11-09 | Ziqi (Odie) Yang | §4: user text rejects NUL through `lib/validation/text.ts`, and an invalid id from the URL is treated as unknown; architecture tree lists `lib/validation/`. PRD US-3: sprint names are trimmed and at most 100 characters, sprint dates fall in 2000–2100 (#74) | Issue #74, from the Nov 9 bug audit: a NUL character, a year like 0026 or a very long sprint name passed validation and then returned 500 |
