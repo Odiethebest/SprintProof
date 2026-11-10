@@ -51,6 +51,7 @@ describe("triggerTeamEvent", () => {
       secret: "test-pusher-secret",
       cluster: "mt1",
       useTLS: true,
+      timeout: 2000,
     });
     expect(trigger).toHaveBeenCalledExactlyOnceWith(
       "team-team-1",
@@ -78,6 +79,7 @@ describe("triggerTeamEvent", () => {
       host: "localhost",
       port: "6001",
       useTLS: false,
+      timeout: 2000,
     });
     expect(trigger).toHaveBeenCalledExactlyOnceWith(
       "team-team-1",

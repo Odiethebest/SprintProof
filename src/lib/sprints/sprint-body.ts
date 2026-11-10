@@ -1,3 +1,5 @@
+import { MAX_TEAM_NAME_LENGTH } from "@/lib/teams/create-team";
+import { noNul } from "@/lib/validation/text";
 import { z } from "zod";
 
 export const DEFAULT_STANDUPS_PER_PERSON = 3;
@@ -12,16 +14,23 @@ function textField({
   requiredMessage: string;
   typeMessage: string;
 }) {
-  return z.string({
-    error: (issue) =>
-      issue.input === undefined ? requiredMessage : typeMessage,
-  });
+  return z
+    .string({
+      error: (issue) =>
+        issue.input === undefined ? requiredMessage : typeMessage,
+    })
+    .check(noNul);
 }
 
 const nameField = textField({
   requiredMessage: "Sprint name is required.",
   typeMessage: "Sprint name must be text.",
-});
+})
+  .trim()
+  .max(
+    MAX_TEAM_NAME_LENGTH,
+    `Use ${MAX_TEAM_NAME_LENGTH} characters or fewer.`
+  );
 const startDateField = textField({
   requiredMessage: "Start date is required.",
   typeMessage: "Start date must be a valid calendar date in YYYY-MM-DD format.",

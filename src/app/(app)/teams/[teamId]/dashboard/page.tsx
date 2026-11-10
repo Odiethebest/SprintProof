@@ -26,16 +26,13 @@ import {
 import { LiveAnnouncer } from "@/components/dashboard/live-announcer";
 import { buildLiveUpdates } from "@/components/dashboard/live-updates";
 import { RequirementSummary } from "@/components/dashboard/requirement-summary";
-import { AppHeader } from "@/components/layout/app-header";
 import { PageHeader } from "@/components/layout/page-header";
 import { PageLoading } from "@/components/layout/page-loading";
 import {
-  buildSprintSelector,
   formatDateRange,
   formatShortDate,
   readRequestedSprintId,
 } from "@/components/layout/sprint-navigation";
-import { TeamLiveProvider } from "@/components/realtime/team-live-provider";
 import {
   EMPTY_STATE_LINK_CLASSES,
   EmptyState,
@@ -133,32 +130,10 @@ async function TeamDashboard({
     timeZone: team.timezone,
   });
   const isReadOnly = access.role === "INSTRUCTOR";
-  const header = (
-    <AppHeader
-      team={team}
-      user={user}
-      role={access.role}
-      teamNav={{
-        teamId: team.id,
-        current: "dashboard",
-        requestedSprintId:
-          sprint !== null && sprint.id === requestedSprintId
-            ? requestedSprintId
-            : null,
-      }}
-      sprintSelector={buildSprintSelector({
-        sprints,
-        selectedId: sprint?.id ?? null,
-        now,
-        timeZone: team.timezone,
-      })}
-    />
-  );
 
   if (sprint === null) {
     return (
       <>
-        {header}
         <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-8 md:px-6">
           <PageHeader
             title="Dashboard"
@@ -190,8 +165,7 @@ async function TeamDashboard({
   // The empty state above has nothing a teammate's standup or push could
   // change, so only a sprint's dashboard listens for live updates.
   return (
-    <TeamLiveProvider teamId={team.id}>
-      {header}
+    <>
       <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-8 md:px-6">
         {/* A new sprint remounts it: no count highlights or announcements for the switch. */}
         <SprintDashboard
@@ -203,7 +177,7 @@ async function TeamDashboard({
           now={now}
         />
       </main>
-    </TeamLiveProvider>
+    </>
   );
 }
 
