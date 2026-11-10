@@ -7,11 +7,18 @@ import {
 import { findTeamByRepo } from "@/server/repositories/teams";
 import { recordWebhookEvent } from "@/server/repositories/activities";
 import { triggerTeamEvent } from "@/server/realtime";
+import { describeDatabaseError } from "@/server/prisma-errors";
 
 export async function POST(request: Request): Promise<Response> {
   try {
     return await handleWebhook(request);
-  } catch {
+  } catch (error) {
+    // The 500 makes GitHub retry; the log says which delivery failed and why,
+    // without the payload (AGENTS.md §4 Security requirements).
+    console.error(
+      `Couldn't store webhook delivery ${request.headers.get("x-github-delivery") ?? "(no id)"}:`,
+      describeDatabaseError(error)
+    );
     return errorResponse({
       status: 500,
       code: "WEBHOOK_STORAGE_FAILED",
