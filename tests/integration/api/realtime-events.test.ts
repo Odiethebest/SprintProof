@@ -13,6 +13,7 @@ import {
   insertTeam,
   insertUser,
 } from "../../factories/db";
+import { withFailingActivityInserts } from "../helpers/activity-inserts";
 import {
   apiRequest,
   routeContext,
@@ -166,6 +167,7 @@ describe("real-time events", () => {
 
     afterEach(() => {
       vi.unstubAllEnvs();
+      vi.restoreAllMocks();
     });
 
     async function connectedTeam() {
@@ -194,7 +196,7 @@ describe("real-time events", () => {
       });
     });
 
-    it("doesn't trigger again when GitHub redelivers the same delivery", async () => {
+    it("doesn't trigger again when the same delivery is redelivered", async () => {
       // Arrange
       await connectedTeam();
       await sendWebhook({
@@ -233,30 +235,78 @@ describe("real-time events", () => {
       expect(triggerTeamEvent).not.toHaveBeenCalled();
     });
 
-    it("returns 500 when storing an activity fails so GitHub can retry", async () => {
+    // GitHub doesn't redeliver a failed delivery on its own. The 500 marks it
+    // failed in the webhook's Recent Deliveries, where a lead can redeliver it.
+    it("returns 500 when storing an activity fails, so the delivery shows as failed on GitHub", async () => {
+      // Arrange
       await connectedTeam();
-      const payload = structuredClone(pushPayload);
-      payload.commits[0].message = "bad\u0000text";
-      const response = await sendWebhook({
-        event: "push",
-        payload,
-        deliveryId: "failed-write",
-      });
+      vi.spyOn(console, "error").mockImplementation(() => {});
+
+      // Act
+      const response = await withFailingActivityInserts(() =>
+        sendWebhook({
+          event: "push",
+          payload: pushPayload,
+          deliveryId: "failed-write",
+        })
+      );
+
+      // Assert
       expect(response.status).toBe(500);
+      expect(await response.json()).toEqual({
+        error: {
+          code: "WEBHOOK_STORAGE_FAILED",
+          message:
+            "Couldn't store this delivery. Redeliver it from the webhook's Recent Deliveries on GitHub.",
+        },
+      });
       expect(triggerTeamEvent).not.toHaveBeenCalled();
     });
 
+    it("triggers activity.created when a delivery that failed is redelivered", async () => {
+      // Arrange
+      const team = await connectedTeam();
+      vi.spyOn(console, "error").mockImplementation(() => {});
+      await withFailingActivityInserts(() =>
+        sendWebhook({
+          event: "push",
+          payload: pushPayload,
+          deliveryId: "redelivered-after-failure",
+        })
+      );
+
+      // Act
+      const response = await sendWebhook({
+        event: "push",
+        payload: pushPayload,
+        deliveryId: "redelivered-after-failure",
+      });
+
+      // Assert
+      expect(response.status).toBe(200);
+      expect(triggerTeamEvent).toHaveBeenCalledExactlyOnceWith({
+        teamId: team.id,
+        event: "activity.created",
+      });
+    });
+
     it("logs which delivery failed without logging its payload", async () => {
+      // Arrange: the database error's detail quotes the failing row, title included
       await connectedTeam();
       const log = vi.spyOn(console, "error").mockImplementation(() => {});
       const payload = structuredClone(pushPayload);
-      payload.commits[0].message = "private-commit-message\u0000";
-      await sendWebhook({ event: "push", payload, deliveryId: "logged-write" });
+      payload.commits[0].message = "private-commit-message";
+
+      // Act
+      await withFailingActivityInserts(() =>
+        sendWebhook({ event: "push", payload, deliveryId: "logged-write" })
+      );
+
+      // Assert
       expect(log).toHaveBeenCalledTimes(1);
       const line = log.mock.calls[0].map(String).join(" ");
       expect(line).toContain("logged-write");
       expect(line).not.toContain("private-commit-message");
-      log.mockRestore();
     });
 
     it("doesn't trigger an event for a ping", async () => {
