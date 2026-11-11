@@ -1,4 +1,4 @@
-import { expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { computeRequirementStatus } from "@/lib/checks/requirement-status";
 import { getSprintWindow } from "@/lib/sprints";
 import {
@@ -9,6 +9,13 @@ import {
 } from "../../factories";
 import { buildSprintSummary } from "@/lib/stats/sprint-summary";
 import { createTeamMember } from "../../factories/member";
+import {
+  HOST_TIME_ZONES,
+  TEAM_TIME_ZONES,
+  addDays,
+  listIntlDaysNearOffsetChanges,
+  withHostTimeZone,
+} from "../sprints/time-zone-cases";
 
 it("counts stored standup dates even when two days were persisted after the same midnight", () => {
   const sprint = createSprint();
@@ -111,3 +118,132 @@ for (const timeZone of ["America/Santiago", "America/Nuuk"]) {
     }
   });
 }
+
+const DAYS_BY_TIME_ZONE = TEAM_TIME_ZONES.map((timeZone) => ({
+  timeZone,
+  days: listIntlDaysNearOffsetChanges({
+    timeZone,
+    fromYear: 2025,
+    toYear: 2027,
+  }),
+}));
+
+// Sprint dates as the callers pass them: Prisma reads a DATE column as midnight UTC.
+function toDbDate(date: string): Date {
+  return new Date(`${date}T00:00:00.000Z`);
+}
+
+// AGENTS.md §1 Timezone: the same inputs give the same counts and statuses on
+// any machine, whatever its own time zone (#99).
+describe.each(HOST_TIME_ZONES)(
+  "computeRequirementStatus on a host in %s",
+  (hostTimeZone) => {
+    it.each(DAYS_BY_TIME_ZONE)(
+      "counts reviews and standups inside the day bounds Intl reports near the 2025–2027 offset changes in $timeZone",
+      ({ timeZone, days }) => {
+        // Arrange: a one-day sprint, reviews just outside and on its first and
+        // last instants, standups on the day before, the day and the day after
+        const member = createMember({ userId: "user-1", githubLogin: "alice" });
+
+        // Act
+        const observed = withHostTimeZone(hostTimeZone, () =>
+          days.map(({ date, start, nextStart }) => {
+            const sprint = createSprint({
+              startDate: toDbDate(date),
+              endDate: toDbDate(date),
+              timezone: timeZone,
+              standupsPerPerson: 3,
+              reviewsPerPerson: 5,
+            });
+            const reviewTimes = [
+              start.getTime() - 1,
+              start.getTime(),
+              nextStart.getTime() - 1,
+              nextStart.getTime(),
+            ];
+            const activities = reviewTimes.map((time, index) =>
+              createActivity({
+                actorLogin: "alice",
+                prNumber: index + 1,
+                prAuthorLogin: "bob",
+                createdAt: new Date(time),
+              })
+            );
+            const standups = [-1, 0, 1].map((days) =>
+              createStandup({
+                userId: member.userId,
+                date: addDays(date, days),
+              })
+            );
+            const statusAt = (time: number) =>
+              computeRequirementStatus({
+                sprint,
+                members: [member],
+                standups,
+                activities,
+                now: new Date(time),
+              })[0];
+            const onLastInstant = statusAt(nextStart.getTime() - 1);
+            return {
+              date,
+              reviews: onLastInstant.reviews.count,
+              standups: onLastInstant.standups.count,
+              statusOnLastInstant: onLastInstant.standups.status,
+              statusAfterEnd: statusAt(nextStart.getTime()).standups.status,
+            };
+          })
+        );
+
+        // Assert: the reviews on the first and last instants and the standup on the day
+        expect(observed).toEqual(
+          days.map(({ date }) => ({
+            date,
+            reviews: 2,
+            standups: 1,
+            statusOnLastInstant: "AT_RISK",
+            statusAfterEnd: "MISSED",
+          }))
+        );
+      }
+    );
+
+    it.each(DAYS_BY_TIME_ZONE)(
+      "counts days left from the day starts Intl reports near the 2025–2027 offset changes in $timeZone",
+      ({ timeZone, days }) => {
+        // Arrange: a sprint from `date` through the day after, nothing done yet
+        const member = createMember({ userId: "user-1", githubLogin: "alice" });
+
+        // Act: just before and at the start of `date`
+        const observed = withHostTimeZone(hostTimeZone, () =>
+          days.map(({ date, start }) => {
+            const sprint = createSprint({
+              startDate: toDbDate(date),
+              endDate: toDbDate(addDays(date, 1)),
+              timezone: timeZone,
+              standupsPerPerson: 3,
+              reviewsPerPerson: 5,
+            });
+            return {
+              date,
+              statuses: [start.getTime() - 1, start.getTime()].map(
+                (time) =>
+                  computeRequirementStatus({
+                    sprint,
+                    members: [member],
+                    standups: [],
+                    activities: [],
+                    now: new Date(time),
+                  })[0].standups.status
+              ),
+            };
+          })
+        );
+
+        // Assert: 3 days left (on track) the day before, 2 (at risk) once `date` starts
+        expect(observed).toEqual(
+          days.map(({ date }) => ({ date, statuses: ["ON_TRACK", "AT_RISK"] }))
+        );
+      }
+    );
+  }
+);
