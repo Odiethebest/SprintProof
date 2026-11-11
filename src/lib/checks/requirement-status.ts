@@ -1,6 +1,10 @@
 import { tz } from "@date-fns/tz";
 import { format } from "date-fns";
-import { getDayStart } from "@/lib/sprints/day-start";
+import {
+  getSprintState,
+  getSprintWindow,
+  type SprintDateRange,
+} from "@/lib/sprints";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -76,21 +80,6 @@ function toDayNumber(date: string): number {
   return Date.parse(`${date}T00:00:00.000Z`) / DAY_MS;
 }
 
-// Counting rule: sprint boundaries in team timezone (AGENTS.md §1, R1)
-function getSprintStartBoundary(date: string, timezone: string): Date {
-  return getDayStart({ date, timeZone: timezone });
-}
-
-// Counting rule: the sprint ends at the start of the next day minus 1 ms (AGENTS.md §1, R1)
-function getSprintEndBoundary(date: string, timezone: string): Date {
-  const nextDate = new Date((toDayNumber(date) + 1) * DAY_MS)
-    .toISOString()
-    .slice(0, 10);
-  return new Date(
-    getDayStart({ date: nextDate, timeZone: timezone }).getTime() - 1
-  );
-}
-
 // Requirement status: MET, ON_TRACK, AT_RISK (<= 2 days left), MISSED (AGENTS.md §1, R5)
 function computeRequirementProgress(
   count: number,
@@ -120,18 +109,21 @@ export function computeRequirementStatus(
 ): MemberRequirementStatus[] {
   const { sprint, members, standups, activities, now } = options;
 
-  const firstDate = toCalendarDate(sprint.startDate, sprint.timezone);
-  const lastDate = toCalendarDate(sprint.endDate, sprint.timezone);
-  const sprintStart = getSprintStartBoundary(firstDate, sprint.timezone);
-  const sprintEnd = getSprintEndBoundary(lastDate, sprint.timezone);
-
-  const isSprintEnded = now.getTime() > sprintEnd.getTime();
-  const today = format(now, "yyyy-MM-dd", { in: tz(sprint.timezone) });
+  const timeZone = sprint.timezone;
+  const sprintDates: SprintDateRange = {
+    startDate: toCalendarDate(sprint.startDate, timeZone),
+    endDate: toCalendarDate(sprint.endDate, timeZone),
+  };
+  // Counting rule: sprint boundaries in team timezone (AGENTS.md §1, R1)
+  const window = getSprintWindow({ sprint: sprintDates, timeZone });
+  const isSprintEnded =
+    getSprintState({ sprint: sprintDates, now, timeZone }) === "ENDED";
+  const today = format(now, "yyyy-MM-dd", { in: tz(timeZone) });
   // Days left = sprint end date minus today's date in team timezone + 1 (AGENTS.md §1, R5)
-  const daysLeft = toDayNumber(lastDate) - toDayNumber(today) + 1;
+  const daysLeft = toDayNumber(sprintDates.endDate) - toDayNumber(today) + 1;
 
-  const startTime = sprintStart.getTime();
-  const endTime = sprintEnd.getTime();
+  const startTime = window.start.getTime();
+  const endTime = window.end.getTime();
 
   return members.map((member) => {
     // Counting rule: at most one standup per person per calendar day in team timezone (AGENTS.md §1, R2)
@@ -139,7 +131,10 @@ export function computeRequirementStatus(
     const standupDays = new Set<string>();
 
     for (const standup of memberStandups) {
-      if (standup.date >= firstDate && standup.date <= lastDate) {
+      if (
+        standup.date >= sprintDates.startDate &&
+        standup.date <= sprintDates.endDate
+      ) {
         standupDays.add(standup.date);
       }
     }
