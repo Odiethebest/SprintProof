@@ -268,6 +268,26 @@ describe("buildSprintSummaryMarkdown", () => {
     expect(markdown).toContain("**Blockers:** Waiting on a review.");
   });
 
+  it("escapes a backslash in a name, so a typed \\| can't end the table cell", () => {
+    // Arrange: the name as typed is `Ziqi \| Odie`
+    const summary = createSprintSummary({
+      members: [createMemberSummary({ name: "Ziqi \\| Odie" })],
+    });
+
+    // Act
+    const markdown = buildSprintSummaryMarkdown({
+      team,
+      summary,
+      standups: [],
+      audience: "TEAM",
+    });
+
+    // Assert: `\\` shows one backslash, `\|` one pipe, all in the first cell
+    expect(section(markdown, "## Requirements")[2]).toContain(
+      "| Ziqi \\\\\\| Odie | @user1 |"
+    );
+  });
+
   it("says how many days are left in a running sprint", () => {
     // Arrange
     const summary = createSprintSummary();
