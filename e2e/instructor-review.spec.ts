@@ -88,7 +88,8 @@ test.describe("Instructor review", () => {
     const main = instructor.getByRole("main");
     await expect(main.getByText("Read-only")).toBeVisible();
     await expect(
-      main.getByText("3 standups and 5 PR reviews per person")
+      // Exact: the export preview holds the same words.
+      main.getByText("3 standups and 5 PR reviews per person", { exact: true })
     ).toBeVisible();
 
     // Assert: one row per member, without the instructor
@@ -115,7 +116,7 @@ test.describe("Instructor review", () => {
     const standups = main.getByRole("region", { name: "Standups" });
     await expect(standups.getByRole("heading", { level: 3 })).toHaveCount(1);
     await expect(standups).toContainText("Build the Markdown export.");
-    await expect(main.getByText(NOT_RECORDED)).toBeVisible();
+    await expect(main.getByText(NOT_RECORDED, { exact: true })).toBeVisible();
 
     // Assert: no edit controls, only the export
     await expect(main.getByRole("textbox")).toHaveCount(0);
@@ -188,10 +189,11 @@ test.describe("Instructor review", () => {
       teamNav(page).getByRole("link", { name: "Review" })
     ).toHaveAttribute("aria-current", "page");
     const main = page.getByRole("main");
-    await expect(main.getByText(NOT_RECORDED)).toBeVisible();
+    await expect(main.getByText(NOT_RECORDED, { exact: true })).toBeVisible();
     await expect(
       main.getByText(
-        "Peer feedback is left out of this page and of the export."
+        "Peer feedback is left out of this page and of the export.",
+        { exact: true }
       )
     ).toBeVisible();
     await expectNoBlockingViolations(page);
