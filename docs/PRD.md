@@ -73,7 +73,7 @@ As a team lead, I want to create sprints with dates and the course's requirement
 As someone who forgets standups, I want a quick three-question check-in that files itself under the right sprint, so the record builds on its own.
 - Yesterday and Today required, Blockers optional.
 - One standup per person per day; submitting again the same day updates it.
-- A form left open past midnight doesn't file under the new day; it says the day changed and offers today's form (#73).
+- A form left open past midnight doesn't file under the new day; it says the day changed and offers today's form, which keeps the text not sent yet (#73, #91).
 - Standups are listed by day, newest first, visible to the whole team.
 
 ### Epic C — Contribution tracking
