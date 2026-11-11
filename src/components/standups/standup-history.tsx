@@ -72,6 +72,33 @@ function StandupEntry({ standup }: { standup: StandupEntryView }) {
 }
 
 // AGENTS.md §2 Standups: grouped by day, newest first, with a count per day.
+// The review page lists a sprint's standups the same way.
+export function StandupDayList({ days }: { days: StandupDayView[] }) {
+  return (
+    <div className="flex flex-col gap-6">
+      {days.map((day) => (
+        <div key={day.date} className="flex flex-col gap-3">
+          <h3 className="flex items-baseline gap-2">
+            <span className="font-mono text-sm font-semibold">
+              {day.dayLabel}
+            </span>
+            <span className="text-xs text-text-muted">
+              {day.standups.length === 1
+                ? "1 standup"
+                : `${day.standups.length} standups`}
+            </span>
+          </h3>
+          <ul className="flex flex-col gap-3">
+            {day.standups.map((standup) => (
+              <StandupEntry key={standup.id} standup={standup} />
+            ))}
+          </ul>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function StandupHistory({
   sprintName,
   days,
@@ -113,27 +140,7 @@ export function StandupHistory({
           )}
         </EmptyState>
       ) : (
-        <div className="flex flex-col gap-6">
-          {days.map((day) => (
-            <div key={day.date} className="flex flex-col gap-3">
-              <h3 className="flex items-baseline gap-2">
-                <span className="font-mono text-sm font-semibold">
-                  {day.dayLabel}
-                </span>
-                <span className="text-xs text-text-muted">
-                  {day.standups.length === 1
-                    ? "1 standup"
-                    : `${day.standups.length} standups`}
-                </span>
-              </h3>
-              <ul className="flex flex-col gap-3">
-                {day.standups.map((standup) => (
-                  <StandupEntry key={standup.id} standup={standup} />
-                ))}
-              </ul>
-            </div>
-          ))}
-        </div>
+        <StandupDayList days={days} />
       )}
     </section>
   );

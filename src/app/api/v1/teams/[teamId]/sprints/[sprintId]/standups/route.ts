@@ -1,6 +1,7 @@
 import { z } from "zod";
 import {
   accessDeniedResponse,
+  catchUnexpectedErrors,
   invalidCursorResponse,
   parseInput,
   parsePaginationQuery,
@@ -15,12 +16,20 @@ const paramsSchema = z.object({
   sprintId: z.string().min(1),
 });
 
+interface Context {
+  params: Promise<{ teamId: string; sprintId: string }>;
+}
+
 // GET: A sprint's standups, newest first, one page at a time. Any member can
 // read them, with a session or an API token (#16).
-export async function GET(
-  request: Request,
-  { params }: { params: Promise<{ teamId: string; sprintId: string }> }
-) {
+export async function GET(request: Request, context: Context) {
+  return catchUnexpectedErrors({
+    route: "GET /api/v1/teams/{teamId}/sprints/{sprintId}/standups",
+    handler: () => handleGet(request, context),
+  });
+}
+
+async function handleGet(request: Request, { params }: Context) {
   const parsedParams = parseInput({
     input: await params,
     schema: paramsSchema,

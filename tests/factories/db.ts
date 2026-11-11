@@ -44,8 +44,7 @@ export async function insertTeam(
     data: {
       name: `Team ${n}`,
       repoFullName: `owner${n}/repo${n}`,
-      repoId:
-        repoId !== undefined && repoId !== null ? BigInt(repoId) : repoId,
+      repoId: repoId !== undefined && repoId !== null ? BigInt(repoId) : repoId,
       ...rest,
     },
   });
@@ -55,6 +54,7 @@ export async function insertMembership(input: {
   userId: string;
   teamId: string;
   role: TeamRole;
+  createdAt?: Date;
 }) {
   return db.membership.create({ data: input });
 }
