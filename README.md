@@ -387,7 +387,7 @@ Each member gets 3 votes per retro, at most 1 per item. The top 3 "To improve" i
 | Requirement checks | Done | Met / On track / At risk / Missed in `src/lib/checks/` (PR #30), shown on the dashboard (PR #58) |
 | Retros and action items | Planned | Voting, top 3 "To improve" items carried into the next sprint (#13) |
 | Peer feedback | Planned | Instructor-only, enforced on the server (#14) |
-| Instructor view and Markdown export | Planned | Read-only review page, `sprint-N-summary.md` download (#15) |
+| Instructor view and Markdown export | Partly done | Read-only review page at `/review/[teamId]` for leads and instructors: requirements per member with status, standups by day, and a `sprint-N-summary.md` export (preview, copy, download) in the `docs/sprints/` style (PR #108). Retro items, action items and instructor-only peer feedback wait on #13 and #14; until then the page and the export say they aren't recorded yet |
 | Public REST API | Done | Personal tokens stored as SHA-256 hashes; read-only Bearer access to sprints, sprint summaries and standups; cursor pagination; Swagger UI at `/api-docs` (PRs #64, #65, #66); inputs that used to return 500 are rejected (PR #82) |
 
 ---
