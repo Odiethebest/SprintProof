@@ -51,7 +51,7 @@ export interface MemberSummary extends SummaryMemberInput {
 }
 
 export interface SprintSummary {
-  sprint: SummarySprintInput & { state: SprintState; daysLeft: number };
+  sprint: SummarySprintInput & { state: SprintState; daysLeft: number | null };
   countsAsOf: Date;
   members: MemberSummary[];
 }
@@ -107,6 +107,10 @@ export function buildSprintSummary({
   });
 
   const state = getSprintState({ sprint, now, timeZone });
+  // Days left counts down a running sprint (rule R5). Before the start it would
+  // be longer than the sprint itself, so it's null like the statuses (#92).
+  const daysLeft =
+    state === "UPCOMING" ? null : getDaysLeft({ sprint, now, timeZone });
   return {
     sprint: {
       id: sprint.id,
@@ -116,7 +120,7 @@ export function buildSprintSummary({
       standupsPerPerson: sprint.standupsPerPerson,
       reviewsPerPerson: sprint.reviewsPerPerson,
       state,
-      daysLeft: getDaysLeft({ sprint, now, timeZone }),
+      daysLeft,
     },
     countsAsOf: now,
     members: contributors.map((member, index) => ({
