@@ -268,7 +268,10 @@ async function SprintReview({
     day: "numeric",
     timeZone,
   }).format(summary.countsAsOf);
-  const isSprintRunning = summary.sprint.state === "CURRENT";
+  // The selector lists only sprints that have started, so a sprint here is
+  // running or has ended; days left is null only before a start (#92).
+  const daysLeft =
+    summary.sprint.state === "CURRENT" ? summary.sprint.daysLeft : null;
 
   return (
     <>
@@ -283,9 +286,9 @@ async function SprintReview({
               </span>
             </span>
             <span className="font-mono tabular-nums">
-              {isSprintRunning
-                ? `${pluralize(summary.sprint.daysLeft, "day")} left`
-                : `Ended ${formatShortDate(sprint.endDate)}`}
+              {daysLeft === null
+                ? `Ended ${formatShortDate(sprint.endDate)}`
+                : `${pluralize(daysLeft, "day")} left`}
             </span>
             <span>
               {pluralize(sprint.standupsPerPerson, "standup")} and{" "}

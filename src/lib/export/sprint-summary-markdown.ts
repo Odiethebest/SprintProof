@@ -71,10 +71,13 @@ function formatProgress(progress: MemberSummary["standups"]): string {
 }
 
 function describeSprintState(sprint: SprintSummary["sprint"]): string {
-  if (sprint.state === "CURRENT") {
-    return `${pluralize(sprint.daysLeft, "day")} left`;
+  if (sprint.state === "ENDED") {
+    return "Ended";
   }
-  return sprint.state === "ENDED" ? "Ended" : "Not started";
+  // Days left is null only before the sprint starts (#92).
+  return sprint.daysLeft === null
+    ? "Not started"
+    : `${pluralize(sprint.daysLeft, "day")} left`;
 }
 
 function buildHeader({
