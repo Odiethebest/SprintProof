@@ -1,0 +1,188 @@
+name: Database
+
+# After every push to main: apply migrations to the preview database, then to
+# production, then wait for production to serve the new commit. Daily and on
+# demand: run SELECT 1 on both databases, because Supabase pauses a free
+# project after about a week of low activity (decision 002).
+#
+# Each database's connection string is a DATABASE_URL secret in the GitHub
+# environment of the same name (README, Deployment). Without it, the job adds a
+# notice and skips, so a missing secret never turns main red.
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "43 15 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PRODUCTION_URL: https://sprintproof.vercel.app
+
+jobs:
+  # The jobs below need this one, so they also run only after a push.
+  migrate-preview:
+    name: Migrate preview database
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Only for the secret: Vercel deploys the app, so no GitHub deployment is
+    # recorded.
+    environment:
+      name: preview
+      deployment: false
+    # One migration per database at a time, never cancelled midway. A third
+    # push replaces a run that's still waiting, which loses nothing: migrate
+    # deploy applies every pending migration.
+    concurrency:
+      group: database-migrate-preview
+      cancel-in-progress: false
+    env:
+      # "true" or "false", never the value: `if:` can't read secrets.
+      HAS_DATABASE_URL: ${{ secrets.DATABASE_URL != '' }}
+    steps:
+      - name: Skip without a DATABASE_URL secret
+        if: env.HAS_DATABASE_URL != 'true'
+        run: echo "::notice title=Preview migrations skipped::The preview environment has no DATABASE_URL secret, so no migrations were applied. Add it with gh secret set DATABASE_URL --env preview (README, Deployment)."
+
+      - uses: actions/checkout@v4
+        if: env.HAS_DATABASE_URL == 'true'
+
+      - uses: actions/setup-node@v4
+        if: env.HAS_DATABASE_URL == 'true'
+        with:
+          node-version: 22
+          cache: npm
+
+      # Without the secret: install scripts never see it.
+      - name: Install dependencies
+        if: env.HAS_DATABASE_URL == 'true'
+        run: npm ci
+
+      - name: Apply migrations
+        if: env.HAS_DATABASE_URL == 'true'
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: npx prisma migrate deploy
+
+  # After preview, so a migration that fails there never reaches production.
+  migrate-production:
+    name: Migrate production database
+    needs: migrate-preview
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: production
+      deployment: false
+    concurrency:
+      group: database-migrate-production
+      cancel-in-progress: false
+    env:
+      HAS_DATABASE_URL: ${{ secrets.DATABASE_URL != '' }}
+    steps:
+      - name: Skip without a DATABASE_URL secret
+        if: env.HAS_DATABASE_URL != 'true'
+        run: echo "::notice title=Production migrations skipped::The production environment has no DATABASE_URL secret, so no migrations were applied. Add it with gh secret set DATABASE_URL --env production (README, Deployment)."
+
+      - uses: actions/checkout@v4
+        if: env.HAS_DATABASE_URL == 'true'
+
+      - uses: actions/setup-node@v4
+        if: env.HAS_DATABASE_URL == 'true'
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        if: env.HAS_DATABASE_URL == 'true'
+        run: npm ci
+
+      - name: Apply migrations
+        if: env.HAS_DATABASE_URL == 'true'
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: npx prisma migrate deploy
+
+  # Vercel builds production from the same push. Passes once /api/health
+  # answers ok with this commit, or with a later one that includes it (a
+  # quick second merge can go live first).
+  smoke-test:
+    name: Production smoke test
+    needs: migrate-production
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Wait for production to serve this commit
+        env:
+          EXPECTED_COMMIT: ${{ github.sha }}
+          GH_TOKEN: ${{ github.token }}
+          POLL_SECONDS: "15"
+          TIMEOUT_SECONDS: "600"
+        run: |
+          health="$RUNNER_TEMP/health.json"
+          deadline=$((SECONDS + TIMEOUT_SECONDS))
+          while :; do
+            rm -f "$health"
+            code="$(curl --silent --max-time 10 --output "$health" --write-out '%{http_code}' \
+              "$PRODUCTION_URL/api/health" || true)"
+            status="$(jq -r '.status // empty' "$health" 2>/dev/null || true)"
+            commit="$(jq -r '.commit // empty' "$health" 2>/dev/null || true)"
+            error="$(jq -r '.error.code // empty' "$health" 2>/dev/null || true)"
+
+            if [ "$status" = "ok" ] && [ "$commit" = "$EXPECTED_COMMIT" ]; then
+              echo "Production serves $EXPECTED_COMMIT, and its database answers."
+              exit 0
+            fi
+
+            if [ "$status" = "ok" ] && [[ "$commit" =~ ^[0-9a-f]{40}$ ]]; then
+              relation="$(gh api "repos/$GITHUB_REPOSITORY/compare/$EXPECTED_COMMIT...$commit" \
+                --jq .status 2>/dev/null || true)"
+              if [ "$relation" = "ahead" ]; then
+                echo "::notice title=Production smoke test::Production already serves $commit, a later commit that includes $EXPECTED_COMMIT."
+                exit 0
+              fi
+            fi
+
+            last="HTTP ${code:-000}, status ${status:-none}, commit ${commit:-none}${error:+, $error}"
+            if [ "$SECONDS" -ge "$deadline" ]; then
+              echo "::error title=Production smoke test failed::Production didn't serve $EXPECTED_COMMIT with a working database within $((TIMEOUT_SECONDS / 60)) minutes. Last answer from /api/health: $last."
+              echo "Check this commit's production deployment on Vercel."
+              echo "Commit none with status ok: the deployment can't read VERCEL_GIT_COMMIT_SHA. Turn on \"Automatically expose System Environment Variables\" in the Vercel project settings."
+              echo "DATABASE_UNAVAILABLE: production can't reach its database. If Supabase paused the project, resume it from the dashboard (decision 002)."
+              exit 1
+            fi
+            echo "Not yet ($last). Checking again in ${POLL_SECONDS}s."
+            sleep "$POLL_SECONDS"
+          done
+
+  keep-alive:
+    name: Keep ${{ matrix.environment }} database awake
+    if: github.event_name != 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix:
+        environment: [preview, production]
+    environment:
+      name: ${{ matrix.environment }}
+      deployment: false
+    steps:
+      - name: Run SELECT 1
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          TARGET_ENVIRONMENT: ${{ matrix.environment }}
+          PGCONNECT_TIMEOUT: "15"
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::notice title=No ${TARGET_ENVIRONMENT} database check::The ${TARGET_ENVIRONMENT} environment has no DATABASE_URL secret, so nothing kept its database awake. Add it with gh secret set DATABASE_URL --env ${TARGET_ENVIRONMENT} (README, Deployment)."
+            exit 0
+          fi
+          # psql rejects Prisma-only URL parameters such as ?schema=, so drop the
+          # query string; libpq still prefers SSL.
+          if ! psql "${DATABASE_URL%%\?*}" --no-psqlrc --quiet --tuples-only --no-align --command "SELECT 1"; then
+            echo "::error title=${TARGET_ENVIRONMENT} database unreachable::SELECT 1 failed. If Supabase paused the project, resume it from the dashboard (decision 002)."
+            exit 1
+          fi

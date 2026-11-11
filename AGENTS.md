@@ -67,6 +67,7 @@ src/
 │   ├── api-docs/                 # public Swagger UI for docs/api/openapi.yaml; openapi.yaml/ serves the raw file
 │   └── api/
 │       ├── auth/[...nextauth]/
+│       ├── health/               # GET /api/health: SELECT 1 and the deployed commit. Public, outside v1, so not in openapi.yaml
 │       ├── webhooks/github/      # GitHub webhook receiver
 │       └── v1/                   # public, documented REST API (docs/api/openapi.yaml)
 │           ├── teams/            # create a team; [teamId]/invites/ create and revoke links; [teamId]/sprints/ (route.ts and [sprintId]/route.ts, [sprintId]/summary/, [sprintId]/standups/); [teamId]/standups/ post or update today's standup
@@ -104,6 +105,7 @@ src/
 │   ├── api-response.ts           # errorResponse(), parseJsonBody(), accessDeniedResponse(), parsePaginationQuery()
 │   ├── api-tokens.ts             # createPersonalApiToken(): random token, stores only its hash
 │   ├── openapi-spec.ts           # reads docs/api/openapi.yaml for /api-docs
+│   ├── health.ts                 # checkHealth({ database }): the /api/health response; tests pass a client that can't connect
 │   ├── prisma-errors.ts          # isUniqueViolation()
 │   ├── request-origin.ts         # origin for absolute links (invite URLs)
 │   ├── github-client.ts          # Octokit wrapper
@@ -189,8 +191,8 @@ Main Prisma models: `User`, `Team`, `Membership` (role: `LEAD` | `MEMBER` | `INS
   3. End your turn. Don't run `git commit` and don't write implementation code until the developer replies; the developer makes the `test(...)` commit.
 
   An acceptance criterion such as "failing tests committed before implementation" is met by that commit; it isn't a request for you to commit. Tests you add later go in their own `test(...)` commit, not the `feat` commit.
-- **Unit tests (Vitest)** for every function in `src/lib/`. Coverage goal: ≥ 90% lines for `src/lib/`, ≥ 80% overall.
-- **Integration tests (Vitest)** call route handlers directly against a real PostgreSQL test database (reset between test files). Mock only external services at their wrappers: `server/github-client.ts` and `server/realtime.ts`, plus `server/auth-session.ts` to set the signed-in user.
+- **Unit tests (Vitest)** for every function in `src/lib/`. Coverage goal: ≥ 90% lines for `src/lib/`, ≥ 80% overall. CI runs the unit tests with `--coverage` and fails below 90% lines, statements and functions or 85% branches in `src/lib/` (thresholds in `vitest.config.mts`).
+- **Integration tests (Vitest)** call route handlers directly against a real PostgreSQL test database (reset between test files). Mock only external services at their wrappers: `server/github-client.ts` and `server/realtime.ts`, plus `server/auth-session.ts` to set the signed-in user. To test a database outage, pass a Prisma client that can't connect instead of mocking (`tests/integration/api/health.test.ts`).
 - **E2E tests (Playwright)** cover the user flows in section 2. Each flow includes an `@axe-core/playwright` accessibility check with no serious or critical violations.
 - E2E sign-in uses a test-only credentials provider that is enabled **only** when `E2E_TEST_AUTH=true`. It must never be enabled in production; `.github/workflows/production-guard.yml` checks production after every push to `main` and daily. CI runs the E2E suite with one worker because the specs share one database.
 - Test structure: Arrange / Act / Assert. One behavior per test. Names describe behavior: `it("counts three reviews on the same PR as one")`.
@@ -401,3 +403,4 @@ Standups, planning notes and retros for our own team are recorded in SprintProof
 | 2026-11-09 | Ziqi (Odie) Yang | §4: user text rejects NUL through `lib/validation/text.ts`, and an invalid id from the URL is treated as unknown; architecture tree lists `lib/validation/`. PRD US-3: sprint names are trimmed and at most 100 characters, sprint dates fall in 2000–2100 (#74) | Issue #74, from the Nov 9 bug audit: a NUL character, a year like 0026 or a very long sprint name passed validation and then returned 500 |
 | 2026-11-09 | Ziqi (Odie) Yang | Standups count on their stored day; a form opened on an earlier day is rejected with 409 `STANDUP_DAY_CHANGED`; a sprint ends at the start of the next day minus 1 ms; no requirement status before a sprint starts (§1, PRD R1, R2 and R5, README Counting Rules) (#73) | Issue #73, from the Nov 9 bug audit: a standup saved just after midnight was counted on the next day, a form left open overnight filed under the new day, a DST change at midnight moved sprint ends, and the summary API showed upcoming sprints as at risk |
 | 2026-11-11 | Ziqi (Odie) Yang | §4: webhook text (commit messages, PR titles) has NUL removed instead of rejected (#90) | Issue #90, from Yunhong's review of PR #79: a NUL in a commit message or PR title returned 500 on every redelivery, so none of that delivery's activity was counted |
+| 2026-11-11 | Ziqi (Odie) Yang | Architecture tree lists `app/api/health/` and `server/health.ts`; §1 Testing strategy: CI enforces unit test coverage for `src/lib/` (90% lines, statements and functions, 85% branches), and integration tests reach a database outage through a client that can't connect, not a mock (#98) | Issue #98, from the Nov 11 audit of main: migrations were applied by hand, nothing kept the Supabase databases awake, and CI never measured coverage |
