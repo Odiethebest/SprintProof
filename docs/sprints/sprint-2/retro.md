@@ -54,7 +54,7 @@ Sprint goal met? Yes. Creating and joining teams, sprint setup, standups, GitHub
 | Unplanned bug work (17 estimated points across 10 issues) came to more than half of the 30 committed points. #71–#77 alone (16 points) were opened and merged on Nov 9. | |
 | We apply migrations to Supabase by hand after merging. Production ran without #64's `api_tokens` table for about 3 hours, and without #69's standups migration for about 6. | |
 | 8 approvals had no comment beyond "lgtm" or "approved" (#48, #50, #54, #55, #61, #67, #69, #70). Most of these were one-file standup PRs. | |
-| The board's fields don't match the plan. #17 shows 5 points on the board but 3 in `planning.md`, #41 and #62 have no points on the board, and #56 and #68 were never estimated. | |
+| The board's fields drifted from the plan during the sprint. #17 showed 5 points on the board but 3 in `planning.md`, and #41 and #62 had no points on the board until we fixed them on Nov 10. #56 and #68 were never estimated. | |
 
 ## Action items for the next sprint
 <!-- Top 3 "To improve" items by votes (ties: earliest listed). -->
