@@ -1,12 +1,11 @@
 import { tz } from "@date-fns/tz";
 import { format } from "date-fns";
 import {
+  getDaysLeft,
   getSprintState,
   getSprintWindow,
   type SprintDateRange,
 } from "@/lib/sprints";
-
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 export type RequirementStatus = "MET" | "ON_TRACK" | "AT_RISK" | "MISSED";
 
@@ -76,10 +75,6 @@ function toCalendarDate(date: Date, timezone: string): string {
   return format(date, "yyyy-MM-dd", { in: tz(timezone) });
 }
 
-function toDayNumber(date: string): number {
-  return Date.parse(`${date}T00:00:00.000Z`) / DAY_MS;
-}
-
 // Requirement status: MET, ON_TRACK, AT_RISK (<= 2 days left), MISSED (AGENTS.md §1, R5)
 function computeRequirementProgress(
   count: number,
@@ -118,9 +113,8 @@ export function computeRequirementStatus(
   const window = getSprintWindow({ sprint: sprintDates, timeZone });
   const isSprintEnded =
     getSprintState({ sprint: sprintDates, now, timeZone }) === "ENDED";
-  const today = format(now, "yyyy-MM-dd", { in: tz(timeZone) });
   // Days left = sprint end date minus today's date in team timezone + 1 (AGENTS.md §1, R5)
-  const daysLeft = toDayNumber(sprintDates.endDate) - toDayNumber(today) + 1;
+  const daysLeft = getDaysLeft({ sprint: sprintDates, now, timeZone });
 
   const startTime = window.start.getTime();
   const endTime = window.end.getTime();
