@@ -10,7 +10,7 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run tests/unit",
-    "test:integration": "vitest run --config vitest.config.integration.mts --passWithNoTests",
+    "test:integration": "vitest run --config vitest.config.integration.mts",
     "test:e2e": "playwright test",
     "format": "prettier --write ."
   },

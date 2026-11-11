@@ -84,8 +84,31 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # Fails below the coverage thresholds for src/lib/ in vitest.config.mts
+      # (AGENTS.md §1 Testing strategy).
       - name: Unit tests
-        run: npm test
+        run: npm test -- --coverage
+
+      # Also runs after a coverage failure, to show the numbers that missed.
+      # Vitest writes no report when a test fails.
+      - name: Coverage summary
+        if: ${{ !cancelled() }}
+        run: |
+          summary=coverage/coverage-summary.json
+          if [ ! -f "$summary" ]; then
+            echo "No coverage report: a unit test failed before coverage was measured." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          {
+            echo "### Unit test coverage (src/lib/)"
+            echo
+            echo "| Metric | Coverage | Covered |"
+            echo "| --- | --- | --- |"
+            jq -r '.total | ("lines", "statements", "functions", "branches") as $metric
+              | "| \($metric | (.[0:1] | ascii_upcase) + .[1:]) | \(.[$metric].pct)% | \(.[$metric].covered) / \(.[$metric].total) |"' "$summary"
+            echo
+            echo "The job fails below the thresholds in \`vitest.config.mts\`."
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Integration tests
         run: npm run test:integration

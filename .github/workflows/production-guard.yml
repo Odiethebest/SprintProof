@@ -1,8 +1,8 @@
 name: Production guard
 
 # Checks that production never offers the test-only sign-in provider
-# (AGENTS.md §1 Testing strategy). Not on PRs: a production outage
-# shouldn't turn every PR red.
+# (AGENTS.md §1 Testing strategy), and daily that /api/health answers ok.
+# Not on PRs: a production outage shouldn't turn every PR red.
 on:
   push:
     branches: [main]
@@ -38,5 +38,27 @@ jobs:
 
           if echo "$providers" | jq -e 'has("e2e-credentials")' > /dev/null; then
             echo "::error::Production offers the test sign-in provider. Remove E2E_TEST_AUTH from Vercel production and redeploy."
+            exit 1
+          fi
+
+  # Its own job, so a database outage can't hide the sign-in check above. Not
+  # after a push: the Database workflow's smoke test waits for the new
+  # deployment instead.
+  health:
+    name: Production health
+    if: github.event_name != 'push'
+    runs-on: ubuntu-latest
+    steps:
+      # The health check runs SELECT 1, which also keeps the production
+      # database awake without any secret: Supabase pauses a free project
+      # after about a week of low activity (decision 002).
+      - name: Check /api/health
+        run: |
+          health="$(curl --silent --show-error --max-time 30 --retry 3 --retry-delay 10 \
+            "$PRODUCTION_URL/api/health" || true)"
+          echo "Health: ${health:0:300}"
+
+          if ! echo "$health" | jq -e '.status == "ok"' > /dev/null 2>&1; then
+            echo "::error::Production's /api/health didn't answer ok. DATABASE_UNAVAILABLE means production can't reach its database: if Supabase paused the project, resume it from the dashboard (decision 002)."
             exit 1
           fi
