@@ -13,8 +13,11 @@ export async function POST(request: Request): Promise<Response> {
   try {
     return await handleWebhook(request);
   } catch (error) {
-    // The 500 makes GitHub retry; the log says which delivery failed and why,
-    // without the payload (AGENTS.md §4 Security requirements).
+    // GitHub doesn't redeliver a failed delivery on its own. The 500 marks it
+    // failed in the webhook's Recent Deliveries, where a lead can redeliver it
+    // (https://docs.github.com/webhooks/using-webhooks/handling-failed-webhook-deliveries).
+    // The log says which delivery failed and why, without the payload
+    // (AGENTS.md §4 Security requirements).
     console.error(
       `Couldn't store webhook delivery ${request.headers.get("x-github-delivery") ?? "(no id)"}:`,
       describeDatabaseError(error)
@@ -22,7 +25,8 @@ export async function POST(request: Request): Promise<Response> {
     return errorResponse({
       status: 500,
       code: "WEBHOOK_STORAGE_FAILED",
-      message: "Couldn't store this delivery. Please retry.",
+      message:
+        "Couldn't store this delivery. Redeliver it from the webhook's Recent Deliveries on GitHub.",
     });
   }
 }

@@ -35,6 +35,11 @@ export default defineConfig({
       NEXT_PUBLIC_PUSHER_HOST:
         process.env.NEXT_PUBLIC_PUSHER_HOST ?? "localhost",
       NEXT_PUBLIC_PUSHER_PORT: process.env.NEXT_PUBLIC_PUSHER_PORT ?? "6001",
+      // A fixed test value, not a secret: e2e/github-activity.spec.ts signs
+      // its webhook deliveries with the same one.
+      GITHUB_WEBHOOK_SECRET:
+        process.env.GITHUB_WEBHOOK_SECRET ??
+        "e2e-webhook-secret-not-a-real-secret",
     },
   },
 });

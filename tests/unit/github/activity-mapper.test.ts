@@ -369,6 +369,62 @@ describe("mapWebhookToActivities", () => {
     });
   });
 
+  // PostgreSQL text can't store NUL, and a redelivery carries the same text, so
+  // rejecting it would drop the event for good. The mapper removes it (#90).
+  describe("NUL characters in webhook text", () => {
+    it("removes NUL characters from a commit message and maps the commit as usual", () => {
+      const [activity] = activitiesFor({
+        event: "push",
+        payload: pushWith({
+          ...pushCommit,
+          message:
+            "feat: add\u0000 feature\u0000\n\nDetailed\u0000 explanation",
+        }),
+      });
+
+      expect(activity).toEqual({
+        type: "COMMIT",
+        actorLogin: "alice",
+        prNumber: null,
+        prAuthorLogin: null,
+        sha: "1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b",
+        title: "feat: add feature",
+        occurredAt: new Date("2026-11-05T15:30:00Z"),
+      });
+    });
+
+    it("stores no title for a commit whose first line is only NUL characters", () => {
+      const [activity] = activitiesFor({
+        event: "push",
+        payload: pushWith({ ...pushCommit, message: "\u0000\u0000\nDetails" }),
+      });
+
+      expect(activity.title).toBeNull();
+    });
+
+    it.each([
+      ["an opened pull request", "pull_request", prOpenedPayload],
+      ["a merged pull request", "pull_request", prMergedPayload],
+      ["a submitted review", "pull_request_review", prReviewPayload],
+    ])(
+      "removes NUL characters from the PR title of %s",
+      (_label, event, payload) => {
+        const [activity] = activitiesFor({
+          event,
+          payload: {
+            ...payload,
+            pull_request: {
+              ...payload.pull_request,
+              title: "Add\u0000 webhook receiver\u0000",
+            },
+          },
+        });
+
+        expect(activity.title).toBe("Add webhook receiver");
+      }
+    );
+  });
+
   describe("ping and other events", () => {
     it("returns empty array for ping event", () => {
       expect(
