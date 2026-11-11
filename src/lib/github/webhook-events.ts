@@ -31,12 +31,18 @@ const timestampSchema = z.iso.datetime({ offset: true });
 const accountSchema = z.object({ login: z.string().min(1) });
 const prNumberSchema = z.number().int().positive();
 const actionSchema = z.object({ action: z.string() });
+// PostgreSQL text can't store NUL. User text is rejected with 400 (noNul), but a
+// redelivery carries the same payload, so rejecting this text would drop the
+// event for good. Removing NUL keeps the commit or PR counted (#90).
+const webhookTextSchema = z
+  .string()
+  .transform((text) => text.replaceAll("\u0000", ""));
 
 const pushSchema = z.object({
   commits: z.array(
     z.object({
       id: z.string().min(1),
-      message: z.string(),
+      message: webhookTextSchema,
       timestamp: timestampSchema,
       // GitHub leaves out `username` when the author's email isn't linked to an account.
       author: z.object({ username: z.string().min(1).nullish() }),
@@ -47,7 +53,7 @@ const pushSchema = z.object({
 const openedPullRequestSchema = z.object({
   pull_request: z.object({
     number: prNumberSchema,
-    title: z.string(),
+    title: webhookTextSchema,
     user: accountSchema,
     created_at: timestampSchema,
   }),
@@ -60,7 +66,7 @@ const closedPullRequestSchema = z.object({
 const mergedPullRequestSchema = z.object({
   pull_request: z.object({
     number: prNumberSchema,
-    title: z.string(),
+    title: webhookTextSchema,
     user: accountSchema,
     merged_at: timestampSchema,
     merged_by: accountSchema,
@@ -74,7 +80,7 @@ const submittedReviewSchema = z.object({
   }),
   pull_request: z.object({
     number: prNumberSchema,
-    title: z.string(),
+    title: webhookTextSchema,
     user: accountSchema,
   }),
 });
