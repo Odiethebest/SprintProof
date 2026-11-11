@@ -79,7 +79,7 @@ src/
 │   └── <feature>/                # feature components: auth/, teams/, sprints/, dashboard/, standups/, api-tokens/, api-docs/, retro/...
 ├── lib/                          # PURE business logic — no I/O
 │   ├── auth/                     # sign-in redirects, team role checks, test sign-in input
-│   ├── teams/                    # create-team input (name, owner/name repo, timezone)
+│   ├── teams/                    # create-team input (name, owner/name repo, timezone), team navigation pages and their paths
 │   ├── invites/                  # invite link expiry and validity
 │   ├── api/                      # list pagination: ?limit= and ?cursor= schema, rows → { data, nextCursor }
 │   ├── api-tokens/               # API token name input, SHA-256 hash, masked display (spk_live_••••last4), Bearer header parsing
@@ -124,6 +124,7 @@ e2e/                              # Playwright specs
 - **Layering is one-way:** `app/` → `server/` → `lib/`. Route handlers validate input with Zod, check authorization, call `server/` for data, call `lib/` for logic, and return a response. Nothing more.
 - **`src/lib/` is pure.** It must not import from `next`, `@prisma/client`, `src/server/`, `fetch`, or read `process.env`. Inputs in, outputs out. Pass the current time in as an argument (`now: Date`); never call `new Date()` inside `lib/`.
 - **Server Components by default.** Add `"use client"` only for components that need state, effects or event handlers. Load page data on the server through `server/repositories/`, not with `useEffect` + `fetch`.
+- **Pages own the sign-in redirect.** A team page that gets a 401 from `requireTeamRole()` redirects to sign-in with its own path as the callback. The team layout doesn't redirect: it renders the page without the top bar. A layout can't read the path, and Next.js renders it in parallel with the page, so a redirect there could name the wrong page (#93).
 - **All mutations go through route handlers** in `app/api/`. Do not use Server Actions; one mutation pattern keeps integration tests uniform.
 - **Real-time flow:** webhook or mutation → write to DB → `server/realtime.ts` triggers `team-{teamId}` channel with a small event (`activity.created`, `standup.created`) → client refetches the affected section. Never push full records through Pusher.
 - **API response shape:** success returns the resource or `{ data, nextCursor }` for lists. Errors always return `{ "error": { "code": "SNAKE_CASE_CODE", "message": "Human readable" } }` with the right HTTP status.
@@ -400,3 +401,4 @@ Standups, planning notes and retros for our own team are recorded in SprintProof
 | 2026-11-09 | Ziqi (Odie) Yang | Standups: a standup counts in the sprint whose dates contain its day and moves with it when sprint dates change (§1, PRD R2 and US-3, README Counting Rules) (#56) | Issue #56, from Yunhong's review of PR #51: editing sprint dates left standups outside their sprint and allowed two on one day. Standups now belong to a team and a day, not a stored sprint |
 | 2026-11-09 | Ziqi (Odie) Yang | §4: user text rejects NUL through `lib/validation/text.ts`, and an invalid id from the URL is treated as unknown; architecture tree lists `lib/validation/`. PRD US-3: sprint names are trimmed and at most 100 characters, sprint dates fall in 2000–2100 (#74) | Issue #74, from the Nov 9 bug audit: a NUL character, a year like 0026 or a very long sprint name passed validation and then returned 500 |
 | 2026-11-09 | Ziqi (Odie) Yang | Standups count on their stored day; a form opened on an earlier day is rejected with 409 `STANDUP_DAY_CHANGED`; a sprint ends at the start of the next day minus 1 ms; no requirement status before a sprint starts (§1, PRD R1, R2 and R5, README Counting Rules) (#73) | Issue #73, from the Nov 9 bug audit: a standup saved just after midnight was counted on the next day, a form left open overnight filed under the new day, a DST change at midnight moved sprint ends, and the summary API showed upcoming sprints as at risk |
+| 2026-11-11 | Ziqi (Odie) Yang | Key patterns: pages own the sign-in redirect, and the team layout renders the page alone on a 401; architecture tree lists the team navigation pages in `lib/teams/` (#93) | Issue #93, from Yunhong's review of PR #80: the layout's redirect always named the dashboard |
