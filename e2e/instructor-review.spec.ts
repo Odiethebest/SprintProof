@@ -239,9 +239,13 @@ test.describe("Instructor review", () => {
     // Act
     await member.goto(`/review/${teamId}`);
 
-    // Assert: the same page as a team that doesn't exist
+    // Assert: the same page as a team that doesn't exist, whether that's
+    // Next's default ("404") or the app's own ("Page not found", #100)
     await expect(
-      member.getByText("This page could not be found.")
+      member.getByRole("heading", {
+        level: 1,
+        name: /^(404|Page not found)$/,
+      })
     ).toBeVisible();
     await expect(member.getByText("Sprint 1 review")).toHaveCount(0);
     await expect(member.getByText("Build the Markdown export.")).toHaveCount(0);

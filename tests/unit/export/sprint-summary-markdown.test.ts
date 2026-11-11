@@ -367,7 +367,9 @@ describe("buildSprintSummaryMarkdown", () => {
         }),
       ],
     });
+    // The summary has no days left before the start either (#92).
     summary.sprint.state = "UPCOMING";
+    summary.sprint.daysLeft = null;
 
     // Act
     const markdown = buildSprintSummaryMarkdown({
@@ -378,6 +380,9 @@ describe("buildSprintSummaryMarkdown", () => {
     });
 
     // Assert
+    expect(markdown).toContain(
+      "**Dates:** 2026-10-29 – 2026-11-04 · Not started ·"
+    );
     expect(section(markdown, "## Requirements")[2]).toBe(
       "| Ziqi (Odie) Yang | @Odiethebest | 0 / 3 | 0 / 5 | 0 | 0 |"
     );
