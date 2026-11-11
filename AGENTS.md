@@ -67,9 +67,10 @@ src/
 │   ├── api-docs/                 # public Swagger UI for docs/api/openapi.yaml; openapi.yaml/ serves the raw file
 │   └── api/
 │       ├── auth/[...nextauth]/
+│       ├── health/               # GET /api/health: SELECT 1 and the deployed commit. Public, outside v1, so not in openapi.yaml
 │       ├── webhooks/github/      # GitHub webhook receiver
 │       └── v1/                   # public, documented REST API (docs/api/openapi.yaml)
-│           ├── teams/            # create a team; [teamId]/invites/ create and revoke links; [teamId]/sprints/ (route.ts and [sprintId]/route.ts, [sprintId]/summary/, [sprintId]/standups/); [teamId]/standups/ post or update today's standup
+│           ├── teams/            # list your teams and create one (route.ts); [teamId]/route.ts reads one team and its members; [teamId]/invites/ create and revoke links; [teamId]/sprints/ (route.ts and [sprintId]/route.ts, [sprintId]/summary/, [sprintId]/standups/); [teamId]/standups/ post or update today's standup
 │           ├── memberships/      # join a team with an invite token
 │           └── tokens/           # create a personal API token (shown once); [tokenId]/ revoke it. Session only
 ├── components/
@@ -96,14 +97,15 @@ src/
 ├── server/                       # everything with side effects
 │   ├── db.ts                     # single Prisma client
 │   ├── repositories/             # all database reads/writes (sprints.ts, standups.ts, activities.ts, api-tokens.ts, ...)
-│   ├── auth.ts                   # requireTeamRole(); requireApiTeamRole() for the read-only endpoints that take an API token
+│   ├── auth.ts                   # requireTeamRole(); requireApiTeamRole() and requireApiUser() for the read-only endpoints that take an API token
 │   ├── auth-config.ts            # Auth.js config: GitHub provider, test sign-in
 │   ├── auth-session.ts           # getSession(), getSessionUserId(); tests mock this
 │   ├── auth-proxy.ts             # cookie-only Auth.js instance for src/proxy.ts
 │   ├── current-user.ts           # getCurrentUser() for pages
-│   ├── api-response.ts           # errorResponse(), parseJsonBody(), accessDeniedResponse(), parsePaginationQuery()
+│   ├── api-response.ts           # errorResponse(), parseJsonBody(), accessDeniedResponse(), parsePaginationQuery(), catchUnexpectedErrors()
 │   ├── api-tokens.ts             # createPersonalApiToken(): random token, stores only its hash
 │   ├── openapi-spec.ts           # reads docs/api/openapi.yaml for /api-docs
+│   ├── health.ts                 # checkHealth({ database }): the /api/health response; tests pass a client that can't connect
 │   ├── prisma-errors.ts          # isUniqueViolation()
 │   ├── request-origin.ts         # origin for absolute links (invite URLs)
 │   ├── github-client.ts          # Octokit wrapper
@@ -128,8 +130,8 @@ e2e/                              # Playwright specs
 - **All mutations go through route handlers** in `app/api/`. Do not use Server Actions; one mutation pattern keeps integration tests uniform.
 - **Real-time flow:** webhook or mutation → write to DB → `server/realtime.ts` triggers `team-{teamId}` channel with a small event (`activity.created`, `standup.created`) → client refetches the affected section. Never push full records through Pusher.
 - **API response shape:** success returns the resource or `{ data, nextCursor }` for lists. Errors always return `{ "error": { "code": "SNAKE_CASE_CODE", "message": "Human readable" } }` with the right HTTP status.
-- **Route handler helpers** live in `server/api-response.ts`: parse request bodies with `parseJsonBody({ request, schema })` (400 `VALIDATION_ERROR` with the first Zod message), parse `?limit=` and `?cursor=` with `parsePaginationQuery({ request })`, turn a denied `requireTeamRole()` or `requireApiTeamRole()` result into a 401 or 403 with `accessDeniedResponse()`, and build every other error with `errorResponse()`. Don't write error JSON by hand.
-- **API tokens only read.** Only `GET /teams/{teamId}/sprints`, `.../sprints/{sprintId}/summary` and `.../sprints/{sprintId}/standups` call `requireApiTeamRole()`, which takes `Authorization: Bearer` or the session. Every other route keeps `requireTeamRole()` (session only), so a leaked token can't change data or create tokens.
+- **Route handler helpers** live in `server/api-response.ts`: parse request bodies with `parseJsonBody({ request, schema })` (400 `VALIDATION_ERROR` with the first Zod message), parse `?limit=` and `?cursor=` with `parsePaginationQuery({ request })`, turn a denied `requireTeamRole()`, `requireApiTeamRole()` or `requireApiUser()` result into a 401 or 403 with `accessDeniedResponse()`, and build every other error with `errorResponse()`. Don't write error JSON by hand. Every exported handler under `app/api/v1/` runs its body through `catchUnexpectedErrors({ route, handler })`, so an unexpected error returns 500 `INTERNAL_ERROR` in the same shape and the log names only the route and the error's code or name; `tests/integration/api/unexpected-errors.test.ts` fails when a handler isn't covered.
+- **API tokens only read.** Only `GET /teams`, `GET /teams/{teamId}`, `GET /teams/{teamId}/sprints`, `.../sprints/{sprintId}/summary` and `.../sprints/{sprintId}/standups` take a token. `GET /teams` calls `requireApiUser()` and the others call `requireApiTeamRole()`; both take `Authorization: Bearer` or the session. Every other route keeps `requireTeamRole()` (session only), so a leaked token can't change data or create tokens.
 - **The OpenAPI spec is part of the API.** A new or changed route under `app/api/v1/` updates `docs/api/openapi.yaml` in the same PR; `tests/unit/docs/openapi-coverage.test.ts` fails when a route and the spec disagree.
 
 ### Domain model and counting rules
@@ -190,8 +192,8 @@ Main Prisma models: `User`, `Team`, `Membership` (role: `LEAD` | `MEMBER` | `INS
   3. End your turn. Don't run `git commit` and don't write implementation code until the developer replies; the developer makes the `test(...)` commit.
 
   An acceptance criterion such as "failing tests committed before implementation" is met by that commit; it isn't a request for you to commit. Tests you add later go in their own `test(...)` commit, not the `feat` commit.
-- **Unit tests (Vitest)** for every function in `src/lib/`. Coverage goal: ≥ 90% lines for `src/lib/`, ≥ 80% overall.
-- **Integration tests (Vitest)** call route handlers directly against a real PostgreSQL test database (reset between test files). Mock only external services at their wrappers: `server/github-client.ts` and `server/realtime.ts`, plus `server/auth-session.ts` to set the signed-in user.
+- **Unit tests (Vitest)** for every function in `src/lib/`. Coverage goal: ≥ 90% lines for `src/lib/`, ≥ 80% overall. CI runs the unit tests with `--coverage` and fails below 90% lines, statements and functions or 85% branches in `src/lib/` (thresholds in `vitest.config.mts`).
+- **Integration tests (Vitest)** call route handlers directly against a real PostgreSQL test database (reset between test files). Mock only external services at their wrappers: `server/github-client.ts` and `server/realtime.ts`, plus `server/auth-session.ts` to set the signed-in user. To test a database outage, pass a Prisma client that can't connect instead of mocking (`tests/integration/api/health.test.ts`).
 - **E2E tests (Playwright)** cover the user flows in section 2. Each flow includes an `@axe-core/playwright` accessibility check with no serious or critical violations.
 - E2E sign-in uses a test-only credentials provider that is enabled **only** when `E2E_TEST_AUTH=true`. It must never be enabled in production; `.github/workflows/production-guard.yml` checks production after every push to `main` and daily. CI runs the E2E suite with one worker because the specs share one database.
 - Test structure: Arrange / Act / Assert. One behavior per test. Names describe behavior: `it("counts three reviews on the same PR as one")`.
@@ -314,7 +316,7 @@ Standups, planning notes and retros for our own team are recorded in SprintProof
 ### Do
 
 - Validate every external input with Zod: request bodies, query params, route params, webhook payloads. User text uses the shared `noNul` check from `lib/validation/text.ts`, because PostgreSQL can't store a NUL character. Webhook text (commit messages, PR titles) has NUL removed instead: a redelivery carries the same payload, so rejecting it would drop the event for good. An id from the URL that can't be valid is treated as unknown (the same 403 or 404), never a 500.
-- Call `requireTeamRole(teamId, roles)` at the top of every route handler and server page that touches team data (`requireApiTeamRole(request, teamId, roles)` in the three token endpoints).
+- Call `requireTeamRole(teamId, roles)` at the top of every route handler and server page that touches team data (`requireApiTeamRole(request, teamId, roles)` in the token endpoints that read one team).
 - Put logic in `src/lib/` as pure functions and test it first.
 - Use design tokens from `DESIGN.md` through Tailwind classes.
 - Write UI copy that is short, neutral and specific.
@@ -402,4 +404,6 @@ Standups, planning notes and retros for our own team are recorded in SprintProof
 | 2026-11-09 | Ziqi (Odie) Yang | §4: user text rejects NUL through `lib/validation/text.ts`, and an invalid id from the URL is treated as unknown; architecture tree lists `lib/validation/`. PRD US-3: sprint names are trimmed and at most 100 characters, sprint dates fall in 2000–2100 (#74) | Issue #74, from the Nov 9 bug audit: a NUL character, a year like 0026 or a very long sprint name passed validation and then returned 500 |
 | 2026-11-09 | Ziqi (Odie) Yang | Standups count on their stored day; a form opened on an earlier day is rejected with 409 `STANDUP_DAY_CHANGED`; a sprint ends at the start of the next day minus 1 ms; no requirement status before a sprint starts (§1, PRD R1, R2 and R5, README Counting Rules) (#73) | Issue #73, from the Nov 9 bug audit: a standup saved just after midnight was counted on the next day, a form left open overnight filed under the new day, a DST change at midnight moved sprint ends, and the summary API showed upcoming sprints as at risk |
 | 2026-11-11 | Ziqi (Odie) Yang | §4: webhook text (commit messages, PR titles) has NUL removed instead of rejected (#90) | Issue #90, from Yunhong's review of PR #79: a NUL in a commit message or PR title returned 500 on every redelivery, so none of that delivery's activity was counted |
+| 2026-11-11 | Ziqi (Odie) Yang | Architecture tree lists `app/api/health/` and `server/health.ts`; §1 Testing strategy: CI enforces unit test coverage for `src/lib/` (90% lines, statements and functions, 85% branches), and integration tests reach a database outage through a client that can't connect, not a mock (#98) | Issue #98, from the Nov 11 audit of main: migrations were applied by hand, nothing kept the Supabase databases awake, and CI never measured coverage |
+| 2026-11-11 | Ziqi (Odie) Yang | Tokens also read `GET /teams` (through `requireApiUser()`) and `GET /teams/{teamId}`; every `/api/v1` handler runs through `catchUnexpectedErrors()`, which answers 500 `INTERNAL_ERROR` and logs only the route and error code (§1 Architecture and Key patterns, §4) (#97) | Issue #97, from the Nov 11 audit of main: tokens could read only 3 endpoints, and a route that threw returned Next's default 500 without the error shape |
 | 2026-11-11 | Ziqi (Odie) Yang | Key patterns: pages own the sign-in redirect, and the team layout renders the page alone on a 401; architecture tree lists the team navigation pages in `lib/teams/` (#93) | Issue #93, from Yunhong's review of PR #80: the layout's redirect always named the dashboard |

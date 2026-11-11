@@ -1,6 +1,7 @@
 import { z } from "zod";
 import {
   accessDeniedResponse,
+  catchUnexpectedErrors,
   errorResponse,
   parseInput,
 } from "@/server/api-response";
@@ -12,11 +13,19 @@ const paramsSchema = z.object({
   inviteId: z.string().min(1),
 });
 
+interface Context {
+  params: Promise<{ teamId: string; inviteId: string }>;
+}
+
 // Revokes an invite link. Lead only; revoking twice is a no-op.
-export async function DELETE(
-  _request: Request,
-  { params }: { params: Promise<{ teamId: string; inviteId: string }> }
-) {
+export async function DELETE(_request: Request, context: Context) {
+  return catchUnexpectedErrors({
+    route: "DELETE /api/v1/teams/{teamId}/invites/{inviteId}",
+    handler: () => handleDelete(context),
+  });
+}
+
+async function handleDelete({ params }: Context) {
   const parsedParams = parseInput({
     input: await params,
     schema: paramsSchema,

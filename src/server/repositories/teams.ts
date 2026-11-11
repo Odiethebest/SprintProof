@@ -1,4 +1,6 @@
 import { db } from "@/server/db";
+import { toPage, type Page } from "@/lib/api/pagination";
+import type { TeamRole } from "@/lib/auth/team-access";
 import type { CreateTeamInput } from "@/lib/teams/create-team";
 
 const TEAM_FIELDS = {
@@ -92,4 +94,55 @@ export async function listTeamsForUser({ userId }: { userId: string }) {
     select: { role: true, team: { select: TEAM_FIELDS } },
   });
   return memberships.map(({ role, team }) => ({ ...team, role }));
+}
+
+export interface TeamWithRole {
+  id: string;
+  name: string;
+  repoFullName: string;
+  timezone: string;
+  role: TeamRole;
+}
+
+// In the order the user joined, as listTeamsForUser() orders them; the team id
+// breaks ties so every team lands on exactly one page.
+const MEMBERSHIP_PAGE_ORDER = [
+  { createdAt: "asc" },
+  { teamId: "asc" },
+] as const;
+
+// One page of the user's teams with their role there. The cursor is a team id.
+// Returns null when the user isn't on that team, so a cursor can't come from
+// anyone else's list.
+export async function listTeamsPageForUser({
+  userId,
+  limit,
+  cursor,
+}: {
+  userId: string;
+  limit: number;
+  cursor?: string;
+}): Promise<Page<TeamWithRole> | null> {
+  if (cursor !== undefined) {
+    const cursorRow = await db.membership.findUnique({
+      where: { userId_teamId: { userId, teamId: cursor } },
+      select: { id: true },
+    });
+    if (cursorRow === null) {
+      return null;
+    }
+  }
+  const memberships = await db.membership.findMany({
+    where: { userId },
+    orderBy: [...MEMBERSHIP_PAGE_ORDER],
+    take: limit + 1,
+    ...(cursor === undefined
+      ? {}
+      : { cursor: { userId_teamId: { userId, teamId: cursor } }, skip: 1 }),
+    select: { role: true, team: { select: TEAM_FIELDS } },
+  });
+  return toPage({
+    rows: memberships.map(({ role, team }) => ({ ...team, role })),
+    limit,
+  });
 }

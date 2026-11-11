@@ -1,5 +1,6 @@
 import { z } from "zod";
 import {
+  catchUnexpectedErrors,
   errorResponse,
   parseInput,
   unauthenticatedResponse,
@@ -9,12 +10,20 @@ import { deleteApiToken } from "@/server/repositories/api-tokens";
 
 const paramsSchema = z.object({ tokenId: z.string().min(1) });
 
+interface Context {
+  params: Promise<{ tokenId: string }>;
+}
+
 // Revokes one of the signed-in user's tokens. Someone else's token gets the
 // same 404 as a missing one, so ids reveal nothing.
-export async function DELETE(
-  _request: Request,
-  { params }: { params: Promise<{ tokenId: string }> }
-) {
+export async function DELETE(_request: Request, context: Context) {
+  return catchUnexpectedErrors({
+    route: "DELETE /api/v1/tokens/{tokenId}",
+    handler: () => handleDelete(context),
+  });
+}
+
+async function handleDelete({ params }: Context) {
   const userId = await getSessionUserId();
   if (userId === null) {
     return unauthenticatedResponse();

@@ -4,6 +4,7 @@ import { getStandupDate } from "@/lib/standups/standup-date";
 import { createStandupSchema } from "@/lib/standups/standup-input";
 import {
   accessDeniedResponse,
+  catchUnexpectedErrors,
   errorResponse,
   parseInput,
   parseJsonBody,
@@ -16,12 +17,20 @@ import { findTeam } from "@/server/repositories/teams";
 
 const paramsSchema = z.object({ teamId: z.string().min(1) });
 
+interface Context {
+  params: Promise<{ teamId: string }>;
+}
+
 // POST: Posts today's standup, or updates it if the user already posted today (rule R2).
 // Leads and members only: instructors read standups but don't post them.
-export async function POST(
-  request: Request,
-  { params }: { params: Promise<{ teamId: string }> }
-) {
+export async function POST(request: Request, context: Context) {
+  return catchUnexpectedErrors({
+    route: "POST /api/v1/teams/{teamId}/standups",
+    handler: () => handlePost(request, context),
+  });
+}
+
+async function handlePost(request: Request, { params }: Context) {
   const parsedParams = parseInput({
     input: await params,
     schema: paramsSchema,
