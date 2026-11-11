@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "@/server/db";
 import { getSessionUserId } from "@/server/auth-session";
 import type { TeamRole } from "@/lib/auth/team-access";
+import { GET as listTeamsRoute } from "@/app/api/v1/teams/route";
+import { GET as teamRoute } from "@/app/api/v1/teams/[teamId]/route";
 import {
   GET as listSprintsRoute,
   POST as createSprintRoute,
@@ -39,11 +41,21 @@ interface CallOptions {
   authorization?: string;
 }
 
-// The three endpoints AC #16 opens to API tokens.
-const ENDPOINTS: Array<{
+interface Endpoint {
   name: string;
   call: (options: CallOptions) => Promise<Response>;
-}> = [
+}
+
+// The endpoints that read one team's data with an API token (#16, #97).
+const TEAM_ENDPOINTS: Endpoint[] = [
+  {
+    name: "GET /teams/{teamId}",
+    call: ({ teamId, authorization }) =>
+      teamRoute(
+        apiGetRequest(`/teams/${teamId}`, { authorization }),
+        routeContext({ teamId })
+      ),
+  },
   {
     name: "GET /teams/{teamId}/sprints",
     call: ({ teamId, authorization }) =>
@@ -72,6 +84,17 @@ const ENDPOINTS: Array<{
         routeContext({ teamId, sprintId })
       ),
   },
+];
+
+// Every endpoint that takes an API token: the caller's own team list (#97)
+// and the reads of one team above.
+const ENDPOINTS: Endpoint[] = [
+  {
+    name: "GET /teams",
+    call: ({ authorization }) =>
+      listTeamsRoute(apiGetRequest("/teams", { authorization })),
+  },
+  ...TEAM_ENDPOINTS,
 ];
 
 async function setUpTeam(role: TeamRole = "MEMBER") {
@@ -193,20 +216,6 @@ describe.each(ENDPOINTS)("$name with an API token", ({ call }) => {
     expect(await res.json()).toEqual(INVALID_TOKEN);
   });
 
-  it("returns 403 FORBIDDEN for a token whose owner isn't on the team", async () => {
-    // Arrange
-    const { teamId, sprintId } = await setUpTeam();
-    const outsider = await insertUser();
-    const { token } = await insertApiToken({ userId: outsider.id });
-
-    // Act
-    const res = await call({ teamId, sprintId, authorization: bearer(token) });
-
-    // Assert
-    expect(res.status).toBe(403);
-    expect((await res.json()).error.code).toBe("FORBIDDEN");
-  });
-
   it("still works with a session and no token, as the app calls it", async () => {
     // Arrange
     const { teamId, sprintId, user } = await setUpTeam();
@@ -219,6 +228,36 @@ describe.each(ENDPOINTS)("$name with an API token", ({ call }) => {
     expect(res.status).toBe(200);
   });
 });
+
+// GET /teams has no team to be outside of: it lists the owner's own teams.
+describe.each(TEAM_ENDPOINTS)(
+  "$name with an outsider's API token",
+  ({ call }) => {
+    beforeEach(async () => {
+      await clearDatabase();
+      vi.mocked(getSessionUserId).mockReset();
+      vi.mocked(getSessionUserId).mockResolvedValue(null);
+    });
+
+    it("returns 403 FORBIDDEN for a token whose owner isn't on the team", async () => {
+      // Arrange
+      const { teamId, sprintId } = await setUpTeam();
+      const outsider = await insertUser();
+      const { token } = await insertApiToken({ userId: outsider.id });
+
+      // Act
+      const res = await call({
+        teamId,
+        sprintId,
+        authorization: bearer(token),
+      });
+
+      // Assert
+      expect(res.status).toBe(403);
+      expect((await res.json()).error.code).toBe("FORBIDDEN");
+    });
+  }
+);
 
 // Tokens only read. Every other endpoint stays session-only, so a leaked
 // token can't change team data or mint more tokens.
