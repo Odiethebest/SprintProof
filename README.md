@@ -75,7 +75,7 @@ Every task is a GitHub Issue on the project board (Backlog → Sprint Todo → I
 | Sprint 1 | Oct 29 – Nov 4, 2026 | "Sprint 1" |
 | Sprint 2 | Nov 5 – Nov 11, 2026 | "Sprint 2" |
 
-Planning notes, standups and retros live in [`docs/sprints/`](docs/sprints/). For the full conventions shared by humans and AI tools (branching, commits, PRs, coding standards, security), see [`AGENTS.md`](AGENTS.md). Contribution log: _added at the end of Sprint 2_.
+Planning notes, standups and retros live in [`docs/sprints/`](docs/sprints/). For the full conventions shared by humans and AI tools (branching, commits, PRs, coding standards, security), see [`AGENTS.md`](AGENTS.md). Contribution log: [`docs/contribution-log.md`](docs/contribution-log.md) (draft, finalized after the Sprint 2 retro).
 
 ---
 
@@ -379,15 +379,16 @@ Each member gets 3 votes per retro, at most 1 per item. The top 3 "To improve" i
 
 | Feature | Status | Notes |
 |---|---|---|
-| GitHub sign-in and teams | Done | Auth.js GitHub provider, invite links, lead / member / instructor roles (#6, #7) |
-| Repository connection and webhooks | Planned | Signature verification, idempotent `Activity` storage |
-| Async standups | Planned | Three-question form, one per person per day |
-| Live contribution dashboard | Planned | Counts per member, Pusher live updates |
-| Requirement checks | Planned | Met / On track / At risk / Missed |
-| Retros and action items | Planned | Voting, top 3 "To improve" items carried into the next sprint |
-| Peer feedback | Planned | Instructor-only, enforced on the server |
-| Instructor view and Markdown export | Planned | Read-only review page, `sprint-N-summary.md` download |
-| Public REST API | Done | Personal tokens stored as SHA-256 hashes; read-only Bearer access to sprints, sprint summaries and standups; cursor pagination; Swagger UI at `/api-docs` (#16) |
+| GitHub sign-in and teams | Done | Auth.js GitHub provider, create a team, invite links, lead / member / instructor roles (PRs #37, #44); invite writes serialized (PR #83) |
+| Repository connection and webhooks | Done | Signature verification, delivery dedup, idempotent `Activity` storage, webhook URL and setup steps in Settings (PRs #49, #79, #83). One app-wide webhook secret for now: per-team secret rotation and the "Unmapped activity" list aren't built (#78) |
+| Sprints and requirements | Done | Create and edit sprints with dates, standups and PR reviews per person; date, overlap and 1–20 checks (PRs #40, #47); overlapping writes serialized (PR #83) |
+| Async standups | Done | Three-question form, one per person per day in the team timezone, history by day (PRs #51, #69, #81); character counter and focus fixes (PRs #84, #85) |
+| Live contribution dashboard | Done | Counts per member, activity feed, Pusher live updates (PRs #58, #60, #80); teammates' standups announced to screen readers (PR #85) |
+| Requirement checks | Done | Met / On track / At risk / Missed in `src/lib/checks/` (PR #30), shown on the dashboard (PR #58) |
+| Retros and action items | Planned | Voting, top 3 "To improve" items carried into the next sprint (#13) |
+| Peer feedback | Planned | Instructor-only, enforced on the server (#14) |
+| Instructor view and Markdown export | Planned | Read-only review page, `sprint-N-summary.md` download (#15) |
+| Public REST API | Done | Personal tokens stored as SHA-256 hashes; read-only Bearer access to sprints, sprint summaries and standups; cursor pagination; Swagger UI at `/api-docs` (PRs #64, #65, #66); inputs that used to return 500 are rejected (PR #82) |
 
 ---
 
