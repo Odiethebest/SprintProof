@@ -231,6 +231,42 @@ describe("GET /api/v1/teams/{teamId}/sprints/{sprintId}/summary", () => {
     ]);
   });
 
+  it("returns no days left and no statuses for a sprint that hasn't started", async () => {
+    // Arrange: Nov 10, noon in Los Angeles, two days before Sprint 3 starts
+    const { team, bob } = await setUpSprint();
+    const upcoming = await insertSprint({
+      teamId: team.id,
+      name: "Sprint 3",
+      startDate: "2026-11-12",
+      endDate: "2026-11-18",
+    });
+    const { token } = await insertApiToken({ userId: bob.id });
+    vi.setSystemTime(new Date("2026-11-10T20:00:00Z"));
+
+    // Act
+    const res = await getSummary({
+      teamId: team.id,
+      sprintId: upcoming.id,
+      token,
+    });
+
+    // Assert: not 9 days left (Nov 18 minus Nov 10, plus 1) for a 7-day sprint
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.sprint).toMatchObject({ state: "UPCOMING", daysLeft: null });
+    expect(
+      body.members.map(
+        (member: {
+          standups: { status: string | null };
+          reviews: { status: string | null };
+        }) => [member.standups.status, member.reviews.status]
+      )
+    ).toEqual([
+      [null, null],
+      [null, null],
+    ]);
+  });
+
   it("returns 404 SPRINT_NOT_FOUND for a sprint that doesn't exist", async () => {
     // Arrange
     const { team, bob } = await setUpSprint();

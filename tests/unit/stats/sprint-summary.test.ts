@@ -22,6 +22,10 @@ const sprint = {
 const NOV_3_NOON = new Date("2026-11-03T20:00:00Z");
 // Nov 5, noon in Los Angeles: the day after the sprint ended.
 const NOV_5_NOON = new Date("2026-11-05T20:00:00Z");
+// Oct 27, noon in Los Angeles: two days before the sprint starts.
+const OCT_27_NOON = new Date("2026-10-27T19:00:00Z");
+// Oct 29, 00:00 in Los Angeles: the first instant of the sprint.
+const OCT_29_MIDNIGHT = new Date("2026-10-29T07:00:00Z");
 
 describe("buildSprintSummary", () => {
   beforeEach(() => {
@@ -180,6 +184,56 @@ describe("buildSprintSummary", () => {
     expect(summary.sprint).toMatchObject({ state: "ENDED", daysLeft: 0 });
     expect(summary.members[0].standups.status).toBe("MISSED");
     expect(summary.members[0].reviews.status).toBe("MISSED");
+  });
+
+  it("gives an upcoming sprint no days left, as it gives its requirements no status", () => {
+    // Arrange
+    const member = createTeamMember({ userId: "user-1", githubLogin: "alice" });
+
+    // Act
+    const summary = buildSprintSummary({
+      sprint,
+      timeZone,
+      members: [member],
+      standups: [],
+      activities: [],
+      now: OCT_27_NOON,
+    });
+
+    // Assert: not 9 (Nov 4 minus Oct 27, plus 1), more than the sprint's 7 days
+    expect(summary.sprint).toMatchObject({ state: "UPCOMING", daysLeft: null });
+    expect(summary.members[0].standups.status).toBeNull();
+    expect(summary.members[0].reviews.status).toBeNull();
+  });
+
+  it("gives no days left until midnight on the first day in the team timezone", () => {
+    // Act: 11:59:59.999 PM on Oct 28 in Los Angeles
+    const summary = buildSprintSummary({
+      sprint,
+      timeZone,
+      members: [],
+      standups: [],
+      activities: [],
+      now: new Date(OCT_29_MIDNIGHT.getTime() - 1),
+    });
+
+    // Assert
+    expect(summary.sprint).toMatchObject({ state: "UPCOMING", daysLeft: null });
+  });
+
+  it("counts all 7 days left from midnight on the first day", () => {
+    // Act
+    const summary = buildSprintSummary({
+      sprint,
+      timeZone,
+      members: [],
+      standups: [],
+      activities: [],
+      now: OCT_29_MIDNIGHT,
+    });
+
+    // Assert
+    expect(summary.sprint).toMatchObject({ state: "CURRENT", daysLeft: 7 });
   });
 
   it("stamps the counts with the time they were computed", () => {

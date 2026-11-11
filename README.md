@@ -244,6 +244,8 @@ Every delivery is checked before anything is stored:
 - `X-GitHub-Delivery` is used to deduplicate, so a redelivered event is stored once.
 - Activity is attributed by GitHub login mapped to a team member. Bot accounts (logins ending in `[bot]`) are ignored.
 
+If a delivery can't be stored, the endpoint returns 500 and keeps nothing from it. GitHub doesn't redeliver failed deliveries on its own; the lead can redeliver one from the webhook's **Recent Deliveries** tab on GitHub.
+
 The OAuth scopes we request, and why, are recorded in [`docs/decisions/`](docs/decisions/).
 
 ---
@@ -302,6 +304,8 @@ NEXT_PUBLIC_PUSHER_CLUSTER=mt1
 NEXT_PUBLIC_PUSHER_HOST=localhost
 NEXT_PUBLIC_PUSHER_PORT=6001
 ```
+
+The GitHub activity spec signs its webhook deliveries with `e2e-webhook-secret-not-a-real-secret`, a test value that `playwright.config.ts` also gives the dev server. If Playwright reuses a dev server you started yourself, set `GITHUB_WEBHOOK_SECRET` to the same value there.
 
 We follow red-green-refactor, and the git history shows it: every feature starts with a commit containing only failing tests, followed by the implementation commit.
 
