@@ -1,7 +1,8 @@
 import Link from "next/link";
+import type { TeamRole } from "@/lib/auth/team-access";
 import {
   SPRINT_PAGES,
-  TEAM_PAGES,
+  getTeamNavPages,
   getTeamPagePath,
   type TeamPage,
 } from "@/lib/teams/team-pages";
@@ -9,6 +10,7 @@ import {
 const LABELS: Record<TeamPage, string> = {
   dashboard: "Dashboard",
   standups: "Standups",
+  review: "Review",
   settings: "Settings",
 };
 
@@ -21,6 +23,8 @@ const LINK_CLASSES = {
 
 export interface TeamNavProps {
   teamId: string;
+  // Review is listed only for the roles that can open it.
+  role: TeamRole;
   // null on a team page the navigation doesn't list: no link is current.
   current: TeamPage | null;
   // The sprint picked in the selector, kept when moving between sprint pages.
@@ -28,11 +32,16 @@ export interface TeamNavProps {
 }
 
 // Links between a team's pages (DESIGN.md §6 Top bar).
-export function TeamNav({ teamId, current, requestedSprintId }: TeamNavProps) {
+export function TeamNav({
+  teamId,
+  role,
+  current,
+  requestedSprintId,
+}: TeamNavProps) {
   return (
     <nav aria-label="Team">
       <ul className="flex flex-wrap gap-1">
-        {TEAM_PAGES.map((page) => {
+        {getTeamNavPages({ role }).map((page) => {
           const query =
             SPRINT_PAGES.includes(page) && requestedSprintId !== null
               ? `?sprint=${encodeURIComponent(requestedSprintId)}`

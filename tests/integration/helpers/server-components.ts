@@ -1,4 +1,8 @@
 import { Suspense, isValidElement, type ReactNode } from "react";
+import {
+  getAccessFallbackHTTPStatus,
+  isHTTPAccessFallbackError,
+} from "next/dist/client/components/http-access-fallback/http-access-fallback";
 import { getURLFromRedirectError } from "next/dist/client/components/redirect";
 import { isRedirectError } from "next/dist/client/components/redirect-error";
 
@@ -36,4 +40,31 @@ export async function collectRedirects(
     }
     throw result.reason;
   });
+}
+
+export type RenderOutcome =
+  | { kind: "RENDERED" }
+  | { kind: "REDIRECT"; url: string }
+  | { kind: "NOT_FOUND" };
+
+// What a render did: finished, redirected, or called notFound(). Any other
+// error fails the test.
+export async function getRenderOutcome(
+  render: Promise<unknown>
+): Promise<RenderOutcome> {
+  try {
+    await render;
+    return { kind: "RENDERED" };
+  } catch (error) {
+    if (isRedirectError(error)) {
+      return { kind: "REDIRECT", url: getURLFromRedirectError(error) };
+    }
+    if (
+      isHTTPAccessFallbackError(error) &&
+      getAccessFallbackHTTPStatus(error) === 404
+    ) {
+      return { kind: "NOT_FOUND" };
+    }
+    throw error;
+  }
 }

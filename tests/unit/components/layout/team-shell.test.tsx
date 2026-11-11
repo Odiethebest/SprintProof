@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { usePathname, useSearchParams } from "next/navigation";
+import type { TeamRole } from "@/lib/auth/team-access";
 import { TeamShell } from "@/components/layout/team-shell";
 
 // TeamShell reads the URL through these hooks, and outside Next.js there's no
@@ -16,7 +17,7 @@ const SPRINT_SELECTOR = {
   selectedId: "sprint-1",
 };
 
-function renderShellAt(pathname: string): string {
+function renderShellAt(pathname: string, role: TeamRole = "LEAD"): string {
   vi.mocked(usePathname).mockReturnValue(pathname);
   vi.mocked(useSearchParams).mockReturnValue(
     new URLSearchParams() as unknown as ReturnType<typeof useSearchParams>
@@ -26,7 +27,7 @@ function renderShellAt(pathname: string): string {
       teamId="team-1"
       team={{ name: "SprintProof", repoFullName: "Odiethebest/SprintProof" }}
       user={{ displayName: "Ziqi (Odie) Yang", githubLogin: "Odiethebest" }}
-      role="LEAD"
+      role={role}
       sprintSelector={SPRINT_SELECTOR}
     >
       <main>Page content</main>
@@ -93,5 +94,40 @@ describe("TeamShell", () => {
 
     // Assert
     expect(hasSprintSelector(html)).toBe(false);
+  });
+
+  it("marks only the Review link as current on the review page", () => {
+    // Act
+    const html = renderShellAt("/review/team-1");
+
+    // Assert
+    expect(currentNavLinks(html)).toEqual(["Review"]);
+  });
+
+  it("shows the sprint selector on the review page", () => {
+    // Act
+    const html = renderShellAt("/review/team-1");
+
+    // Assert
+    expect(hasSprintSelector(html)).toBe(true);
+  });
+
+  it.each(["LEAD", "INSTRUCTOR"] as const)(
+    "links a %s to the review page",
+    (role) => {
+      // Act
+      const html = renderShellAt("/teams/team-1/dashboard", role);
+
+      // Assert
+      expect(html).toContain('href="/review/team-1"');
+    }
+  );
+
+  it("doesn't link a member to the review page", () => {
+    // Act
+    const html = renderShellAt("/teams/team-1/dashboard", "MEMBER");
+
+    // Assert
+    expect(html).not.toContain('href="/review/team-1"');
   });
 });

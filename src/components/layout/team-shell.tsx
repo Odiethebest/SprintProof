@@ -2,6 +2,7 @@
 
 import type { ReactNode, ComponentProps } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
+import type { TeamRole } from "@/lib/auth/team-access";
 import { LIVE_PAGES, SPRINT_PAGES, findTeamPage } from "@/lib/teams/team-pages";
 import { AppHeader } from "./app-header";
 import { TeamLiveProvider } from "@/components/realtime/team-live-provider";
@@ -19,7 +20,7 @@ export function TeamShell({
   teamId: string;
   team: Header["team"];
   user: Header["user"];
-  role: Header["role"];
+  role: TeamRole;
   sprintSelector: Header["sprintSelector"];
   children: ReactNode;
 }) {
@@ -42,7 +43,7 @@ export function TeamShell({
         team={team}
         user={user}
         role={role}
-        teamNav={{ teamId, current, requestedSprintId }}
+        teamNav={{ teamId, role, current, requestedSprintId }}
         sprintSelector={
           !isSprintPage || sprintSelector === null
             ? null
