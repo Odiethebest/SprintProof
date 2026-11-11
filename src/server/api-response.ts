@@ -1,6 +1,8 @@
+import { unstable_rethrow } from "next/navigation";
 import type { z } from "zod";
 import type { ApiTeamAccess } from "@/lib/auth/team-access";
 import { paginationQuerySchema } from "@/lib/api/pagination";
+import { describeDatabaseError } from "@/server/prisma-errors";
 
 type DeniedAccess = Extract<ApiTeamAccess, { isAllowed: false }>;
 
@@ -21,6 +23,35 @@ export function errorResponse({
   message: string;
 }): Response {
   return Response.json({ error: { code, message } }, { status });
+}
+
+// Wraps every /api/v1 handler, so an error nothing expected (a database outage,
+// a bug) still answers in the one error shape, with nothing about the failure
+// in it. The log names the route and the error's code or name only: never its
+// message or the request body, which can quote standup text, feedback or
+// tokens (AGENTS.md §4 Security requirements).
+export async function catchUnexpectedErrors({
+  route,
+  handler,
+}: {
+  route: string;
+  handler: () => Promise<Response>;
+}): Promise<Response> {
+  try {
+    return await handler();
+  } catch (error) {
+    // Next.js throws to redirect or to stop a prerender; it handles those itself.
+    unstable_rethrow(error);
+    console.error(
+      `Unexpected error in ${route}:`,
+      describeDatabaseError(error)
+    );
+    return errorResponse({
+      status: 500,
+      code: "INTERNAL_ERROR",
+      message: "Something went wrong on our side. Try again in a moment.",
+    });
+  }
 }
 
 export function accessDeniedResponse(access: DeniedAccess): Response {

@@ -29,18 +29,24 @@ export async function requireTeamRole(
   return checkMembership(await getSessionUserId(), teamId, roles);
 }
 
-// For the read-only endpoints that also take a personal API token (#16). A
-// request with an Authorization header is checked by its token alone, even when
-// it also carries a session cookie; without one it falls back to the session.
-// Every other endpoint uses requireTeamRole(), so a token can't change anything.
-export async function requireApiTeamRole(
-  request: Request,
-  teamId: string,
-  roles: readonly TeamRole[]
-): Promise<ApiTeamAccess> {
+// Who is calling, or one of the two 401s: no token and no session
+// (UNAUTHENTICATED), or a token that doesn't work (INVALID_TOKEN).
+export type ApiUserAccess =
+  { isAllowed: true; userId: string } | Extract<ApiTeamAccess, { status: 401 }>;
+
+// The caller of a read-only endpoint that also takes a personal API token (#16,
+// #97). A request with an Authorization header is checked by its token alone,
+// even when it also carries a session cookie; without one it falls back to the
+// session. Every other endpoint uses requireTeamRole(), so a token can't change
+// anything.
+export async function requireApiUser(request: Request): Promise<ApiUserAccess> {
   const authorization = request.headers.get("authorization");
   if (authorization === null) {
-    return requireTeamRole(teamId, roles);
+    const userId = await getSessionUserId();
+    if (userId === null) {
+      return { isAllowed: false, status: 401, code: "UNAUTHENTICATED" };
+    }
+    return { isAllowed: true, userId };
   }
   const token = parseBearerToken({ authorization });
   const owner =
@@ -53,5 +59,18 @@ export async function requireApiTeamRole(
   if (owner === null) {
     return { isAllowed: false, status: 401, code: "INVALID_TOKEN" };
   }
-  return checkMembership(owner.userId, teamId, roles);
+  return { isAllowed: true, userId: owner.userId };
+}
+
+// requireApiUser(), then the caller's role on the team.
+export async function requireApiTeamRole(
+  request: Request,
+  teamId: string,
+  roles: readonly TeamRole[]
+): Promise<ApiTeamAccess> {
+  const caller = await requireApiUser(request);
+  if (!caller.isAllowed) {
+    return caller;
+  }
+  return checkMembership(caller.userId, teamId, roles);
 }

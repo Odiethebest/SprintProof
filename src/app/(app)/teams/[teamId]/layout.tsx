@@ -1,11 +1,10 @@
 import { Suspense, type ReactNode } from "react";
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import { requireTeamRole } from "@/server/auth";
 import { getCurrentUser } from "@/server/current-user";
 import { findTeam } from "@/server/repositories/teams";
 import { listSprints } from "@/server/repositories/sprints";
 import { selectSprint } from "@/lib/sprints";
-import { toSignInPath } from "@/lib/auth/sign-in-redirect";
 import { buildSprintSelector } from "@/components/layout/sprint-navigation";
 import { TeamShell } from "@/components/layout/team-shell";
 import { PageLoading } from "@/components/layout/page-loading";
@@ -28,8 +27,13 @@ async function TeamLayoutContent({ params, children }: Props) {
     "INSTRUCTOR",
   ]);
   if (!access.isAllowed) {
-    if (access.status === 401)
-      redirect(toSignInPath({ callbackPath: `/teams/${teamId}/dashboard` }));
+    // Each page sends a signed-out visitor to sign-in with its own path as the
+    // callback. A layout can't read the path, and Next.js renders the page in
+    // parallel with it anyway, so a redirect here could win the race with the
+    // wrong page (#93). With no user there's no top bar to show.
+    if (access.status === 401) {
+      return children;
+    }
     notFound();
   }
   const [user, team, sprints] = await Promise.all([

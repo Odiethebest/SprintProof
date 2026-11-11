@@ -120,7 +120,7 @@ Never use font sizes outside this table.
 
 - Content width `max-w-6xl mx-auto px-4 md:px-6`.
 - Top bar: team mark, team name with the repo below it (repo hidden below `sm`), sprint selector, `LiveIndicator`, user menu.
-- Team navigation (team pages only): a second row in the top bar with links to Dashboard, Standups and Settings, each `h-9 px-3 rounded-md text-sm font-medium`. The current page has `aria-current="page"` and `bg-primary/10 text-primary`; the others are `text-text-muted` with the `ghost` hover. The prototype has no product navigation (its tab row is part of the demo controls), so this row was added in #12.
+- Team navigation (team pages only): a second row in the top bar with links to Dashboard, Standups, Review (leads and instructors only, #15) and Settings, each `h-9 px-3 rounded-md text-sm font-medium`. The current page has `aria-current="page"` and `bg-primary/10 text-primary`; the others are `text-text-muted` with the `ghost` hover. The prototype has no product navigation (its tab row is part of the demo controls), so this row was added in #12.
 - Page header: title on the left with a `text-sm text-text-muted` meta line below it; pills and at most one primary action on the right. Wraps on narrow screens.
 - **Dashboard:** `lg:grid-cols-3`; member cards span 2 columns in their own `md:grid-cols-2` grid, activity feed 1 column. Below `lg`, the feed stacks under the cards.
 - **Standups:** `lg:grid-cols-3`; form 1 column, history 2 columns.
@@ -128,6 +128,7 @@ Never use font sizes outside this table.
 - **Review:** requirements table full width, then standups and retro side by side (`lg:grid-cols-2`), then peer feedback full width.
 - **Settings:** `lg:grid-cols-2`; sprints and API tokens span both columns.
 - **API docs** (`/api-docs`, public, no mockup): a top bar with only the app mark and name, the page header ("API docs", base URL and an `openapi.yaml` link), one line on sending a token, then Swagger UI full width in a light card.
+- **Not found** (`app/not-found.tsx`, no mockup): unknown paths and team pages that call `notFound()`. The sign-in card's layout: the app mark, "Page not found", one sentence that doesn't say whether a team exists, and a primary "Your teams" link to `/`. No top bar, because signed-out visitors see it too (#100).
 - Breakpoints: Tailwind defaults (`sm 640`, `md 768`, `lg 1024`). Must work at 360 px.
 
 ## 7. Components
