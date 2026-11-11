@@ -3,9 +3,9 @@ import { format } from "date-fns";
 import {
   getDaysLeft,
   getSprintState,
-  getSprintWindow,
   type SprintDateRange,
 } from "@/lib/sprints";
+import { attributeActivities } from "@/lib/stats/attribute-activities";
 
 export type RequirementStatus = "MET" | "ON_TRACK" | "AT_RISK" | "MISSED";
 
@@ -75,6 +75,50 @@ function toCalendarDate(date: Date, timezone: string): string {
   return format(date, "yyyy-MM-dd", { in: tz(timezone) });
 }
 
+interface FindReviewedPrsOptions {
+  sprint: SprintDateRange;
+  timeZone: string;
+  members: Member[];
+  activities: Activity[];
+}
+
+// Counting rule: reviews count once per PR, inside the sprint, on someone
+// else's PR; bots are ignored (AGENTS.md §1, R3, R4). attributeActivities()
+// matches logins to members, the same way as for commits and PRs.
+function findReviewedPrs({
+  sprint,
+  timeZone,
+  members,
+  activities,
+}: FindReviewedPrsOptions): Map<string, Set<number>> {
+  const attributed = attributeActivities({
+    sprint,
+    timeZone,
+    members,
+    // An Activity's `createdAt` is when it happened on GitHub.
+    activities: activities.map(({ createdAt, ...activity }) => ({
+      ...activity,
+      occurredAt: createdAt,
+    })),
+  });
+  const reviewedPrs = new Map<string, Set<number>>();
+  for (const { userId, activity } of attributed) {
+    const authorLogin = activity.prAuthorLogin?.toLowerCase();
+    if (
+      activity.type !== "REVIEW" ||
+      activity.prNumber == null ||
+      !authorLogin ||
+      authorLogin === activity.actorLogin.toLowerCase()
+    ) {
+      continue;
+    }
+    const prs = reviewedPrs.get(userId) ?? new Set<number>();
+    prs.add(activity.prNumber);
+    reviewedPrs.set(userId, prs);
+  }
+  return reviewedPrs;
+}
+
 // Requirement status: MET, ON_TRACK, AT_RISK (<= 2 days left), MISSED (AGENTS.md §1, R5)
 function computeRequirementProgress(
   count: number,
@@ -109,15 +153,16 @@ export function computeRequirementStatus(
     startDate: toCalendarDate(sprint.startDate, timeZone),
     endDate: toCalendarDate(sprint.endDate, timeZone),
   };
-  // Counting rule: sprint boundaries in team timezone (AGENTS.md §1, R1)
-  const window = getSprintWindow({ sprint: sprintDates, timeZone });
   const isSprintEnded =
     getSprintState({ sprint: sprintDates, now, timeZone }) === "ENDED";
   // Days left = sprint end date minus today's date in team timezone + 1 (AGENTS.md §1, R5)
   const daysLeft = getDaysLeft({ sprint: sprintDates, now, timeZone });
-
-  const startTime = window.start.getTime();
-  const endTime = window.end.getTime();
+  const reviewedPrs = findReviewedPrs({
+    sprint: sprintDates,
+    timeZone,
+    members,
+    activities,
+  });
 
   return members.map((member) => {
     // Counting rule: at most one standup per person per calendar day in team timezone (AGENTS.md §1, R2)
@@ -134,44 +179,6 @@ export function computeRequirementStatus(
     }
     const standupCount = standupDays.size;
 
-    // Counting rule: reviews on own PR never count; distinct PRs reviewed; ignore bots (AGENTS.md §1, R3, R4)
-    let reviewCount = 0;
-    if (member.githubLogin) {
-      const reviewerLogin = member.githubLogin.toLowerCase();
-      const isReviewerBot = reviewerLogin.endsWith("[bot]");
-
-      if (!isReviewerBot) {
-        const reviewedPrs = new Set<number>();
-
-        for (const activity of activities) {
-          if (activity.type !== "REVIEW") {
-            continue;
-          }
-
-          const actorLogin = activity.actorLogin.toLowerCase();
-          if (actorLogin.endsWith("[bot]") || actorLogin !== reviewerLogin) {
-            continue;
-          }
-
-          const activityTime = activity.createdAt.getTime();
-          if (activityTime < startTime || activityTime > endTime) {
-            continue;
-          }
-
-          const authorLogin = activity.prAuthorLogin?.toLowerCase();
-          if (!authorLogin || authorLogin === reviewerLogin) {
-            continue;
-          }
-
-          if (activity.prNumber != null) {
-            reviewedPrs.add(activity.prNumber);
-          }
-        }
-
-        reviewCount = reviewedPrs.size;
-      }
-    }
-
     return {
       userId: member.userId,
       standups: computeRequirementProgress(
@@ -181,7 +188,7 @@ export function computeRequirementStatus(
         isSprintEnded
       ),
       reviews: computeRequirementProgress(
-        reviewCount,
+        reviewedPrs.get(member.userId)?.size ?? 0,
         sprint.reviewsPerPerson,
         daysLeft,
         isSprintEnded
