@@ -3,6 +3,7 @@ import { getSprintWindow } from "@/lib/sprints";
 import { buildSprintSummary } from "@/lib/stats/sprint-summary";
 import {
   accessDeniedResponse,
+  catchUnexpectedErrors,
   parseInput,
   sprintNotFoundResponse,
 } from "@/server/api-response";
@@ -18,13 +19,21 @@ const paramsSchema = z.object({
   sprintId: z.string().min(1),
 });
 
+interface Context {
+  params: Promise<{ teamId: string; sprintId: string }>;
+}
+
 // GET: One sprint's counts per member: commits, opened PRs, standups and
 // reviews with their requirement status. Any member can read it, with a
 // session or an API token (#16). Peer feedback is never part of it (AGENTS.md §1).
-export async function GET(
-  request: Request,
-  { params }: { params: Promise<{ teamId: string; sprintId: string }> }
-) {
+export async function GET(request: Request, context: Context) {
+  return catchUnexpectedErrors({
+    route: "GET /api/v1/teams/{teamId}/sprints/{sprintId}/summary",
+    handler: () => handleGet(request, context),
+  });
+}
+
+async function handleGet(request: Request, { params }: Context) {
   const parsedParams = parseInput({
     input: await params,
     schema: paramsSchema,

@@ -2,6 +2,7 @@ import { z } from "zod";
 import { createSprintSchema } from "@/lib/sprints";
 import {
   accessDeniedResponse,
+  catchUnexpectedErrors,
   errorResponse,
   invalidCursorResponse,
   parseInput,
@@ -17,12 +18,20 @@ import {
 
 const paramsSchema = z.object({ teamId: z.string().min(1) });
 
+interface Context {
+  params: Promise<{ teamId: string }>;
+}
+
 // GET: Lists a team's sprints, oldest first, one page at a time. Any member
 // (LEAD, MEMBER, INSTRUCTOR) can list, with a session or an API token (#16).
-export async function GET(
-  request: Request,
-  { params }: { params: Promise<{ teamId: string }> }
-) {
+export async function GET(request: Request, context: Context) {
+  return catchUnexpectedErrors({
+    route: "GET /api/v1/teams/{teamId}/sprints",
+    handler: () => handleGet(request, context),
+  });
+}
+
+async function handleGet(request: Request, { params }: Context) {
   const parsedParams = parseInput({
     input: await params,
     schema: paramsSchema,
@@ -51,10 +60,14 @@ export async function GET(
 }
 
 // POST: Creates a sprint. Lead only.
-export async function POST(
-  request: Request,
-  { params }: { params: Promise<{ teamId: string }> }
-) {
+export async function POST(request: Request, context: Context) {
+  return catchUnexpectedErrors({
+    route: "POST /api/v1/teams/{teamId}/sprints",
+    handler: () => handlePost(request, context),
+  });
+}
+
+async function handlePost(request: Request, { params }: Context) {
   const parsedParams = parseInput({
     input: await params,
     schema: paramsSchema,

@@ -128,6 +128,7 @@ Never use font sizes outside this table.
 - **Review:** requirements table full width, then standups and retro side by side (`lg:grid-cols-2`), then peer feedback full width.
 - **Settings:** `lg:grid-cols-2`; sprints and API tokens span both columns.
 - **API docs** (`/api-docs`, public, no mockup): a top bar with only the app mark and name, the page header ("API docs", base URL and an `openapi.yaml` link), one line on sending a token, then Swagger UI full width in a light card.
+- **Not found** (`app/not-found.tsx`, no mockup): unknown paths and team pages that call `notFound()`. The sign-in card's layout: the app mark, "Page not found", one sentence that doesn't say whether a team exists, and a primary "Your teams" link to `/`. No top bar, because signed-out visitors see it too (#100).
 - Breakpoints: Tailwind defaults (`sm 640`, `md 768`, `lg 1024`). Must work at 360 px.
 
 ## 7. Components

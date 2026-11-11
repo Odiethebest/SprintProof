@@ -119,7 +119,7 @@ Exact versions are pinned in `package.json`.
 ```text
 sprintproof/
 ├── .github/
-│   ├── workflows/ci.yml
+│   ├── workflows/                    # CI, database migrations, production guard, CodeQL, dependency review
 │   ├── ISSUE_TEMPLATE/
 │   └── pull_request_template.md
 ├── .agents/ .cursor/ .claude/        # tool-specific scoped rules and skills only
@@ -259,18 +259,38 @@ The OAuth scopes we request, and why, are recorded in [`docs/decisions/`](docs/d
 
 See [`docs/architecture.md`](docs/architecture.md) for details.
 
+### Database migrations
+
+After every push to `main`, the Database workflow (`database.yml`) runs `prisma migrate deploy` on the preview database, then on production, so a migration that fails on preview never reaches production. Each job reads a `DATABASE_URL` secret from the GitHub environment named after its database, `preview` or `production`. Until that secret exists, the job adds a notice to the run and skips instead of failing.
+
+To add the secrets, once, from a checkout of the repo (repo admin):
+
+```bash
+gh api --method PUT repos/Odiethebest/SprintProof/environments/preview
+gh api --method PUT repos/Odiethebest/SprintProof/environments/production
+gh secret set DATABASE_URL --env preview       # paste the value at the prompt; it isn't echoed
+gh secret set DATABASE_URL --env production
+```
+
+Each value is that project's Session pooler URI (Supabase → Connect → Session pooler, port 5432) with the password filled in ([decision 002](docs/decisions/002-database-hosting.md)). Then re-run the latest Database run on `main` (Actions → Database → Re-run all jobs), or wait for the next push.
+
+After the migrations, a smoke test polls `https://sprintproof.vercel.app/api/health` every 15 seconds for up to 10 minutes. It passes once production answers `"status": "ok"` with the pushed commit, or with a later commit that includes it, which shows that Vercel deployed it and that production reaches its database. Otherwise it fails with the last answer it got. `GET /api/health` is public and returns no team data: it runs `SELECT 1` and returns `{ "status": "ok", "commit": "<deployed Git SHA>" }` (`commit` is `null` outside Vercel), or 503 `DATABASE_UNAVAILABLE`.
+
+Supabase pauses a free project after about a week of low activity. To keep both awake, the Database workflow runs `SELECT 1` on both databases daily once the secrets exist, and the production guard checks production's `/api/health` daily, which needs no secret.
+
 ### Continuous integration
 
 | Check | Workflow | Runs on | What it does |
 |---|---|---|---|
 | Lint and typecheck | `ci.yml` | Every PR and push to `main` | ESLint and `tsc --noEmit` |
-| Unit tests | `ci.yml` | After lint and typecheck | Unit tests, then integration tests against a PostgreSQL 17 service container |
+| Unit tests | `ci.yml` | After lint and typecheck | Unit tests with coverage, failing below 90% lines, statements and functions or 85% branches in `src/lib/`, with the totals in the job summary. Then integration tests against a PostgreSQL 17 service container, which also fail when no test files are found |
 | E2E tests | `ci.yml` | After unit tests | Applies migrations to a PostgreSQL 17 service container, builds with the Pusher settings of a Soketi service container (live updates), then runs every spec in `e2e/` against `next start` with one worker (the specs share one database). The Playwright report is uploaded as an artifact when it fails |
 | Production build | `ci.yml` | After E2E tests | `next build` |
 | Dependency audit | `ci.yml` | Every PR and push to `main` | `npm audit --audit-level=high`: fails on high or critical advisories |
 | Dependency review | `dependency-review.yml` | Every PR | Fails if the PR adds a dependency with a high or critical advisory |
 | CodeQL | `codeql.yml` | Every PR, push to `main`, weekly | Code scanning for JavaScript and TypeScript; results under Security → Code scanning |
-| Production guard | `production-guard.yml` | Push to `main`, daily, manual | Fails if production's `/api/auth/providers` offers the test sign-in provider (`E2E_TEST_AUTH`). Not run on PRs, so a production outage doesn't block them |
+| Production guard | `production-guard.yml` | Push to `main`, daily, manual | Fails if production's `/api/auth/providers` offers the test sign-in provider (`E2E_TEST_AUTH`). Daily and manual runs also fail unless production's `/api/health` answers ok, which keeps the production database awake. Not run on PRs, so a production outage doesn't block them |
+| Database | `database.yml` | Push to `main`, daily, manual | After a push: `prisma migrate deploy` on the preview database, then production, then the production smoke test. Daily and manual: `SELECT 1` on both databases. Jobs without their environment's `DATABASE_URL` secret skip with a notice. See [Database migrations](#database-migrations) |
 
 ---
 
@@ -278,6 +298,7 @@ See [`docs/architecture.md`](docs/architecture.md) for details.
 
 ```bash
 npm test                    # unit tests for src/lib/ (Vitest)
+npm test -- --coverage      # the same, failing below the coverage thresholds CI enforces
 npm run test:integration    # route handlers against a real PostgreSQL test database
 npm run test:e2e            # Playwright user flows + axe accessibility checks
 npx vitest run tests/unit/checks/standup-quota.test.ts   # a single test file
@@ -317,7 +338,7 @@ refactor(checks): extract sprint date helpers (#7)
 
 | Level | Covers | Goal |
 |---|---|---|
-| Unit | Every function in `src/lib/` | ≥ 90% line coverage |
+| Unit | Every function in `src/lib/` | ≥ 90% lines, statements and functions and ≥ 85% branches; CI fails below that |
 | Integration | API route handlers with a real database; only GitHub and Pusher wrappers are mocked | Every acceptance criterion |
 | E2E | Main user flows in a browser, each with an accessibility check (no serious or critical violations) | Every flow in the PRD |
 
@@ -392,7 +413,7 @@ Each member gets 3 votes per retro, at most 1 per item. The top 3 "To improve" i
 | Retros and action items | Planned | Voting, top 3 "To improve" items carried into the next sprint (#13) |
 | Peer feedback | Planned | Instructor-only, enforced on the server (#14) |
 | Instructor view and Markdown export | Partly done | Read-only review page at `/review/[teamId]` for leads and instructors: requirements per member with status, standups by day, and a `sprint-N-summary.md` export (preview, copy, download) in the `docs/sprints/` style (PR #108). Retro items, action items and instructor-only peer feedback wait on #13 and #14; until then the page and the export say they aren't recorded yet |
-| Public REST API | Done | Personal tokens stored as SHA-256 hashes; read-only Bearer access to sprints, sprint summaries and standups; cursor pagination; Swagger UI at `/api-docs` (PRs #64, #65, #66); inputs that used to return 500 are rejected (PR #82) |
+| Public REST API | Done | Personal tokens stored as SHA-256 hashes; read-only Bearer access to sprints, sprint summaries and standups; cursor pagination; Swagger UI at `/api-docs` (PRs #64, #65, #66); inputs that used to return 500 are rejected (PR #82); team listing (`GET /teams`, and `GET /teams/{teamId}` with its members) and 500 `INTERNAL_ERROR` in the same error shape for unexpected errors (#97) |
 
 ---
 
