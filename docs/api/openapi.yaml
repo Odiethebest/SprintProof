@@ -880,8 +880,11 @@ components:
               type: string
               enum: [UPCOMING, CURRENT, ENDED]
             daysLeft:
-              type: integer
-              description: The end date minus today, plus 1 because today counts. 0 once the sprint has ended.
+              type: [integer, "null"]
+              description: |
+                The end date minus today, plus 1 because today counts. 0 once the
+                sprint has ended. `null` before the sprint starts (`state` is
+                `UPCOMING`), like each requirement's `status`.
         countsAsOf:
           type: string
           format: date-time

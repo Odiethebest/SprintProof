@@ -13,6 +13,7 @@ import {
   insertTeam,
   insertUser,
 } from "../../factories/db";
+import { releaseActivityInsertsTogether } from "../helpers/activity-inserts";
 import { signWebhookPayload, webhookRequest } from "../helpers/requests";
 import { clearDatabase } from "../setup/test-setup";
 
@@ -21,6 +22,34 @@ import { clearDatabase } from "../setup/test-setup";
 vi.mock("@/server/realtime", () => ({ triggerTeamEvent: vi.fn() }));
 
 const TEST_SECRET = "test-webhook-secret-12345";
+
+function sendSigned(input: {
+  event: string;
+  payload: unknown;
+  deliveryId: string;
+}) {
+  const body = JSON.stringify(input.payload);
+  return POST(
+    webhookRequest({
+      event: input.event,
+      body,
+      signature: signWebhookPayload(body, TEST_SECRET),
+      deliveryId: input.deliveryId,
+    })
+  );
+}
+
+// A push from alice with one commit per SHA, in the order given.
+function pushWithShas(shas: string[]) {
+  return {
+    ...pushPayload,
+    commits: shas.map((sha, index) => ({
+      ...pushPayload.commits[0],
+      id: sha,
+      message: `Commit ${index + 1}`,
+    })),
+  };
+}
 
 describe("POST /api/webhooks/github", () => {
   beforeEach(async () => {
@@ -269,6 +298,48 @@ describe("POST /api/webhooks/github", () => {
       });
       expect(botActivities).toHaveLength(0);
     });
+
+    // PostgreSQL text can't store NUL, and a redelivery carries the same
+    // payload, so a 500 here meant the commit never counted (#90).
+    it("stores a commit whose message contains NUL with the NUL removed", async () => {
+      // Arrange
+      const user = await insertUser({ githubLogin: "alice" });
+      const team = await insertTeam({
+        repoFullName: "Odiethebest/SprintProof",
+        repoId: 987654321n,
+      });
+      await insertMembership({
+        userId: user.id,
+        teamId: team.id,
+        role: "MEMBER",
+      });
+      const commit = {
+        ...pushPayload.commits[0],
+        message: "feat: add\u0000 feature\n\nDetailed\u0000 explanation",
+      };
+
+      // Act
+      const response = await sendSigned({
+        event: "push",
+        payload: { ...pushPayload, commits: [commit] },
+        deliveryId: "nul-commit-delivery",
+      });
+
+      // Assert
+      expect(response.status).toBe(200);
+      const activities = await db.activity.findMany({
+        where: { teamId: team.id },
+      });
+      expect(activities).toEqual([
+        expect.objectContaining({
+          type: "COMMIT",
+          actorLogin: "alice",
+          sha: "1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b",
+          title: "feat: add feature",
+          occurredAt: new Date("2026-11-05T15:30:00Z"),
+        }),
+      ]);
+    });
   });
 
   describe("pull_request event", () => {
@@ -394,6 +465,49 @@ describe("POST /api/webhooks/github", () => {
       });
     });
 
+    it("stores a review on a PR whose title contains NUL with the NUL removed", async () => {
+      // Arrange
+      const user = await insertUser({ githubLogin: "bob" });
+      const team = await insertTeam({
+        repoFullName: "Odiethebest/SprintProof",
+        repoId: 987654321n,
+      });
+      await insertMembership({
+        userId: user.id,
+        teamId: team.id,
+        role: "MEMBER",
+      });
+      const payload = {
+        ...prReviewPayload,
+        pull_request: {
+          ...prReviewPayload.pull_request,
+          title: "Add\u0000 webhook receiver",
+        },
+      };
+
+      // Act
+      const response = await sendSigned({
+        event: "pull_request_review",
+        payload,
+        deliveryId: "nul-title-review-delivery",
+      });
+
+      // Assert
+      expect(response.status).toBe(200);
+      const activities = await db.activity.findMany({
+        where: { teamId: team.id },
+      });
+      expect(activities).toEqual([
+        expect.objectContaining({
+          type: "REVIEW",
+          actorLogin: "bob",
+          prNumber: 42,
+          prAuthorLogin: "alice",
+          title: "Add webhook receiver",
+        }),
+      ]);
+    });
+
     it("ignores reviews submitted by bots ending in [bot]", async () => {
       const team = await insertTeam({
         repoFullName: "Odiethebest/SprintProof",
@@ -517,6 +631,43 @@ describe("POST /api/webhooks/github", () => {
       });
       expect(countAfterSecond).toBe(1);
     });
+
+    // In payload order, each delivery could wait on a row the other had
+    // inserted first; PostgreSQL aborted one as a deadlock, and it returned 500
+    // until someone redelivered it by hand (#90).
+    it("returns 200 for both of two concurrent deliveries with the same SHAs in opposite order, storing each commit once", async () => {
+      // Arrange
+      await insertTeam({
+        repoFullName: "Odiethebest/SprintProof",
+        repoId: 987654321n,
+      });
+      const shas = Array.from({ length: 500 }, (_, index) =>
+        index.toString(16).padStart(40, "0")
+      );
+
+      // Act
+      const responses = await releaseActivityInsertsTogether({
+        count: 2,
+        run: () =>
+          Promise.all([
+            sendSigned({
+              event: "push",
+              payload: pushWithShas(shas),
+              deliveryId: "ascending-shas",
+            }),
+            sendSigned({
+              event: "push",
+              payload: pushWithShas([...shas].reverse()),
+              deliveryId: "descending-shas",
+            }),
+          ]),
+      });
+
+      // Assert
+      expect(responses.map((response) => response.status)).toEqual([200, 200]);
+      const stored = await db.activity.findMany({ select: { sha: true } });
+      expect(stored.map((row) => row.sha).sort()).toEqual(shas);
+    }, 15000);
   });
 
   describe("unknown repository", () => {
