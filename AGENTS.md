@@ -87,7 +87,7 @@ src/
 │   ├── checks/                   # requirement checks (standups, reviews per person)
 │   ├── stats/                    # contribution counts per member per sprint (commits, opened PRs), activity → member attribution, sprint summary for the API
 │   ├── dashboard/                # activity feed: standups, PRs, reviews, commits grouped per member per day
-│   ├── sprints/                  # sprint date math, timezone boundaries, days left, sprint selection (validate-sprint.ts, sprint-dates.ts, sprint-body.ts, sprint-selection.ts)
+│   ├── sprints/                  # sprint date math, timezone boundaries, days left, sprint selection (validate-sprint.ts, day-start.ts, sprint-dates.ts, sprint-body.ts, sprint-selection.ts)
 │   ├── standups/                 # standup input, standup date in the team timezone, history grouped by day, the form's day and unsent text across a day change
 │   ├── retro/                    # vote tallying, action item selection
 │   ├── github/                   # GitHub login and profile rules, webhook payload → Activity mapping
@@ -176,6 +176,7 @@ Main Prisma models: `User`, `Team`, `Membership` (role: `LEAD` | `MEMBER` | `INS
 - TypeScript strict. No `any`; use `unknown` and narrow. No `@ts-ignore`. Non-null assertions (`!`) only in tests.
 - **One input shape per function.** Each exported function in `src/lib/` takes one options object (for #10: `{ sprint, members, standups, activities, now }`), typed from the domain model. No positional overloads. No second name for the same value, in the input or the result. No fallback chains across alternative field names. No defaults for fields the model requires (timezone, `standupsPerPerson`, `reviewsPerPerson`). Return plain arrays and objects; never attach properties to an array. If a field isn't named anywhere yet, pick one name, put it in the type, and list it under "Assumptions" in your summary.
 - **Calendar dates in `src/lib/`:** new code in `src/lib/` takes calendar dates as `'YYYY-MM-DD'` strings, with `src/lib/checks/requirement-status.ts` as the known exception. Sprint dates are `@db.Date` in the database; map them to `'YYYY-MM-DD'` strings in the server layer.
+- **Host time zone:** date math in `src/lib/` gives the same result on any machine. Turn a calendar date into an instant with `getDayStart()` or `getSprintWindow()` from `lib/sprints/`, which read offsets from `Intl`; `TZDate`'s date constructor and `startOfDay()` read the host's offset near DST changes. Each rule has one implementation, so reuse it: `getSprintWindow()`, `getSprintState()`, `getDaysLeft()` and `attributeActivities()` (login → member, bots ignored).
 - Named exports everywhere, except where Next.js requires a default export (`page.tsx`, `layout.tsx`, etc.).
 - Small functions with early returns. If a function needs a comment to explain *what* it does, split it; comments explain *why*.
 - No `console.log` in committed code.
@@ -199,6 +200,7 @@ Main Prisma models: `User`, `Team`, `Membership` (role: `LEAD` | `MEMBER` | `INS
 - Test structure: Arrange / Act / Assert. One behavior per test. Names describe behavior: `it("counts three reviews on the same PR as one")`.
 - Build test data with `tests/factories/`, not inline object literals repeated across files.
 - Every acceptance criterion in the issue maps to at least one test. Edge cases to always consider: empty sprint, sprint boundary at midnight, member with no GitHub login, bot activity, duplicate webhook delivery.
+- Date tests run under several host time zones: wrap the code under test in `withHostTimeZone()` from `tests/unit/sprints/time-zone-cases.ts` (it sets `process.env.TZ` and restores it) and compare with the day starts `Intl` reports.
 - Never weaken, skip, or delete a test to make it pass.
 
 ---
@@ -409,3 +411,4 @@ Standups, planning notes and retros for our own team are recorded in SprintProof
 | 2026-11-11 | Ziqi (Odie) Yang | Key patterns: pages own the sign-in redirect, and the team layout renders the page alone on a 401; architecture tree lists the team navigation pages in `lib/teams/` (#93) | Issue #93, from Yunhong's review of PR #80: the layout's redirect always named the dashboard |
 | 2026-11-11 | Ziqi (Odie) Yang | Architecture tree lists `components/review/` and the `lib/export/` files; §2 Review and `ExportButton`: the page's top bar and Review link, the card and export text until #13 and #14, and how N in `sprint-N-summary.md` is chosen for names that aren't "Sprint N" (#15) | Issue #15: instructor view and Markdown export. The rules should match the code |
 | 2026-11-11 | Ziqi (Odie) Yang | §2 `StandupForm`: when the day changes while it's open, it keeps the unsent text and its old date until "Load today's form" shows the new date; PRD US-4; architecture tree lists the form state in `lib/standups/` (#91) | Issue #91, from Yunhong's review of PR #81: "Load today's form" reloaded the page and a live refresh after midnight emptied the fields, so unsent text was lost |
+| 2026-11-11 | Ziqi (Odie) Yang | §1 Coding standards: date math in `src/lib/` doesn't depend on the host time zone (`getDayStart()` in `lib/sprints/day-start.ts`), and the sprint window, days left and login attribution each have one implementation; Testing strategy: date tests run under several host time zones; architecture tree lists `day-start.ts` (#99) | Issue #99, from the Nov 11 audit of main: with `TZ=Europe/London` the Nuuk calendar test failed, because `TZDate` and `startOfDay()` read the host's offset near DST changes, and `requirement-status.ts` had its own copies of the window, days left and attribution |

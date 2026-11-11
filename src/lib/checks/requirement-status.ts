@@ -1,5 +1,11 @@
-import { TZDate } from "@date-fns/tz";
-import { differenceInCalendarDays, startOfDay } from "date-fns";
+import { tz } from "@date-fns/tz";
+import { format } from "date-fns";
+import {
+  getDaysLeft,
+  getSprintState,
+  type SprintDateRange,
+} from "@/lib/sprints";
+import { attributeActivities } from "@/lib/stats/attribute-activities";
 
 export type RequirementStatus = "MET" | "ON_TRACK" | "AT_RISK" | "MISSED";
 
@@ -55,41 +61,62 @@ export interface ComputeRequirementStatusOptions {
   now: Date;
 }
 
-// Counting rule: sprint boundaries in team timezone (AGENTS.md §1, R1)
-function getSprintStartBoundary(date: Date, timezone: string): TZDate {
-  const dateInTz = new TZDate(date, timezone);
-  if (
+// Sprint dates come as Dates (AGENTS.md §1 Calendar dates: the known
+// exception): midnight UTC as Prisma reads a DATE column, or midnight in the
+// team timezone. Either way they name one calendar date.
+function toCalendarDate(date: Date, timezone: string): string {
+  const isUtcMidnight =
     date.getUTCHours() === 0 &&
     date.getUTCMinutes() === 0 &&
-    date.getUTCSeconds() === 0 &&
-    dateInTz.getDate() !== date.getUTCDate()
-  ) {
-    return startOfDay(
-      new TZDate(
-        date.getUTCFullYear(),
-        date.getUTCMonth(),
-        date.getUTCDate(),
-        timezone
-      )
-    );
+    date.getUTCSeconds() === 0;
+  if (isUtcMidnight) {
+    return date.toISOString().slice(0, 10);
   }
-  return startOfDay(dateInTz);
+  return format(date, "yyyy-MM-dd", { in: tz(timezone) });
 }
 
-// Counting rule: sprint boundaries in team timezone (AGENTS.md §1, R1)
-function getSprintEndBoundary(date: Date, timezone: string): TZDate {
-  const start = getSprintStartBoundary(date, timezone);
-  const nextDay = new TZDate(
-    start.getFullYear(),
-    start.getMonth(),
-    start.getDate() + 1,
-    timezone
-  );
-  return new TZDate(nextDay.getTime() - 1, timezone);
+interface FindReviewedPrsOptions {
+  sprint: SprintDateRange;
+  timeZone: string;
+  members: Member[];
+  activities: Activity[];
 }
 
-function calendarDate(date: TZDate): string {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+// Counting rule: reviews count once per PR, inside the sprint, on someone
+// else's PR; bots are ignored (AGENTS.md §1, R3, R4). attributeActivities()
+// matches logins to members, the same way as for commits and PRs.
+function findReviewedPrs({
+  sprint,
+  timeZone,
+  members,
+  activities,
+}: FindReviewedPrsOptions): Map<string, Set<number>> {
+  const attributed = attributeActivities({
+    sprint,
+    timeZone,
+    members,
+    // An Activity's `createdAt` is when it happened on GitHub.
+    activities: activities.map(({ createdAt, ...activity }) => ({
+      ...activity,
+      occurredAt: createdAt,
+    })),
+  });
+  const reviewedPrs = new Map<string, Set<number>>();
+  for (const { userId, activity } of attributed) {
+    const authorLogin = activity.prAuthorLogin?.toLowerCase();
+    if (
+      activity.type !== "REVIEW" ||
+      activity.prNumber == null ||
+      !authorLogin ||
+      authorLogin === activity.actorLogin.toLowerCase()
+    ) {
+      continue;
+    }
+    const prs = reviewedPrs.get(userId) ?? new Set<number>();
+    prs.add(activity.prNumber);
+    reviewedPrs.set(userId, prs);
+  }
+  return reviewedPrs;
 }
 
 // Requirement status: MET, ON_TRACK, AT_RISK (<= 2 days left), MISSED (AGENTS.md §1, R5)
@@ -121,19 +148,21 @@ export function computeRequirementStatus(
 ): MemberRequirementStatus[] {
   const { sprint, members, standups, activities, now } = options;
 
-  const sprintStart = getSprintStartBoundary(sprint.startDate, sprint.timezone);
-  const sprintEnd = getSprintEndBoundary(sprint.endDate, sprint.timezone);
-
-  const isSprintEnded = now.getTime() > sprintEnd.getTime();
-  const todayInTz = startOfDay(new TZDate(now, sprint.timezone));
-  const endDayInTz = startOfDay(sprintEnd);
+  const timeZone = sprint.timezone;
+  const sprintDates: SprintDateRange = {
+    startDate: toCalendarDate(sprint.startDate, timeZone),
+    endDate: toCalendarDate(sprint.endDate, timeZone),
+  };
+  const isSprintEnded =
+    getSprintState({ sprint: sprintDates, now, timeZone }) === "ENDED";
   // Days left = sprint end date minus today's date in team timezone + 1 (AGENTS.md §1, R5)
-  const daysLeft = differenceInCalendarDays(endDayInTz, todayInTz) + 1;
-
-  const startTime = sprintStart.getTime();
-  const endTime = sprintEnd.getTime();
-  const firstDate = calendarDate(sprintStart);
-  const lastDate = calendarDate(sprintEnd);
+  const daysLeft = getDaysLeft({ sprint: sprintDates, now, timeZone });
+  const reviewedPrs = findReviewedPrs({
+    sprint: sprintDates,
+    timeZone,
+    members,
+    activities,
+  });
 
   return members.map((member) => {
     // Counting rule: at most one standup per person per calendar day in team timezone (AGENTS.md §1, R2)
@@ -141,49 +170,14 @@ export function computeRequirementStatus(
     const standupDays = new Set<string>();
 
     for (const standup of memberStandups) {
-      if (standup.date >= firstDate && standup.date <= lastDate) {
+      if (
+        standup.date >= sprintDates.startDate &&
+        standup.date <= sprintDates.endDate
+      ) {
         standupDays.add(standup.date);
       }
     }
     const standupCount = standupDays.size;
-
-    // Counting rule: reviews on own PR never count; distinct PRs reviewed; ignore bots (AGENTS.md §1, R3, R4)
-    let reviewCount = 0;
-    if (member.githubLogin) {
-      const reviewerLogin = member.githubLogin.toLowerCase();
-      const isReviewerBot = reviewerLogin.endsWith("[bot]");
-
-      if (!isReviewerBot) {
-        const reviewedPrs = new Set<number>();
-
-        for (const activity of activities) {
-          if (activity.type !== "REVIEW") {
-            continue;
-          }
-
-          const actorLogin = activity.actorLogin.toLowerCase();
-          if (actorLogin.endsWith("[bot]") || actorLogin !== reviewerLogin) {
-            continue;
-          }
-
-          const activityTime = activity.createdAt.getTime();
-          if (activityTime < startTime || activityTime > endTime) {
-            continue;
-          }
-
-          const authorLogin = activity.prAuthorLogin?.toLowerCase();
-          if (!authorLogin || authorLogin === reviewerLogin) {
-            continue;
-          }
-
-          if (activity.prNumber != null) {
-            reviewedPrs.add(activity.prNumber);
-          }
-        }
-
-        reviewCount = reviewedPrs.size;
-      }
-    }
 
     return {
       userId: member.userId,
@@ -194,7 +188,7 @@ export function computeRequirementStatus(
         isSprintEnded
       ),
       reviews: computeRequirementProgress(
-        reviewCount,
+        reviewedPrs.get(member.userId)?.size ?? 0,
         sprint.reviewsPerPerson,
         daysLeft,
         isSprintEnded

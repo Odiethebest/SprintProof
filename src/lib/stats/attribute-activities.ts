@@ -11,16 +11,27 @@ export interface MemberLogin {
   githubLogin: string | null;
 }
 
-export interface AttributeActivitiesOptions {
+// What attribution reads from an activity: whose GitHub login did it, and when
+// it happened on GitHub.
+export interface AttributableActivity {
+  actorLogin: string;
+  occurredAt: Date;
+}
+
+export interface AttributeActivitiesOptions<
+  T extends AttributableActivity = ActivityRecord,
+> {
   sprint: SprintDateRange;
   timeZone: string;
   members: MemberLogin[];
-  activities: ActivityRecord[];
+  activities: T[];
 }
 
-export interface AttributedActivity {
+export interface AttributedActivity<
+  T extends AttributableActivity = ActivityRecord,
+> {
   userId: string;
-  activity: ActivityRecord;
+  activity: T;
 }
 
 function isBotLogin(login: string): boolean {
@@ -30,12 +41,12 @@ function isBotLogin(login: string): boolean {
 // Pairs each activity in the sprint with the member whose GitHub login did it.
 // Activity from logins that aren't on the team is stored but not counted, and
 // bots are ignored for every type (AGENTS.md §1). GitHub logins aren't case-sensitive.
-export function attributeActivities({
+export function attributeActivities<T extends AttributableActivity>({
   sprint,
   timeZone,
   members,
   activities,
-}: AttributeActivitiesOptions): AttributedActivity[] {
+}: AttributeActivitiesOptions<T>): AttributedActivity<T>[] {
   const { start, end } = getSprintWindow({ sprint, timeZone });
   const userIdsByLogin = new Map<string, string>();
   for (const member of members) {
@@ -44,7 +55,7 @@ export function attributeActivities({
     }
   }
 
-  const attributed: AttributedActivity[] = [];
+  const attributed: AttributedActivity<T>[] = [];
   for (const activity of activities) {
     const login = activity.actorLogin.toLowerCase();
     const userId = userIdsByLogin.get(login);

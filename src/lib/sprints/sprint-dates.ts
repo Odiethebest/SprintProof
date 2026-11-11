@@ -1,5 +1,6 @@
-import { TZDate } from "@date-fns/tz";
-import { startOfDay } from "date-fns";
+import { getDayStart } from "./day-start";
+
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 export interface SprintDateRange {
   startDate: string;
@@ -22,19 +23,10 @@ export interface IsWithinSprintOptions {
   timeZone: string;
 }
 
-function parseDateParts(dateStr: string): [number, number, number] {
-  const [yearStr, monthStr, dayStr] = dateStr.split("-");
-  return [Number(yearStr), Number(monthStr), Number(dayStr)];
-}
-
-function getSprintStartBoundary(startDateStr: string, timeZone: string): Date {
-  const [year, month, day] = parseDateParts(startDateStr);
-  return startOfDay(new TZDate(year, month - 1, day, timeZone));
-}
-
-function getSprintEndBoundary(endDateStr: string, timeZone: string): Date {
-  const [year, month, day] = parseDateParts(endDateStr);
-  return new Date(new TZDate(year, month - 1, day + 1, timeZone).getTime() - 1);
+function getNextDate(date: string): string {
+  return new Date(Date.parse(`${date}T00:00:00.000Z`) + DAY_MS)
+    .toISOString()
+    .slice(0, 10);
 }
 
 export interface GetSprintWindowOptions {
@@ -48,14 +40,19 @@ export interface SprintWindow {
 }
 
 // Counting rule: a sprint runs from 00:00 on its start date through 23:59:59.999
-// on its end date, in the team timezone (AGENTS.md §1).
+// on its end date, in the team timezone. The end is the start of the next day
+// minus 1 ms, so it stays right when a DST change skips midnight (AGENTS.md §1).
 export function getSprintWindow({
   sprint,
   timeZone,
 }: GetSprintWindowOptions): SprintWindow {
+  const nextDayStart = getDayStart({
+    date: getNextDate(sprint.endDate),
+    timeZone,
+  });
   return {
-    start: new Date(getSprintStartBoundary(sprint.startDate, timeZone)),
-    end: new Date(getSprintEndBoundary(sprint.endDate, timeZone)),
+    start: getDayStart({ date: sprint.startDate, timeZone }),
+    end: new Date(nextDayStart.getTime() - 1),
   };
 }
 
@@ -64,8 +61,7 @@ export function isWithinSprint({
   instant,
   timeZone,
 }: IsWithinSprintOptions): boolean {
-  const start = getSprintStartBoundary(sprint.startDate, timeZone);
-  const end = getSprintEndBoundary(sprint.endDate, timeZone);
+  const { start, end } = getSprintWindow({ sprint, timeZone });
   const time = instant.getTime();
   return time >= start.getTime() && time <= end.getTime();
 }
@@ -104,8 +100,7 @@ export function getSprintState({
   now,
   timeZone,
 }: GetSprintStateOptions): SprintState {
-  const start = getSprintStartBoundary(sprint.startDate, timeZone);
-  const end = getSprintEndBoundary(sprint.endDate, timeZone);
+  const { start, end } = getSprintWindow({ sprint, timeZone });
   const time = now.getTime();
   if (time < start.getTime()) {
     return "UPCOMING";

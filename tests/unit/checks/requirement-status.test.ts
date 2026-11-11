@@ -660,4 +660,201 @@ describe("computeRequirementStatus", () => {
     expect(results[0]?.standups.required).toBe(3);
     expect(results[0]?.standups.remaining).toBe(0);
   });
+
+  it("doesn't count reviews from just before the sprint starts or just after it ends", () => {
+    // Arrange: the sprint runs from Oct 29 00:00 PDT (07:00 UTC) through
+    // Nov 4 23:59:59.999 PST (Nov 5 07:59:59.999 UTC)
+    const sprint = createSprint({ timezone, reviewsPerPerson: 5 });
+    const member = createMember({ userId: "user-1", githubLogin: "alice" });
+    const now = new TZDate(2026, 10, 2, 12, 0, timezone);
+
+    const activities = [
+      createActivity({
+        actorLogin: "alice",
+        prNumber: 1,
+        prAuthorLogin: "bob",
+        createdAt: new Date("2026-10-29T06:59:59.999Z"),
+      }),
+      createActivity({
+        actorLogin: "alice",
+        prNumber: 2,
+        prAuthorLogin: "bob",
+        createdAt: new Date("2026-11-05T08:00:00.000Z"),
+      }),
+    ];
+
+    // Act
+    const results = computeRequirementStatus({
+      sprint,
+      members: [member],
+      standups: [],
+      activities,
+      now,
+    });
+
+    // Assert
+    expect(results[0]?.reviews.count).toBe(0);
+  });
+
+  it("counts reviews on the first and the last millisecond of the sprint", () => {
+    // Arrange: Oct 29 00:00 PDT and Nov 4 23:59:59.999 PST
+    const sprint = createSprint({ timezone, reviewsPerPerson: 5 });
+    const member = createMember({ userId: "user-1", githubLogin: "alice" });
+    const now = new TZDate(2026, 10, 2, 12, 0, timezone);
+
+    const activities = [
+      createActivity({
+        actorLogin: "alice",
+        prNumber: 1,
+        prAuthorLogin: "bob",
+        createdAt: new Date("2026-10-29T07:00:00.000Z"),
+      }),
+      createActivity({
+        actorLogin: "alice",
+        prNumber: 2,
+        prAuthorLogin: "bob",
+        createdAt: new Date("2026-11-05T07:59:59.999Z"),
+      }),
+    ];
+
+    // Act
+    const results = computeRequirementStatus({
+      sprint,
+      members: [member],
+      standups: [],
+      activities,
+      now,
+    });
+
+    // Assert
+    expect(results[0]?.reviews.count).toBe(2);
+  });
+
+  it("matches the reviewer's GitHub login without regard to case", () => {
+    // Arrange: the member signed in as "Alice"; GitHub sends other cases
+    const sprint = createSprint({ timezone, reviewsPerPerson: 5 });
+    const member = createMember({ userId: "user-1", githubLogin: "Alice" });
+    const now = new TZDate(2026, 10, 2, 12, 0, timezone);
+
+    const activities = [
+      createActivity({
+        actorLogin: "alice",
+        prNumber: 1,
+        prAuthorLogin: "bob",
+        createdAt: new TZDate(2026, 9, 30, 10, 0, timezone),
+      }),
+      createActivity({
+        actorLogin: "ALICE",
+        prNumber: 2,
+        prAuthorLogin: "bob",
+        createdAt: new TZDate(2026, 9, 31, 10, 0, timezone),
+      }),
+    ];
+
+    // Act
+    const results = computeRequirementStatus({
+      sprint,
+      members: [member],
+      standups: [],
+      activities,
+      now,
+    });
+
+    // Assert
+    expect(results[0]?.reviews.count).toBe(2);
+  });
+
+  it("doesn't count a review on the member's own PR when the logins differ only in case", () => {
+    // Arrange: Alice reviews a PR she opened; the two logins come in different cases
+    const sprint = createSprint({ timezone, reviewsPerPerson: 5 });
+    const member = createMember({ userId: "user-1", githubLogin: "alice" });
+    const now = new TZDate(2026, 10, 2, 12, 0, timezone);
+
+    const ownPrReview = createActivity({
+      actorLogin: "Alice",
+      prNumber: 201,
+      prAuthorLogin: "ALICE",
+      createdAt: new TZDate(2026, 9, 30, 14, 0, timezone),
+    });
+
+    // Act
+    const results = computeRequirementStatus({
+      sprint,
+      members: [member],
+      standups: [],
+      activities: [ownPrReview],
+      now,
+    });
+
+    // Assert
+    expect(results[0]?.reviews.count).toBe(0);
+  });
+
+  it("doesn't count a review when the PR's author isn't known", () => {
+    // Arrange: without the author there's no telling whether it's the member's own PR
+    const sprint = createSprint({ timezone, reviewsPerPerson: 5 });
+    const member = createMember({ userId: "user-1", githubLogin: "alice" });
+    const now = new TZDate(2026, 10, 2, 12, 0, timezone);
+
+    const activities = [
+      createActivity({
+        actorLogin: "alice",
+        prNumber: 1,
+        prAuthorLogin: null,
+        createdAt: new TZDate(2026, 9, 30, 10, 0, timezone),
+      }),
+      createActivity({
+        actorLogin: "alice",
+        prNumber: 2,
+        prAuthorLogin: undefined,
+        createdAt: new TZDate(2026, 9, 30, 11, 0, timezone),
+      }),
+    ];
+
+    // Act
+    const results = computeRequirementStatus({
+      sprint,
+      members: [member],
+      standups: [],
+      activities,
+      now,
+    });
+
+    // Assert
+    expect(results[0]?.reviews.count).toBe(0);
+  });
+
+  it("doesn't count a review without a PR number", () => {
+    // Arrange: reviews count once per PR, so one without a number can't count
+    const sprint = createSprint({ timezone, reviewsPerPerson: 5 });
+    const member = createMember({ userId: "user-1", githubLogin: "alice" });
+    const now = new TZDate(2026, 10, 2, 12, 0, timezone);
+
+    const activities = [
+      createActivity({
+        actorLogin: "alice",
+        prNumber: null,
+        prAuthorLogin: "bob",
+        createdAt: new TZDate(2026, 9, 30, 10, 0, timezone),
+      }),
+      createActivity({
+        actorLogin: "alice",
+        prNumber: undefined,
+        prAuthorLogin: "bob",
+        createdAt: new TZDate(2026, 9, 30, 11, 0, timezone),
+      }),
+    ];
+
+    // Act
+    const results = computeRequirementStatus({
+      sprint,
+      members: [member],
+      standups: [],
+      activities,
+      now,
+    });
+
+    // Assert
+    expect(results[0]?.reviews.count).toBe(0);
+  });
 });
