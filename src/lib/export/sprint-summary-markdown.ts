@@ -48,8 +48,10 @@ function toInline(text: string): string {
   return text.replace(/\s+/g, " ").trim();
 }
 
+// Backslashes first: a typed `\|` would otherwise come out as `\\|`, an
+// escaped backslash and then a real column break (CodeQL js/incomplete-sanitization).
 function toTableCell(text: string): string {
-  return toInline(text).replace(/\|/g, "\\|");
+  return toInline(text).replace(/\\/g, "\\\\").replace(/\|/g, "\\|");
 }
 
 function pluralize(count: number, noun: string): string {
