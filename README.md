@@ -303,6 +303,8 @@ NEXT_PUBLIC_PUSHER_HOST=localhost
 NEXT_PUBLIC_PUSHER_PORT=6001
 ```
 
+The GitHub activity spec signs its webhook deliveries with `e2e-webhook-secret-not-a-real-secret`, a test value that `playwright.config.ts` also gives the dev server. If Playwright reuses a dev server you started yourself, set `GITHUB_WEBHOOK_SECRET` to the same value there.
+
 We follow red-green-refactor, and the git history shows it: every feature starts with a commit containing only failing tests, followed by the implementation commit.
 
 ```
