@@ -11,7 +11,7 @@ info:
 
     ## Authentication
     - **Personal API token.** Create one under Settings → API tokens and send it as
-      `Authorization: Bearer spk_live_…`. Tokens only read: they work on the three
+      `Authorization: Bearer spk_live_…`. Tokens only read: they work on the
       `GET` endpoints tagged **Public API** and nowhere else. A token acts as you,
       so it sees the teams you're on, with your role.
     - **Session cookie.** Every other endpoint needs a signed-in session in the
@@ -23,6 +23,16 @@ info:
     ## Errors
     Every error has the same shape, with a stable `code` and a message you can show:
     `{ "error": { "code": "SPRINT_NOT_FOUND", "message": "Sprint not found." } }`
+
+    Codes by status:
+    - 400: `VALIDATION_ERROR`, `INVALID_CURSOR`
+    - 401: `UNAUTHENTICATED`, `INVALID_TOKEN`
+    - 403: `FORBIDDEN`
+    - 404: `NOT_FOUND`, `SPRINT_NOT_FOUND`, `INVITE_NOT_FOUND`, `TOKEN_NOT_FOUND`
+    - 409: `REPO_ALREADY_CONNECTED`, `NO_CURRENT_SPRINT`, `STANDUP_DAY_CHANGED`
+    - 410: `INVITE_REVOKED`, `INVITE_EXPIRED`
+    - 500: `INTERNAL_ERROR`, when something fails on the server, such as the
+      database. The response says nothing about the failure; try again in a moment.
 
     ## Pagination
     List endpoints return `{ "data": [...], "nextCursor": "..." }`. Pass
@@ -57,6 +67,32 @@ tags:
 # Sprint names are trimmed and limited to 100 characters.
 paths:
   /teams:
+    get:
+      tags: [Public API]
+      summary: List your teams
+      description: |
+        The teams you're on, with your role on each, in the order you joined
+        them. With a token, that's the token owner's teams.
+      operationId: listTeams
+      security:
+        - bearerToken: []
+        - sessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: One page of your teams.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TeamList"
+        "400":
+          $ref: "#/components/responses/BadPageQuery"
+        "401":
+          $ref: "#/components/responses/TokenOrSessionMissing"
+        "500":
+          $ref: "#/components/responses/InternalError"
     post:
       tags: [Teams]
       summary: Create a team
@@ -91,6 +127,35 @@ paths:
                 error:
                   code: REPO_ALREADY_CONNECTED
                   message: Another team already connected this repo.
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /teams/{teamId}:
+    parameters:
+      - $ref: "#/components/parameters/TeamId"
+    get:
+      tags: [Public API]
+      summary: Get a team and its members
+      description: |
+        The team's repo and timezone, and each lead, member and instructor with
+        their role, leads first. Any team member can read it. Someone who isn't
+        on the team gets 403, the same as for a team that doesn't exist.
+      operationId: getTeam
+      security:
+        - bearerToken: []
+        - sessionCookie: []
+      responses:
+        "200":
+          description: The team and its members.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TeamWithMembers"
+        "401":
+          $ref: "#/components/responses/TokenOrSessionMissing"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalError"
   /teams/{teamId}/invites:
     parameters:
       - $ref: "#/components/parameters/TeamId"
@@ -127,6 +192,8 @@ paths:
           $ref: "#/components/responses/Unauthenticated"
         "403":
           $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalError"
   /teams/{teamId}/invites/{inviteId}:
     parameters:
       - $ref: "#/components/parameters/TeamId"
@@ -159,6 +226,8 @@ paths:
                 error:
                   code: INVITE_NOT_FOUND
                   message: This team has no invite link with that id.
+        "500":
+          $ref: "#/components/responses/InternalError"
   /memberships:
     post:
       tags: [Memberships]
@@ -217,6 +286,8 @@ paths:
                 error:
                   code: INVITE_EXPIRED
                   message: This invite link has expired. Ask your team lead for a new one.
+        "500":
+          $ref: "#/components/responses/InternalError"
   /teams/{teamId}/sprints:
     parameters:
       - $ref: "#/components/parameters/TeamId"
@@ -244,6 +315,8 @@ paths:
           $ref: "#/components/responses/TokenOrSessionMissing"
         "403":
           $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalError"
     post:
       tags: [Sprints]
       summary: Add a sprint
@@ -273,6 +346,8 @@ paths:
           $ref: "#/components/responses/Unauthenticated"
         "403":
           $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalError"
   /teams/{teamId}/sprints/{sprintId}:
     parameters:
       - $ref: "#/components/parameters/TeamId"
@@ -307,6 +382,8 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/SprintNotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
   /teams/{teamId}/sprints/{sprintId}/summary:
     parameters:
       - $ref: "#/components/parameters/TeamId"
@@ -335,6 +412,8 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/SprintNotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
   /teams/{teamId}/sprints/{sprintId}/standups:
     parameters:
       - $ref: "#/components/parameters/TeamId"
@@ -365,6 +444,8 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/SprintNotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
   /teams/{teamId}/standups:
     parameters:
       - $ref: "#/components/parameters/TeamId"
@@ -423,6 +504,8 @@ paths:
                 error:
                   code: NO_CURRENT_SPRINT
                   message: Today isn't in any sprint. A lead can add one in Settings.
+        "500":
+          $ref: "#/components/responses/InternalError"
   /tokens:
     post:
       tags: [API tokens]
@@ -459,6 +542,8 @@ paths:
           $ref: "#/components/responses/ValidationError"
         "401":
           $ref: "#/components/responses/Unauthenticated"
+        "500":
+          $ref: "#/components/responses/InternalError"
   /tokens/{tokenId}:
     parameters:
       - name: tokenId
@@ -488,6 +573,8 @@ paths:
                 error:
                   code: TOKEN_NOT_FOUND
                   message: You have no API token with that id.
+        "500":
+          $ref: "#/components/responses/InternalError"
 components:
   securitySchemes:
     bearerToken:
@@ -604,7 +691,7 @@ components:
                   code: INVALID_TOKEN
                   message: This API token isn't valid. Create a new one in Settings.
     Forbidden:
-      description: You aren't on this team, or your role can't do this.
+      description: You aren't on this team, the team doesn't exist, or your role can't do this.
       content:
         application/json:
           schema:
@@ -613,6 +700,18 @@ components:
             error:
               code: FORBIDDEN
               message: You don't have permission to do this on this team.
+    InternalError:
+      description: |
+        Something failed on the server, such as the database. The response says
+        nothing about the failure. Try again in a moment.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error:
+              code: INTERNAL_ERROR
+              message: Something went wrong on our side. Try again in a moment.
     SprintNotFound:
       description: The team has no sprint with this id.
       content:
@@ -653,6 +752,49 @@ components:
           type: string
           description: IANA timezone for sprint days and standup dates.
           examples: [America/Los_Angeles]
+    TeamWithRole:
+      allOf:
+        - $ref: "#/components/schemas/Team"
+        - type: object
+          required: [role]
+          properties:
+            role:
+              $ref: "#/components/schemas/Role"
+              description: Your role on this team.
+    TeamList:
+      type: object
+      required: [data, nextCursor]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/TeamWithRole"
+        nextCursor:
+          type: [string, "null"]
+    TeamMember:
+      type: object
+      required: [userId, name, githubLogin, role]
+      properties:
+        userId:
+          type: string
+          description: The same id as `userId` in sprint summaries and standups.
+        name:
+          type: [string, "null"]
+        githubLogin:
+          type: [string, "null"]
+        role:
+          $ref: "#/components/schemas/Role"
+    TeamWithMembers:
+      allOf:
+        - $ref: "#/components/schemas/Team"
+        - type: object
+          required: [members]
+          properties:
+            members:
+              type: array
+              description: Leads first, then members, then instructors, each in the order they joined.
+              items:
+                $ref: "#/components/schemas/TeamMember"
     CreateTeamInput:
       type: object
       required: [name, repoFullName]

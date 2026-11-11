@@ -2,6 +2,7 @@ import { z } from "zod";
 import { createInviteSchema } from "@/lib/invites/invite-link";
 import {
   accessDeniedResponse,
+  catchUnexpectedErrors,
   parseInput,
   parseJsonBody,
 } from "@/server/api-response";
@@ -10,11 +11,19 @@ import { createInvite } from "@/server/repositories/invites";
 
 const paramsSchema = z.object({ teamId: z.string().min(1) });
 
+interface Context {
+  params: Promise<{ teamId: string }>;
+}
+
 // Creates a member or instructor invite link. Lead only.
-export async function POST(
-  request: Request,
-  { params }: { params: Promise<{ teamId: string }> }
-) {
+export async function POST(request: Request, context: Context) {
+  return catchUnexpectedErrors({
+    route: "POST /api/v1/teams/{teamId}/invites",
+    handler: () => handlePost(request, context),
+  });
+}
+
+async function handlePost(request: Request, { params }: Context) {
   const parsedParams = parseInput({
     input: await params,
     schema: paramsSchema,
