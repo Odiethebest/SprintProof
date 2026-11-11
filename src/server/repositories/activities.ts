@@ -2,6 +2,20 @@ import { db } from "@/server/db";
 import type { MappedActivity } from "@/lib/github/webhook-events";
 import type { ActivityRecord } from "@/lib/stats/member-activity";
 
+// Compares code units, not locale rules, so every server sorts the same way.
+// A row without a SHA never conflicts, so where it goes doesn't matter.
+function compareBySha(
+  left: { sha: string | null },
+  right: { sha: string | null }
+): number {
+  const a = left.sha ?? "";
+  const b = right.sha ?? "";
+  if (a === b) {
+    return 0;
+  }
+  return a < b ? -1 : 1;
+}
+
 export async function recordWebhookEvent({
   teamId,
   event,
@@ -35,7 +49,12 @@ export async function recordWebhookEvent({
       occurredAt: activity.occurredAt,
     }));
     // Counting rule: commits deduplicate by SHA, across deliveries (AGENTS.md §1).
-    const commits = data.filter((activity) => activity.type === "COMMIT");
+    // Inserted in SHA order, so two deliveries that share commits wait for each
+    // other's rows in the same order. In payload order, each could wait on a
+    // row the other inserted first, and PostgreSQL aborts one as a deadlock (#90).
+    const commits = data
+      .filter((activity) => activity.type === "COMMIT")
+      .sort(compareBySha);
     const other = data.filter((activity) => activity.type !== "COMMIT");
     const insertedCommits = commits.length
       ? await tx.activity.createMany({ data: commits, skipDuplicates: true })
