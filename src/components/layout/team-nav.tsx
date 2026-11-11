@@ -1,12 +1,16 @@
 import Link from "next/link";
+import {
+  SPRINT_PAGES,
+  TEAM_PAGES,
+  getTeamPagePath,
+  type TeamPage,
+} from "@/lib/teams/team-pages";
 
-export type TeamPage = "dashboard" | "standups" | "settings";
-
-const LINKS: Array<{ page: TeamPage; label: string; keepsSprint: boolean }> = [
-  { page: "dashboard", label: "Dashboard", keepsSprint: true },
-  { page: "standups", label: "Standups", keepsSprint: true },
-  { page: "settings", label: "Settings", keepsSprint: false },
-];
+const LABELS: Record<TeamPage, string> = {
+  dashboard: "Dashboard",
+  standups: "Standups",
+  settings: "Settings",
+};
 
 const LINK_CLASSES = {
   current:
@@ -17,7 +21,8 @@ const LINK_CLASSES = {
 
 export interface TeamNavProps {
   teamId: string;
-  current: TeamPage;
+  // null on a team page the navigation doesn't list: no link is current.
+  current: TeamPage | null;
   // The sprint picked in the selector, kept when moving between sprint pages.
   requestedSprintId: string | null;
 }
@@ -27,22 +32,22 @@ export function TeamNav({ teamId, current, requestedSprintId }: TeamNavProps) {
   return (
     <nav aria-label="Team">
       <ul className="flex flex-wrap gap-1">
-        {LINKS.map(({ page, label, keepsSprint }) => {
+        {TEAM_PAGES.map((page) => {
           const query =
-            keepsSprint && requestedSprintId !== null
+            SPRINT_PAGES.includes(page) && requestedSprintId !== null
               ? `?sprint=${encodeURIComponent(requestedSprintId)}`
               : "";
           const isCurrent = page === current;
           return (
             <li key={page}>
               <Link
-                href={`/teams/${teamId}/${page}${query}`}
+                href={`${getTeamPagePath({ teamId, page })}${query}`}
                 aria-current={isCurrent ? "page" : undefined}
                 className={
                   isCurrent ? LINK_CLASSES.current : LINK_CLASSES.other
                 }
               >
-                {label}
+                {LABELS[page]}
               </Link>
             </li>
           );

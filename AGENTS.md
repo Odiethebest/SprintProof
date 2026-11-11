@@ -80,7 +80,7 @@ src/
 │   └── <feature>/                # feature components: auth/, teams/, sprints/, dashboard/, standups/, api-tokens/, api-docs/, retro/...
 ├── lib/                          # PURE business logic — no I/O
 │   ├── auth/                     # sign-in redirects, team role checks, test sign-in input
-│   ├── teams/                    # create-team input (name, owner/name repo, timezone)
+│   ├── teams/                    # create-team input (name, owner/name repo, timezone), team navigation pages and their paths
 │   ├── invites/                  # invite link expiry and validity
 │   ├── api/                      # list pagination: ?limit= and ?cursor= schema, rows → { data, nextCursor }
 │   ├── api-tokens/               # API token name input, SHA-256 hash, masked display (spk_live_••••last4), Bearer header parsing
@@ -126,6 +126,7 @@ e2e/                              # Playwright specs
 - **Layering is one-way:** `app/` → `server/` → `lib/`. Route handlers validate input with Zod, check authorization, call `server/` for data, call `lib/` for logic, and return a response. Nothing more.
 - **`src/lib/` is pure.** It must not import from `next`, `@prisma/client`, `src/server/`, `fetch`, or read `process.env`. Inputs in, outputs out. Pass the current time in as an argument (`now: Date`); never call `new Date()` inside `lib/`.
 - **Server Components by default.** Add `"use client"` only for components that need state, effects or event handlers. Load page data on the server through `server/repositories/`, not with `useEffect` + `fetch`.
+- **Pages own the sign-in redirect.** A team page that gets a 401 from `requireTeamRole()` redirects to sign-in with its own path as the callback. The team layout doesn't redirect: it renders the page without the top bar. A layout can't read the path, and Next.js renders it in parallel with the page, so a redirect there could name the wrong page (#93).
 - **All mutations go through route handlers** in `app/api/`. Do not use Server Actions; one mutation pattern keeps integration tests uniform.
 - **Real-time flow:** webhook or mutation → write to DB → `server/realtime.ts` triggers `team-{teamId}` channel with a small event (`activity.created`, `standup.created`) → client refetches the affected section. Never push full records through Pusher.
 - **API response shape:** success returns the resource or `{ data, nextCursor }` for lists. Errors always return `{ "error": { "code": "SNAKE_CASE_CODE", "message": "Human readable" } }` with the right HTTP status.
@@ -405,3 +406,4 @@ Standups, planning notes and retros for our own team are recorded in SprintProof
 | 2026-11-11 | Ziqi (Odie) Yang | §4: webhook text (commit messages, PR titles) has NUL removed instead of rejected (#90) | Issue #90, from Yunhong's review of PR #79: a NUL in a commit message or PR title returned 500 on every redelivery, so none of that delivery's activity was counted |
 | 2026-11-11 | Ziqi (Odie) Yang | Architecture tree lists `app/api/health/` and `server/health.ts`; §1 Testing strategy: CI enforces unit test coverage for `src/lib/` (90% lines, statements and functions, 85% branches), and integration tests reach a database outage through a client that can't connect, not a mock (#98) | Issue #98, from the Nov 11 audit of main: migrations were applied by hand, nothing kept the Supabase databases awake, and CI never measured coverage |
 | 2026-11-11 | Ziqi (Odie) Yang | Tokens also read `GET /teams` (through `requireApiUser()`) and `GET /teams/{teamId}`; every `/api/v1` handler runs through `catchUnexpectedErrors()`, which answers 500 `INTERNAL_ERROR` and logs only the route and error code (§1 Architecture and Key patterns, §4) (#97) | Issue #97, from the Nov 11 audit of main: tokens could read only 3 endpoints, and a route that threw returned Next's default 500 without the error shape |
+| 2026-11-11 | Ziqi (Odie) Yang | Key patterns: pages own the sign-in redirect, and the team layout renders the page alone on a 401; architecture tree lists the team navigation pages in `lib/teams/` (#93) | Issue #93, from Yunhong's review of PR #80: the layout's redirect always named the dashboard |
