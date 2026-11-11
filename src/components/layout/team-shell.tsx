@@ -2,6 +2,7 @@
 
 import type { ReactNode, ComponentProps } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
+import { LIVE_PAGES, SPRINT_PAGES, findTeamPage } from "@/lib/teams/team-pages";
 import { AppHeader } from "./app-header";
 import { TeamLiveProvider } from "@/components/realtime/team-live-provider";
 
@@ -24,11 +25,11 @@ export function TeamShell({
 }) {
   const pathname = usePathname();
   const query = useSearchParams();
-  const current = pathname.endsWith("/settings")
-    ? "settings"
-    : pathname.endsWith("/standups")
-      ? "standups"
-      : "dashboard";
+  // A team path the navigation doesn't list marks no link as current and shows
+  // no sprint selector (#93).
+  const current = findTeamPage({ teamId, pathname });
+  const isSprintPage = current !== null && SPRINT_PAGES.includes(current);
+  const isLivePage = current !== null && LIVE_PAGES.includes(current);
   const requested = query.getAll("sprint");
   const requestedSprintId =
     requested.length === 1 &&
@@ -43,7 +44,7 @@ export function TeamShell({
         role={role}
         teamNav={{ teamId, current, requestedSprintId }}
         sprintSelector={
-          current === "settings" || sprintSelector === null
+          !isSprintPage || sprintSelector === null
             ? null
             : {
                 ...sprintSelector,
@@ -54,9 +55,9 @@ export function TeamShell({
       {children}
     </>
   );
-  return current === "settings" ? (
-    content
-  ) : (
+  return isLivePage ? (
     <TeamLiveProvider teamId={teamId}>{content}</TeamLiveProvider>
+  ) : (
+    content
   );
 }
