@@ -60,7 +60,7 @@ describe.each(HOST_TIME_ZONES)(
       expect(dayStart("2026-04-24", "Africa/Cairo")).toBe(
         "2026-04-23T22:00:00.000Z"
       );
-      // Tehran's last DST change went from 00:00 to 01:00 (UTC+4:30)
+      // In 2022, Tehran's last year of DST, its clocks went from 00:00 to 01:00 (UTC+4:30)
       expect(dayStart("2022-03-22", "Asia/Tehran")).toBe(
         "2022-03-21T20:30:00.000Z"
       );
