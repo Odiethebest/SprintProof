@@ -388,7 +388,7 @@ Each member gets 3 votes per retro, at most 1 per item. The top 3 "To improve" i
 | Retros and action items | Planned | Voting, top 3 "To improve" items carried into the next sprint (#13) |
 | Peer feedback | Planned | Instructor-only, enforced on the server (#14) |
 | Instructor view and Markdown export | Planned | Read-only review page, `sprint-N-summary.md` download (#15) |
-| Public REST API | Done | Personal tokens stored as SHA-256 hashes; read-only Bearer access to sprints, sprint summaries and standups; cursor pagination; Swagger UI at `/api-docs` (PRs #64, #65, #66); inputs that used to return 500 are rejected (PR #82) |
+| Public REST API | Done | Personal tokens stored as SHA-256 hashes; read-only Bearer access to sprints, sprint summaries and standups; cursor pagination; Swagger UI at `/api-docs` (PRs #64, #65, #66); inputs that used to return 500 are rejected (PR #82); team listing (`GET /teams`, and `GET /teams/{teamId}` with its members) and 500 `INTERNAL_ERROR` in the same error shape for unexpected errors (#97) |
 
 ---
 
