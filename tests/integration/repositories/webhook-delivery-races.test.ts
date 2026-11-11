@@ -3,6 +3,7 @@ import { db } from "@/server/db";
 import { recordWebhookEvent } from "@/server/repositories/activities";
 import { createActivityRecord } from "../../factories/activity";
 import { insertTeam } from "../../factories/db";
+import { releaseActivityInsertsTogether } from "../helpers/activity-inserts";
 import { clearDatabase } from "../setup/test-setup";
 
 describe("webhook delivery atomicity", () => {
@@ -30,6 +31,42 @@ describe("webhook delivery atomicity", () => {
     );
     expect(await db.webhookDelivery.count()).toBe(2);
   });
+
+  // Inserting in payload order let each delivery wait on a row the other had
+  // inserted first, and PostgreSQL aborted one of them as a deadlock (#90).
+  it("stores each commit once when two deliveries insert the same SHAs in opposite order at the same time", async () => {
+    // Arrange
+    const team = await insertTeam();
+    const shas = Array.from({ length: 500 }, (_, index) =>
+      index.toString(16).padStart(40, "0")
+    );
+    const deliver = (deliveryId: string, order: string[]) =>
+      recordWebhookEvent({
+        teamId: team.id,
+        event: "push",
+        deliveryId,
+        activities: order.map((sha) => createActivityRecord({ sha })),
+      });
+
+    // Act
+    const results = await releaseActivityInsertsTogether({
+      count: 2,
+      run: () =>
+        Promise.allSettled([
+          deliver("ascending", shas),
+          deliver("descending", [...shas].reverse()),
+        ]),
+    });
+
+    // Assert
+    expect(results.map((result) => result.status)).toEqual([
+      "fulfilled",
+      "fulfilled",
+    ]);
+    const stored = await db.activity.findMany({ select: { sha: true } });
+    expect(stored.map((row) => row.sha).sort()).toEqual(shas);
+    expect(await db.webhookDelivery.count()).toBe(2);
+  }, 15000);
 
   it("reports exactly one duplicate when the same delivery arrives concurrently", async () => {
     const team = await insertTeam();
