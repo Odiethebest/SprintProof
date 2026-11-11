@@ -150,6 +150,9 @@ jobs:
       NEXT_PUBLIC_PUSHER_CLUSTER: mt1
       NEXT_PUBLIC_PUSHER_HOST: localhost
       NEXT_PUBLIC_PUSHER_PORT: "6001"
+      # A fixed test value, not a secret: e2e/github-activity.spec.ts signs its
+      # webhook deliveries with it, and the server checks them against it.
+      GITHUB_WEBHOOK_SECRET: e2e-webhook-secret-not-a-real-secret
     steps:
       - uses: actions/checkout@v4
 
