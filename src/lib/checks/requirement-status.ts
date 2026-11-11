@@ -1,5 +1,8 @@
-import { TZDate } from "@date-fns/tz";
-import { differenceInCalendarDays, startOfDay } from "date-fns";
+import { tz } from "@date-fns/tz";
+import { format } from "date-fns";
+import { getDayStart } from "@/lib/sprints/day-start";
+
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 export type RequirementStatus = "MET" | "ON_TRACK" | "AT_RISK" | "MISSED";
 
@@ -55,41 +58,37 @@ export interface ComputeRequirementStatusOptions {
   now: Date;
 }
 
-// Counting rule: sprint boundaries in team timezone (AGENTS.md §1, R1)
-function getSprintStartBoundary(date: Date, timezone: string): TZDate {
-  const dateInTz = new TZDate(date, timezone);
-  if (
+// Sprint dates come as Dates (AGENTS.md §1 Calendar dates: the known
+// exception): midnight UTC as Prisma reads a DATE column, or midnight in the
+// team timezone. Either way they name one calendar date.
+function toCalendarDate(date: Date, timezone: string): string {
+  const isUtcMidnight =
     date.getUTCHours() === 0 &&
     date.getUTCMinutes() === 0 &&
-    date.getUTCSeconds() === 0 &&
-    dateInTz.getDate() !== date.getUTCDate()
-  ) {
-    return startOfDay(
-      new TZDate(
-        date.getUTCFullYear(),
-        date.getUTCMonth(),
-        date.getUTCDate(),
-        timezone
-      )
-    );
+    date.getUTCSeconds() === 0;
+  if (isUtcMidnight) {
+    return date.toISOString().slice(0, 10);
   }
-  return startOfDay(dateInTz);
+  return format(date, "yyyy-MM-dd", { in: tz(timezone) });
+}
+
+function toDayNumber(date: string): number {
+  return Date.parse(`${date}T00:00:00.000Z`) / DAY_MS;
 }
 
 // Counting rule: sprint boundaries in team timezone (AGENTS.md §1, R1)
-function getSprintEndBoundary(date: Date, timezone: string): TZDate {
-  const start = getSprintStartBoundary(date, timezone);
-  const nextDay = new TZDate(
-    start.getFullYear(),
-    start.getMonth(),
-    start.getDate() + 1,
-    timezone
-  );
-  return new TZDate(nextDay.getTime() - 1, timezone);
+function getSprintStartBoundary(date: string, timezone: string): Date {
+  return getDayStart({ date, timeZone: timezone });
 }
 
-function calendarDate(date: TZDate): string {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+// Counting rule: the sprint ends at the start of the next day minus 1 ms (AGENTS.md §1, R1)
+function getSprintEndBoundary(date: string, timezone: string): Date {
+  const nextDate = new Date((toDayNumber(date) + 1) * DAY_MS)
+    .toISOString()
+    .slice(0, 10);
+  return new Date(
+    getDayStart({ date: nextDate, timeZone: timezone }).getTime() - 1
+  );
 }
 
 // Requirement status: MET, ON_TRACK, AT_RISK (<= 2 days left), MISSED (AGENTS.md §1, R5)
@@ -121,19 +120,18 @@ export function computeRequirementStatus(
 ): MemberRequirementStatus[] {
   const { sprint, members, standups, activities, now } = options;
 
-  const sprintStart = getSprintStartBoundary(sprint.startDate, sprint.timezone);
-  const sprintEnd = getSprintEndBoundary(sprint.endDate, sprint.timezone);
+  const firstDate = toCalendarDate(sprint.startDate, sprint.timezone);
+  const lastDate = toCalendarDate(sprint.endDate, sprint.timezone);
+  const sprintStart = getSprintStartBoundary(firstDate, sprint.timezone);
+  const sprintEnd = getSprintEndBoundary(lastDate, sprint.timezone);
 
   const isSprintEnded = now.getTime() > sprintEnd.getTime();
-  const todayInTz = startOfDay(new TZDate(now, sprint.timezone));
-  const endDayInTz = startOfDay(sprintEnd);
+  const today = format(now, "yyyy-MM-dd", { in: tz(sprint.timezone) });
   // Days left = sprint end date minus today's date in team timezone + 1 (AGENTS.md §1, R5)
-  const daysLeft = differenceInCalendarDays(endDayInTz, todayInTz) + 1;
+  const daysLeft = toDayNumber(lastDate) - toDayNumber(today) + 1;
 
   const startTime = sprintStart.getTime();
   const endTime = sprintEnd.getTime();
-  const firstDate = calendarDate(sprintStart);
-  const lastDate = calendarDate(sprintEnd);
 
   return members.map((member) => {
     // Counting rule: at most one standup per person per calendar day in team timezone (AGENTS.md §1, R2)
