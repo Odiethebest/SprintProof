@@ -1,5 +1,6 @@
 import { checkInvite, joinTeamSchema } from "@/lib/invites/invite-link";
 import {
+  catchUnexpectedErrors,
   errorResponse,
   parseJsonBody,
   unauthenticatedResponse,
@@ -10,6 +11,13 @@ import { joinTeam } from "@/server/repositories/memberships";
 
 // Joins the team of an invite link: 201 when added, 200 when already a member.
 export async function POST(request: Request) {
+  return catchUnexpectedErrors({
+    route: "POST /api/v1/memberships",
+    handler: () => handlePost(request),
+  });
+}
+
+async function handlePost(request: Request) {
   const userId = await getSessionUserId();
   if (userId === null) {
     return unauthenticatedResponse();
