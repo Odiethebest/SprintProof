@@ -11,11 +11,12 @@ import type { MemberCardView } from "@/components/dashboard/member-card";
 
 function reviewEntry(input: {
   reviewState: ReviewState | null;
+  id?: string;
   prNumber?: number | null;
 }): ActivityFeedEntryView {
   return {
     kind: "REVIEW",
-    id: "activity-review",
+    id: input.id ?? "activity-review",
     userId: "user-2",
     prNumber: input.prNumber === undefined ? 105 : input.prNumber,
     reviewState: input.reviewState,
@@ -57,15 +58,15 @@ describe("describeAction for a review", () => {
 describe("ActivityFeed", () => {
   it("shows each review with what the reviewer did", () => {
     // Arrange
-    const entries: ActivityFeedEntryView[] = [
-      { ...reviewEntry({ reviewState: "APPROVED" }), id: "r1", prNumber: 113 },
-      {
-        ...reviewEntry({ reviewState: "CHANGES_REQUESTED" }),
+    const entries = [
+      reviewEntry({ id: "r1", reviewState: "APPROVED", prNumber: 113 }),
+      reviewEntry({
         id: "r2",
+        reviewState: "CHANGES_REQUESTED",
         prNumber: 106,
-      },
-      { ...reviewEntry({ reviewState: "COMMENTED" }), id: "r3", prNumber: 111 },
-      { ...reviewEntry({ reviewState: null }), id: "r4", prNumber: 104 },
+      }),
+      reviewEntry({ id: "r3", reviewState: "COMMENTED", prNumber: 111 }),
+      reviewEntry({ id: "r4", reviewState: null, prNumber: 104 }),
     ];
 
     // Act
