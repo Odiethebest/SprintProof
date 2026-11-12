@@ -109,6 +109,9 @@ test.describe("Onboarding", () => {
     // the setup steps
     const secret = await copyWebhookSecret(page, teamId);
     const repository = page.getByRole("region", { name: "Repository" });
+    // Pending until GitHub's ping arrives (decision 007, #117).
+    const connection = repository.getByTestId("repository-connection");
+    await expect(connection).toHaveText("Waiting for GitHub's ping");
     const webhookUrl =
       (await repository.getByText(/\/api\/webhooks\/github$/).textContent()) ??
       "";
@@ -134,16 +137,15 @@ test.describe("Onboarding", () => {
       },
     });
 
-    // Assert: Settings shows the verified delivery
+    // Assert: the ping connected the repository, and Settings shows it as
+    // the verified delivery
     expect(new URL(webhookUrl).pathname).toBe("/api/webhooks/github");
     expect(pinged.status()).toBe(200);
     await page.reload();
+    await expect(connection).toHaveText("Connected");
     await expect(repository).toContainText(
       /Last delivery\s*ping at .+Verified/
     );
-    await expect(
-      repository.getByText("Connected", { exact: true })
-    ).toBeVisible();
 
     // Act: the lead adds Sprint 1 under "Sprints and requirements"
     const sprints = page.getByRole("region", {
