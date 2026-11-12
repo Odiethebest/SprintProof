@@ -34,6 +34,7 @@ export function createActivityRecord(
     prAuthorLogin: null,
     sha: `sha-${id}`,
     title: "Add the dashboard page",
+    reviewState: null,
     occurredAt: new Date("2026-11-02T18:00:00Z"),
     ...overrides,
   };
