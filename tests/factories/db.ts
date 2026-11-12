@@ -254,3 +254,18 @@ export async function insertActionItem(input: {
 }) {
   return db.actionItem.create({ data: { isDone: false, ...input } });
 }
+
+// One author's partner feedback about a teammate for a sprint (#14).
+export async function insertPeerFeedback(input: {
+  sprintId: string;
+  authorId: string;
+  recipientId: string;
+  text?: string;
+  createdAt?: Date;
+  updatedAt?: Date;
+}) {
+  const n = recordSeq++;
+  return db.peerFeedback.create({
+    data: { text: `Peer feedback ${n}`, ...input },
+  });
+}

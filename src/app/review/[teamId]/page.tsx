@@ -11,6 +11,11 @@ import {
   type ExportRetro,
 } from "@/lib/export/sprint-summary-markdown";
 import { getSummaryFileName } from "@/lib/export/summary-file-name";
+import {
+  pairPeerFeedback,
+  type FeedbackMember,
+  type PeerFeedbackPair,
+} from "@/lib/peer-feedback/peer-feedback-pairs";
 import { findNextSprint } from "@/lib/retro/next-sprint";
 import { tallyRetroItems } from "@/lib/retro/retro-votes";
 import {
@@ -38,6 +43,7 @@ import {
 import {
   PeerFeedbackCard,
   PeerFeedbackLeftOutNote,
+  type PeerFeedbackEntryView,
 } from "@/components/review/peer-feedback-card";
 import { ReviewRetroCard } from "@/components/review/review-retro-card";
 import { ReviewStandups } from "@/components/review/review-standups";
@@ -51,6 +57,7 @@ import { requireTeamRole } from "@/server/auth";
 import { getCurrentUser } from "@/server/current-user";
 import { listTeamActivities } from "@/server/repositories/activities";
 import { listTeamMembers } from "@/server/repositories/memberships";
+import { listPeerFeedbackForInstructor } from "@/server/repositories/peer-feedback";
 import { findRetro, type RetroRecord } from "@/server/repositories/retros";
 import { listSprints } from "@/server/repositories/sprints";
 import {
@@ -270,7 +277,36 @@ function toExportRetro({
   };
 }
 
-// The same reads and counts as GET .../sprints/{sprintId}/summary.
+function toMemberName(member: FeedbackMember): string {
+  return member.name ?? member.githubLogin ?? "GitHub user";
+}
+
+// The peer feedback card's entries (#14): "Ziqi (Odie) Yang about Yunhong
+// Huang", with the text and its day, or nothing yet.
+function toPeerFeedbackEntries({
+  pairs,
+  timeZone,
+}: {
+  pairs: PeerFeedbackPair[];
+  timeZone: string;
+}): PeerFeedbackEntryView[] {
+  // "Oct 31" in the team's timezone (DESIGN.md §9).
+  const dayFormat = new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    timeZone,
+  });
+  return pairs.map(({ author, recipient, feedback }) => ({
+    id: `${author.userId}-${recipient.userId}`,
+    title: `${toMemberName(author)} about ${toMemberName(recipient)}`,
+    text: feedback?.text ?? null,
+    updatedOnLabel:
+      feedback === null ? null : dayFormat.format(feedback.updatedAt),
+  }));
+}
+
+// The same reads and counts as GET .../sprints/{sprintId}/summary, and for
+// instructors the sprint's peer feedback.
 async function SprintReview({
   sprint,
   sprints,
@@ -290,31 +326,61 @@ async function SprintReview({
 }) {
   const timeZone = team.timezone;
   const window = getSprintWindow({ sprint, timeZone });
-  const [standups, activities, retroRecord] = await Promise.all([
-    listSprintStandups({ sprint }),
-    listTeamActivities({ teamId: team.id, from: window.start, to: window.end }),
-    findRetro({ sprintId: sprint.id }),
-  ]);
+  const audience = getExportAudience({ role });
+  const members: FeedbackMember[] = memberships.map(
+    ({ role: memberRole, user }) => ({
+      userId: user.id,
+      name: user.name,
+      githubLogin: user.githubLogin,
+      role: memberRole,
+    })
+  );
+  const [standups, activities, retroRecord, feedbackRecords] =
+    await Promise.all([
+      listSprintStandups({ sprint }),
+      listTeamActivities({
+        teamId: team.id,
+        from: window.start,
+        to: window.end,
+      }),
+      findRetro({ sprintId: sprint.id }),
+      // Peer feedback only ever reaches instructors (AGENTS.md §1, PRD R7):
+      // a lead's page doesn't read it at all, and the repository answers null
+      // to anyone who isn't an instructor on the team.
+      audience === "INSTRUCTOR"
+        ? listPeerFeedbackForInstructor({
+            teamId: team.id,
+            sprintId: sprint.id,
+            instructorId: viewerId,
+          })
+        : null,
+    ]);
   const retro = toExportRetro({
     retro: retroRecord,
     sprint,
     sprints,
     viewerId,
   });
+  const peerFeedback: PeerFeedbackPair[] =
+    feedbackRecords === null
+      ? []
+      : pairPeerFeedback({
+          members,
+          entries: feedbackRecords.map((record) => ({
+            authorId: record.author.userId,
+            recipientId: record.recipient.userId,
+            text: record.text,
+            updatedAt: record.updatedAt,
+          })),
+        });
   const summary = buildSprintSummary({
     sprint,
     timeZone,
-    members: memberships.map(({ role: memberRole, user }) => ({
-      userId: user.id,
-      name: user.name,
-      githubLogin: user.githubLogin,
-      role: memberRole,
-    })),
+    members,
     standups: standups.map(({ id, userId, date }) => ({ id, userId, date })),
     activities,
     now,
   });
-  const audience = getExportAudience({ role });
   const rows: RequirementRowView[] = summary.members.map((member) => ({
     userId: member.userId,
     name: member.name ?? member.githubLogin ?? "GitHub user",
@@ -368,6 +434,7 @@ async function SprintReview({
               standups,
               audience,
               retro,
+              peerFeedback,
             })}
             audience={audience}
           />
@@ -384,7 +451,9 @@ async function SprintReview({
       </div>
       {/* Peer feedback only ever reaches instructors (AGENTS.md §1, PRD R7). */}
       {audience === "INSTRUCTOR" ? (
-        <PeerFeedbackCard />
+        <PeerFeedbackCard
+          entries={toPeerFeedbackEntries({ pairs: peerFeedback, timeZone })}
+        />
       ) : (
         <PeerFeedbackLeftOutNote />
       )}

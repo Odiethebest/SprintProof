@@ -1,9 +1,24 @@
 import { Lock, MessageSquare } from "lucide-react";
 import { EmptyState } from "@/components/ui/empty-state";
 
-// AGENTS.md §2 Review "Peer feedback", for instructors only (PRD R7). Peer
-// feedback (#14) isn't built yet, so the card says so.
-export function PeerFeedbackCard() {
+// One author's feedback about one teammate, as the card shows it.
+export interface PeerFeedbackEntryView {
+  id: string;
+  // "Ziqi (Odie) Yang about Yunhong Huang"
+  title: string;
+  // null until the author saves feedback about this teammate.
+  text: string | null;
+  // "Oct 31" in the team's timezone; null with no feedback.
+  updatedOnLabel: string | null;
+}
+
+// AGENTS.md §2 Review "Peer feedback", for instructors only (PRD R7): one
+// entry per author and teammate, or "Not submitted yet".
+export function PeerFeedbackCard({
+  entries,
+}: {
+  entries: PeerFeedbackEntryView[];
+}) {
   return (
     <section
       aria-labelledby="review-peer-feedback-title"
@@ -18,11 +33,45 @@ export function PeerFeedbackCard() {
           Visible only to instructors.
         </p>
       </div>
-      <EmptyState Icon={MessageSquare}>
-        <p className="text-sm text-text-muted">
-          Peer feedback isn&apos;t recorded in SprintProof yet.
-        </p>
-      </EmptyState>
+      {entries.length === 0 ? (
+        <EmptyState Icon={MessageSquare}>
+          <p className="text-sm text-text-muted">
+            The team has one member, so there&apos;s no partner feedback.
+          </p>
+        </EmptyState>
+      ) : (
+        <div className="grid items-start gap-4 md:grid-cols-2">
+          {entries.map((entry) => {
+            const titleId = `review-peer-feedback-${entry.id}`;
+            return (
+              <article
+                key={entry.id}
+                aria-labelledby={titleId}
+                className="flex flex-col gap-2 rounded-md border border-border p-4"
+              >
+                <h3 id={titleId} className="text-sm font-semibold">
+                  {entry.title}
+                </h3>
+                {entry.text === null ? (
+                  <p className="text-sm text-text-muted">Not submitted yet.</p>
+                ) : (
+                  <p className="whitespace-pre-wrap break-words text-sm">
+                    {entry.text}
+                  </p>
+                )}
+                {entry.updatedOnLabel !== null && (
+                  <p className="text-xs text-text-muted">
+                    Updated{" "}
+                    <span className="font-mono tabular-nums">
+                      {entry.updatedOnLabel}
+                    </span>
+                  </p>
+                )}
+              </article>
+            );
+          })}
+        </div>
+      )}
     </section>
   );
 }

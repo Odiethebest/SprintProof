@@ -26,6 +26,8 @@ import {
   PUT as voteRetroItem,
 } from "@/app/api/v1/teams/[teamId]/sprints/[sprintId]/retro/items/[itemId]/vote/route";
 import { PATCH as updateActionItem } from "@/app/api/v1/teams/[teamId]/sprints/[sprintId]/retro/action-items/[actionItemId]/route";
+import { GET as listPeerFeedback } from "@/app/api/v1/teams/[teamId]/sprints/[sprintId]/peer-feedback/route";
+import { PUT as savePeerFeedback } from "@/app/api/v1/teams/[teamId]/sprints/[sprintId]/peer-feedback/[recipientId]/route";
 import {
   insertUser,
   insertTeam,
@@ -171,6 +173,95 @@ it("returns a structured validation error for NUL in a retro item (#13)", async 
   const response = await addRetroItem(
     apiRequest("POST", "/", { column: "WENT_WELL", text: "bad\u0000" }),
     routeContext({ teamId: team.id, sprintId: sprint.id })
+  );
+  expect(response.status).toBe(400);
+  expect(await response.json()).toMatchObject({
+    error: { code: "VALIDATION_ERROR" },
+  });
+});
+it("treats NUL peer feedback ids exactly like unknown ids (#14)", async () => {
+  const lead = await insertUser();
+  const member = await insertUser();
+  const instructor = await insertUser();
+  const team = await insertTeam();
+  await insertMembership({ userId: lead.id, teamId: team.id, role: "LEAD" });
+  await insertMembership({
+    userId: member.id,
+    teamId: team.id,
+    role: "MEMBER",
+  });
+  await insertMembership({
+    userId: instructor.id,
+    teamId: team.id,
+    role: "INSTRUCTOR",
+  });
+  const sprint = await insertSprint({ teamId: team.id });
+  await insertRetro({ sprintId: sprint.id });
+  const body = { text: "Reviews were thorough." };
+  for (const teamId of ["missing", "bad\u0000id"]) {
+    const context = { teamId, sprintId: sprint.id };
+    vi.mocked(getSessionUserId).mockResolvedValue(instructor.id);
+    // Anyone who can't read feedback gets 404, the same as no feedback.
+    expect(
+      (await listPeerFeedback(apiRequest("GET", "/"), routeContext(context)))
+        .status
+    ).toBe(404);
+    vi.mocked(getSessionUserId).mockResolvedValue(lead.id);
+    expect(
+      (
+        await savePeerFeedback(
+          apiRequest("PUT", "/", body),
+          routeContext({ ...context, recipientId: member.id })
+        )
+      ).status
+    ).toBe(403);
+  }
+  for (const id of ["missing", "bad\u0000id"]) {
+    vi.mocked(getSessionUserId).mockResolvedValue(instructor.id);
+    expect(
+      (
+        await listPeerFeedback(
+          apiRequest("GET", "/"),
+          routeContext({ teamId: team.id, sprintId: id })
+        )
+      ).status
+    ).toBe(404);
+    vi.mocked(getSessionUserId).mockResolvedValue(lead.id);
+    for (const context of [
+      { teamId: team.id, sprintId: id, recipientId: member.id },
+      { teamId: team.id, sprintId: sprint.id, recipientId: id },
+    ]) {
+      expect(
+        (
+          await savePeerFeedback(
+            apiRequest("PUT", "/", body),
+            routeContext(context)
+          )
+        ).status
+      ).toBe(404);
+    }
+  }
+});
+it("returns a structured validation error for NUL in peer feedback (#14)", async () => {
+  const lead = await insertUser();
+  const member = await insertUser();
+  const team = await insertTeam();
+  await insertMembership({ userId: lead.id, teamId: team.id, role: "LEAD" });
+  await insertMembership({
+    userId: member.id,
+    teamId: team.id,
+    role: "MEMBER",
+  });
+  const sprint = await insertSprint({ teamId: team.id });
+  await insertRetro({ sprintId: sprint.id });
+  vi.mocked(getSessionUserId).mockResolvedValue(lead.id);
+  const response = await savePeerFeedback(
+    apiRequest("PUT", "/", { text: "bad\u0000" }),
+    routeContext({
+      teamId: team.id,
+      sprintId: sprint.id,
+      recipientId: member.id,
+    })
   );
   expect(response.status).toBe(400);
   expect(await response.json()).toMatchObject({

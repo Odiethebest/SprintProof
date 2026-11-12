@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import { notFound, redirect } from "next/navigation";
 import { ClipboardList, Lock, ThumbsUp } from "lucide-react";
 import { toSignInPath } from "@/lib/auth/sign-in-redirect";
+import { listTeammates } from "@/lib/peer-feedback/peer-feedback-pairs";
 import { findNextSprint } from "@/lib/retro/next-sprint";
 import {
   MAX_VOTES_PER_RETRO,
@@ -23,18 +24,26 @@ import {
   type RetroColumnMode,
   type RetroItemView,
 } from "@/components/retro/retro-column";
+import { PeerFeedbackForm } from "@/components/retro/peer-feedback-form";
 import { RetroLeadControls } from "@/components/retro/retro-lead-controls";
+import type { TeammateFeedbackView } from "@/components/retro/teammate-feedback-field";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageAnnouncer } from "@/components/ui/page-announcer";
 import { Pill } from "@/components/ui/pill";
 import { requireTeamRole } from "@/server/auth";
 import { getCurrentUser } from "@/server/current-user";
+import { listTeamMembers } from "@/server/repositories/memberships";
+import {
+  listOwnPeerFeedback,
+  type PeerFeedbackRecord,
+} from "@/server/repositories/peer-feedback";
 import {
   findRetro,
   listCarriedActionItems,
   type RetroRecord,
 } from "@/server/repositories/retros";
 import { listSprints } from "@/server/repositories/sprints";
+import { findTeam } from "@/server/repositories/teams";
 
 export const metadata: Metadata = { title: "Retro · SprintProof" };
 
@@ -81,7 +90,48 @@ function VotesLeftPill({ votesLeft }: { votesLeft: number }) {
   );
 }
 
-// AGENTS.md §2 Retro: action items, then "Went well" and "To improve".
+// The viewer's teammates for "Partner feedback" (#14), each with what the
+// viewer saved about them. `own` holds only the viewer's entries, so nothing a
+// teammate wrote reaches this page (rule R7).
+function toTeammateFeedback({
+  memberships,
+  own,
+  viewerId,
+  timeZone,
+}: {
+  memberships: Awaited<ReturnType<typeof listTeamMembers>>;
+  own: PeerFeedbackRecord[];
+  viewerId: string;
+  timeZone: string;
+}): TeammateFeedbackView[] {
+  // "Nov 3" in the team's timezone (DESIGN.md §9).
+  const dayFormat = new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    timeZone,
+  });
+  const members = memberships.map(({ role, user }) => ({
+    userId: user.id,
+    name: user.name,
+    githubLogin: user.githubLogin,
+    role,
+  }));
+  return listTeammates({ members, authorId: viewerId }).map((teammate) => {
+    const saved = own.find(
+      (entry) => entry.recipient.userId === teammate.userId
+    );
+    return {
+      userId: teammate.userId,
+      name: teammate.name ?? teammate.githubLogin ?? "GitHub user",
+      savedText: saved?.text ?? null,
+      savedOnLabel:
+        saved === undefined ? null : dayFormat.format(saved.updatedAt),
+    };
+  });
+}
+
+// AGENTS.md §2 Retro: action items, "Went well" and "To improve", then
+// partner feedback.
 async function SprintRetro({ params }: { params: Params }) {
   const { teamId, sprintId } = await params;
   const access = await requireTeamRole(teamId, [
@@ -100,23 +150,27 @@ async function SprintRetro({ params }: { params: Params }) {
     // Same page as a team that doesn't exist, so outsiders learn nothing.
     notFound();
   }
-  const [user, sprints] = await Promise.all([
+  const [user, team, sprints] = await Promise.all([
     getCurrentUser(),
+    findTeam({ teamId }),
     listSprints({ teamId }),
   ]);
   const sprint = sprints.find((other) => other.id === sprintId);
-  if (user === null || sprint === undefined) {
+  if (user === null || team === null || sprint === undefined) {
     notFound();
   }
-  const [retro, carried] = await Promise.all([
+  // Instructors read the retro but don't take part (AGENTS.md §1 roles), and
+  // read partner feedback on the review page instead.
+  const canTakePart = access.role !== "INSTRUCTOR";
+  const [retro, carried, memberships, ownFeedback] = await Promise.all([
     findRetro({ sprintId }),
     listCarriedActionItems({ sprintId }),
+    canTakePart ? listTeamMembers({ teamId }) : [],
+    canTakePart ? listOwnPeerFeedback({ sprintId, authorId: user.id }) : [],
   ]);
 
   const retroState = getRetroState(retro);
   const isLead = access.role === "LEAD";
-  // Instructors read the retro but don't take part (AGENTS.md §1 roles).
-  const canTakePart = access.role !== "INSTRUCTOR";
   const nextSprint = getNextSprint({ retro, sprint, sprints });
   const items =
     retro === null
@@ -231,23 +285,38 @@ async function SprintRetro({ params }: { params: Params }) {
             </p>
           </EmptyState>
         ) : (
-          // DESIGN.md §6 Retro: the two columns side by side from md.
-          <div className="grid items-start gap-4 md:grid-cols-2">
-            <RetroColumn
-              column="WENT_WELL"
-              items={items
-                .filter((item) => item.column === "WENT_WELL")
-                .map(toItemView)}
-              mode={columnMode}
-            />
-            <RetroColumn
-              column="TO_IMPROVE"
-              items={items
-                .filter((item) => item.column === "TO_IMPROVE")
-                .map(toItemView)}
-              mode={columnMode}
-            />
-          </div>
+          <>
+            {/* DESIGN.md §6 Retro: the two columns side by side from md. */}
+            <div className="grid items-start gap-4 md:grid-cols-2">
+              <RetroColumn
+                column="WENT_WELL"
+                items={items
+                  .filter((item) => item.column === "WENT_WELL")
+                  .map(toItemView)}
+                mode={columnMode}
+              />
+              <RetroColumn
+                column="TO_IMPROVE"
+                items={items
+                  .filter((item) => item.column === "TO_IMPROVE")
+                  .map(toItemView)}
+                mode={columnMode}
+              />
+            </div>
+            {canTakePart && (
+              <PeerFeedbackForm
+                teamId={teamId}
+                sprintId={sprintId}
+                isClosed={retroState === "CLOSED"}
+                teammates={toTeammateFeedback({
+                  memberships,
+                  own: ownFeedback,
+                  viewerId: user.id,
+                  timeZone: team.timezone,
+                })}
+              />
+            )}
+          </>
         )}
       </main>
     </PageAnnouncer>

@@ -140,12 +140,13 @@ function toCarriedRecord(row: CarriedRow): CarriedActionItemRecord {
   };
 }
 
-// Every write to a sprint's retro and its carried action items checks the
-// retro first, so it takes this lock (AGENTS.md Key patterns): writes to one
-// retro happen one at a time, a member's votes can't pass 3 by racing each
-// other, and nothing changes between a closing retro's count and its closedAt.
-// Returns the retro as it is under the lock, or null when the sprint has none.
-async function lockRetro(
+// Every write to a sprint's retro, its carried action items and its partner
+// feedback (#14) checks the retro first, so it takes this lock (AGENTS.md Key
+// patterns): writes to one retro happen one at a time, a member's votes can't
+// pass 3 by racing each other, and nothing changes between a closing retro's
+// count and its closedAt. Returns the retro as it is under the lock, or null
+// when the sprint has none.
+export async function lockRetro(
   tx: Prisma.TransactionClient,
   sprintId: string
 ): Promise<{ id: string; closedAt: Date | null } | null> {
