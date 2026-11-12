@@ -129,6 +129,8 @@ export function WebhookSecretField({
         isOpen={isConfirming}
         title="Rotate the webhook secret?"
         confirmLabel="Rotate secret"
+        // The old secret stops working at once, like revoking a token.
+        confirmVariant="destructive"
         isBusy={isRotating}
         error={rotateError}
         onConfirm={() => void rotateSecret()}
