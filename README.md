@@ -68,7 +68,7 @@ SprintProof is built by two people:
 | Ziqi (Odie) Yang | [@Odiethebest](https://github.com/Odiethebest) | Product, design and app features |
 | Yunhong Huang | [@santiaojun](https://github.com/santiaojun) | Platform and core logic |
 
-Every task is a GitHub Issue on the project board (Backlog → Sprint Todo → In Progress → In Review → Done). Each issue gets its own branch (`feature/12-standup-form`, `fix/31-webhook-signature`), commits follow [Conventional Commits](https://www.conventionalcommits.org/) ending with the issue number, and every pull request needs CI passing plus an approving review from the other partner. No one merges their own PR, and we never squash-merge, because squashing erases the test-first commits. AI coding tools follow the same rules and commit or push only when the developer explicitly asks, under that developer's own git identity, so authorship in the git history stays accurate.
+Every task is a GitHub Issue on the project board (Backlog → Sprint Todo → In Progress → In Review → Done). Each issue gets its own branch (`feature/12-standup-form`, `fix/31-webhook-signature`), commits follow [Conventional Commits](https://www.conventionalcommits.org/) ending with the issue number, and `main` is protected: a pull request needs the seven required checks (lint and typecheck, unit tests, E2E tests, production build, dependency audit, dependency review, CodeQL) and an approving review from the other partner. So far Ziqi has merged every pull request, both partners'. 20 of the 65 were merged without an approval from the partner in place, using the repository owner's admin override; the [contribution log](docs/contribution-log.md#process-notes) lists them. We never squash-merge, because squashing erases the test-first commits. AI coding tools follow the same rules and commit or push only when the developer explicitly asks, under that developer's own git identity, so authorship in the git history stays accurate.
 
 | Sprint | Dates | Milestone |
 |---|---|---|
@@ -255,19 +255,17 @@ The OAuth scopes we request, and why, are recorded in [`docs/decisions/`](docs/d
 | Environment | Trigger | Database and env vars |
 |---|---|---|
 | Preview | Every pull request (Vercel preview deployment) | Separate preview database |
-| Production | Merge to `main`, after CI passes | Production database |
+| Production | Every push to `main` (Vercel production deployment). CI runs at the same time and doesn't hold the deployment back; the Database workflow's smoke test then checks that production serves the new commit | Production database |
 
 See [`docs/architecture.md`](docs/architecture.md) for details.
 
 ### Database migrations
 
-After every push to `main`, the Database workflow (`database.yml`) runs `prisma migrate deploy` on the preview database, then on production, so a migration that fails on preview never reaches production. Each job reads a `DATABASE_URL` secret from the GitHub environment named after its database, `preview` or `production`. Until that secret exists, the job adds a notice to the run and skips instead of failing.
+After every push to `main`, the Database workflow (`database.yml`) runs `prisma migrate deploy` on the preview database, then on production, so a migration that fails on preview never reaches production. Each job reads a `DATABASE_URL` secret from the GitHub environment named after its database, `preview` or `production`. Both secrets are set (since Nov 11, 2026), and both environments accept only protected branches, so a workflow on any other branch can't read them. A job whose environment has no secret adds a notice to the run and skips instead of failing.
 
-To add the secrets, once, from a checkout of the repo (repo admin):
+To replace a secret, for example after a database password change (repo admin, from a checkout of the repo):
 
 ```bash
-gh api --method PUT repos/Odiethebest/SprintProof/environments/preview
-gh api --method PUT repos/Odiethebest/SprintProof/environments/production
 gh secret set DATABASE_URL --env preview       # paste the value at the prompt; it isn't echoed
 gh secret set DATABASE_URL --env production
 ```
@@ -276,7 +274,7 @@ Each value is that project's Session pooler URI (Supabase → Connect → Sessio
 
 After the migrations, a smoke test polls `https://sprintproof.vercel.app/api/health` every 15 seconds for up to 10 minutes. It passes once production answers `"status": "ok"` with the pushed commit, or with a later commit that includes it, which shows that Vercel deployed it and that production reaches its database. Otherwise it fails with the last answer it got. `GET /api/health` is public and returns no team data: it runs `SELECT 1` and returns `{ "status": "ok", "commit": "<deployed Git SHA>" }` (`commit` is `null` outside Vercel), or 503 `DATABASE_UNAVAILABLE`.
 
-Supabase pauses a free project after about a week of low activity. To keep both awake, the Database workflow runs `SELECT 1` on both databases daily once the secrets exist, and the production guard checks production's `/api/health` daily, which needs no secret.
+Supabase pauses a free project after about a week of low activity. To keep both awake, the Database workflow runs `SELECT 1` on both databases daily with those secrets, and the production guard checks production's `/api/health` daily, which needs no secret.
 
 ### Continuous integration
 
