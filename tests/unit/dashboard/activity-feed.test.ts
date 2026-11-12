@@ -102,7 +102,7 @@ describe("buildActivityFeed", () => {
     ]);
   });
 
-  it("lists a review with the PR's number and title", () => {
+  it("lists a review with the PR's number, title and review state", () => {
     const review = createActivityRecord({
       id: "activity-review",
       type: "REVIEW",
@@ -111,6 +111,7 @@ describe("buildActivityFeed", () => {
       prAuthorLogin: "alice",
       sha: null,
       title: "Async standup check-in and history",
+      reviewState: "APPROVED",
       occurredAt: new Date("2026-11-03T22:41:00Z"),
     });
 
@@ -128,11 +129,38 @@ describe("buildActivityFeed", () => {
         id: "activity-review",
         userId: "user-2",
         prNumber: 113,
+        reviewState: "APPROVED",
         summary: "Async standup check-in and history",
         occurredAt: new Date("2026-11-03T22:41:00Z"),
       },
     ]);
   });
+
+  // Reviews stored before #57 have no state (null).
+  it.each(["APPROVED", "CHANGES_REQUESTED", "COMMENTED", null] as const)(
+    "keeps the review state %s on the review's item",
+    (reviewState) => {
+      const review = createActivityRecord({
+        type: "REVIEW",
+        actorLogin: "bob",
+        prNumber: 113,
+        prAuthorLogin: "alice",
+        sha: null,
+        reviewState,
+      });
+
+      const feed = buildActivityFeed({
+        sprint,
+        timeZone,
+        members: [alice(), bob()],
+        standups: [],
+        activities: [review],
+      });
+
+      expect(feed).toHaveLength(1);
+      expect(feed[0]).toMatchObject({ kind: "REVIEW", reviewState });
+    }
+  );
 
   it("leaves out reviews on the reviewer's own PR, which never count", () => {
     // Counting rule: reviews on your own PR never count (AGENTS.md §1)

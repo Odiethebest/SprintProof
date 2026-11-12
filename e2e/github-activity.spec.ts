@@ -185,13 +185,49 @@ test.describe("GitHub activity", () => {
       .getByRole("region", { name: "Activity" })
       .getByRole("listitem")
       .first();
-    await expect(latest).toContainText("Yunhong Huang reviewed #105");
+    await expect(latest).toContainText("Yunhong Huang approved #105");
     await expect(latest).toContainText("Show live contribution dashboard");
     await expect(page.getByRole("status")).toHaveText(
-      "Yunhong Huang reviewed #105. PR reviews 1 of 5, on track."
+      "Yunhong Huang approved #105. PR reviews 1 of 5, on track."
     );
     expect(await page.evaluate(() => "noReload" in window)).toBe(true);
     await expectNoBlockingViolations(page);
+
+    // Act: the member requests changes on another of the lead's PRs
+    const changesRequested = await deliver(request, {
+      event: "pull_request_review",
+      deliveryId: crypto.randomUUID(),
+      payload: {
+        action: "submitted",
+        review: {
+          id: 1002,
+          user: { login: REVIEWER.login },
+          state: "changes_requested",
+          submitted_at: new Date().toISOString(),
+        },
+        pull_request: {
+          number: 106,
+          title: "Add UI mockups and DESIGN.md",
+          user: { login: REVIEW_LEAD.login },
+        },
+        repository: repositoryField(repo),
+        sender: { login: REVIEWER.login },
+      },
+    });
+
+    // Assert: it counts like the approval (rule R3), and the feed says what it was
+    expect(changesRequested.status()).toBe(200);
+    await expect(reviewerCard.locator("dl")).toHaveText(
+      /Commits\s*0\s*PRs\s*0\s*Reviews\s*2\s*Standups\s*0/,
+      { timeout: 5_000 }
+    );
+    await expect(latest).toContainText(
+      "Yunhong Huang requested changes on #106"
+    );
+    await expect(page.getByRole("status")).toHaveText(
+      "Yunhong Huang requested changes on #106. PR reviews 2 of 5, on track."
+    );
+    expect(await page.evaluate(() => "noReload" in window)).toBe(true);
 
     // Act: the lead checks the webhook in Settings
     await page.goto(`/teams/${teamId}/settings`);

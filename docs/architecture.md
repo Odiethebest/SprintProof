@@ -102,6 +102,7 @@ erDiagram
     string prAuthorLogin "pr_author_login, nullable"
     string sha "nullable, commit SHA"
     string title "nullable"
+    enum reviewState "review_state, nullable: APPROVED | CHANGES_REQUESTED | COMMENTED"
     datetime occurredAt "occurred_at (timestamp on GitHub)"
     datetime createdAt "created_at (row insertion time)"
     datetime updatedAt "updated_at"
@@ -145,7 +146,7 @@ erDiagram
 - **`invites` (`Invite`)**: Invite links. `role` is `MEMBER` or `INSTRUCTOR`; a link works until `expires_at` (7 days after creation) unless `revoked_at` is set. At most one active link per team and role: creating a new one revokes the previous one. `token` is stored as is rather than hashed so the lead can copy the link again from Settings (#7).
 - **`sprints` (`Sprint`)**: Calendar boundaries stored as `@db.Date` (`start_date`, `end_date`), along with `standups_per_person` (default 3) and `reviews_per_person` (default 5).
 - **`standups` (`Standup`)**: Belongs to a team and a calendar day (`date`, `@db.Date`, in the team timezone), not to a stored sprint. It's listed under the sprint whose dates contain its day, so it follows its day when sprint dates change (#56, `docs/decisions/003-standups-belong-to-days.md`). `@@unique([team_id, user_id, date])` keeps at most one standup per person per day.
-- **`activities` (`Activity`)**: Activity records with `occurred_at` for event time and `@@unique([team_id, type, sha])` deduplicating commit SHAs.
+- **`activities` (`Activity`)**: Activity records with `occurred_at` for event time and `@@unique([team_id, type, sha])` deduplicating commit SHAs. `review_state` holds GitHub's `review.state` for a `REVIEW` row, so the activity feed can say "approved", "requested changes on" or "commented on" #N (#57). It's null for every other type, for reviews stored before #57, and for a review whose state GitHub doesn't document. Those reviews show as "reviewed #N". Every state counts the same under R3.
 - **`webhook_deliveries` (`WebhookDelivery`)**: One row per GitHub delivery, keyed by the `X-GitHub-Delivery` id so a redelivered event is stored once (#11). `team_id` is nullable because a delivery can arrive for a repo that no team has connected.
 - **`api_tokens` (`ApiToken`)**: Personal tokens for the public API (#16). Only the SHA-256 hash (`token_hash`, unique) is stored; the token itself is shown once. `last4` lets Settings tell tokens apart, and `last_used_at` is updated when a token is used. Revoking deletes the row.
 
@@ -155,6 +156,7 @@ erDiagram
 | --- | --- | --- |
 | `MembershipRole` | `LEAD`, `MEMBER`, `INSTRUCTOR` | `Membership.role`, `Invite.role` |
 | `ActivityType` | `COMMIT`, `PR_OPENED`, `PR_MERGED`, `REVIEW` | `Activity.type` |
+| `ReviewState` | `APPROVED`, `CHANGES_REQUESTED`, `COMMENTED` | `Activity.reviewState` |
 
 ### Migrations
 
@@ -168,3 +170,4 @@ In `prisma/migrations/`, applied in order:
 | `20261106000000_add_repo_id_and_webhook_deliveries` | #11 | `teams.repo_id` (unique, nullable) and the `webhook_deliveries` table |
 | `20261108081720_add_api_tokens` | #16 | The `api_tokens` table |
 | `20261109224149_standups_belong_to_team` | #56 | Fills `standups.team_id` from each standup's sprint, drops `sprint_id`, and replaces the unique key with `[team_id, user_id, date]`. Fails if a person already has two standups on one day in a team |
+| `20261112025033_add_activity_review_state` | #57 | The `ReviewState` enum and `activities.review_state` (nullable, no default, so existing rows stay null) |

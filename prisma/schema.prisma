@@ -20,6 +20,14 @@ enum ActivityType {
   REVIEW
 }
 
+// GitHub's review.state for a submitted review (#57). Every state counts
+// under R3; the state only changes the activity feed's wording.
+enum ReviewState {
+  APPROVED
+  CHANGES_REQUESTED
+  COMMENTED
+}
+
 model User {
   id          String       @id @default(cuid())
   githubId    String       @unique @map("github_id")
@@ -138,6 +146,9 @@ model Activity {
   prAuthorLogin String?      @map("pr_author_login")
   sha           String?
   title         String?
+  // Only REVIEW rows have a state. Reviews stored before #57, and reviews with
+  // a state GitHub doesn't document, have none and still count.
+  reviewState   ReviewState? @map("review_state")
   occurredAt    DateTime     @map("occurred_at")
   createdAt     DateTime     @default(now()) @map("created_at")
   updatedAt     DateTime     @updatedAt @map("updated_at")

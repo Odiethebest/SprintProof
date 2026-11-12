@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+export type ReviewState = "APPROVED" | "CHANGES_REQUESTED" | "COMMENTED";
+
 export interface MappedActivity {
   type: "COMMIT" | "PR_OPENED" | "PR_MERGED" | "REVIEW";
   actorLogin: string;
@@ -7,6 +9,8 @@ export interface MappedActivity {
   prAuthorLogin: string | null;
   sha: string | null;
   title: string | null;
+  // Set only on a REVIEW, and null there when GitHub's state is one we don't know.
+  reviewState: ReviewState | null;
   occurredAt: Date;
 }
 
@@ -73,9 +77,27 @@ const mergedPullRequestSchema = z.object({
   }),
 });
 
+// GitHub sends review.state in lowercase in pull_request_review payloads.
+const REVIEW_STATES = {
+  approved: "APPROVED",
+  changes_requested: "CHANGES_REQUESTED",
+  commented: "COMMENTED",
+} as const satisfies Record<string, ReviewState>;
+
+// Counting rule: a submitted review counts whatever its state (AGENTS.md §1,
+// R3), and a redelivery carries the same state, so rejecting an unknown or
+// missing one would drop a counted review for good. It's stored as null
+// instead, and the feed says "reviewed #N" (#57).
+const reviewStateSchema = z
+  .enum(["approved", "changes_requested", "commented"])
+  .transform((state) => REVIEW_STATES[state])
+  .nullable()
+  .catch(null);
+
 const submittedReviewSchema = z.object({
   review: z.object({
     user: accountSchema,
+    state: reviewStateSchema,
     submitted_at: timestampSchema,
   }),
   pull_request: z.object({
@@ -141,6 +163,7 @@ function mapPush({ payload }: { payload: unknown }): WebhookMapping {
         prAuthorLogin: null,
         sha: commit.id,
         title: toCommitTitle(commit.message),
+        reviewState: null,
         occurredAt: new Date(commit.timestamp),
       },
     ];
@@ -170,6 +193,7 @@ function mapOpenedPullRequest({
       prAuthorLogin: pr.user.login,
       sha: null,
       title: pr.title,
+      reviewState: null,
       occurredAt: new Date(pr.created_at),
     },
   ]);
@@ -205,6 +229,7 @@ function mapClosedPullRequest({
       prAuthorLogin: pr.user.login,
       sha: null,
       title: pr.title,
+      reviewState: null,
       occurredAt: new Date(pr.merged_at),
     },
   ]);
@@ -252,6 +277,7 @@ function mapReview({ payload }: { payload: unknown }): WebhookMapping {
       prAuthorLogin: pr.user.login,
       sha: null,
       title: pr.title,
+      reviewState: review.state,
       occurredAt: new Date(review.submitted_at),
     },
   ]);

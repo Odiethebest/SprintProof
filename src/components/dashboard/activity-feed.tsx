@@ -8,6 +8,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import type { ActivityFeedItem } from "@/lib/dashboard/activity-feed";
+import type { ReviewState } from "@/lib/github/webhook-events";
 import {
   EMPTY_STATE_LINK_CLASSES,
   EmptyState,
@@ -25,12 +26,23 @@ const KIND_ICONS: Record<ActivityFeedItem["kind"], LucideIcon> = {
   COMMITS: GitCommitHorizontal,
 };
 
+// AGENTS.md §2 ActivityFeed: "approved", "requested changes on" or "commented on" #N.
+const REVIEW_VERBS: Record<ReviewState, string> = {
+  APPROVED: "approved",
+  CHANGES_REQUESTED: "requested changes on",
+  COMMENTED: "commented on",
+};
+
 function prLabel(prNumber: number | null): string {
   return prNumber === null ? "a PR" : `#${prNumber}`;
 }
 
+// Reviews stored before #57 have no state, so they keep the plain verb.
+function reviewVerb(reviewState: ReviewState | null): string {
+  return reviewState === null ? "reviewed" : REVIEW_VERBS[reviewState];
+}
+
 // The action after the actor's name, e.g. "pushed 3 commits".
-// TODO(#57): say "approved", "requested changes on" or "commented on" once the review state is stored.
 export function describeAction(entry: ActivityFeedEntryView): string {
   switch (entry.kind) {
     case "STANDUP":
@@ -38,7 +50,7 @@ export function describeAction(entry: ActivityFeedEntryView): string {
     case "PR_OPENED":
       return `opened ${prLabel(entry.prNumber)}`;
     case "REVIEW":
-      return `reviewed ${prLabel(entry.prNumber)}`;
+      return `${reviewVerb(entry.reviewState)} ${prLabel(entry.prNumber)}`;
     case "COMMITS":
       return `pushed ${entry.commitCount} ${entry.commitCount === 1 ? "commit" : "commits"}`;
   }
