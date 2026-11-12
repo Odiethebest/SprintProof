@@ -84,10 +84,12 @@ As someone who hates deadline surprises, I want the app to tell me which require
 - For each member and requirement: count, required number, and status (`MET`, `ON_TRACK`, `AT_RISK`, `MISSED`) following the rules in section 6.
 - Copy is neutral and specific ("3 more PR reviews"), never judgmental.
 
-**US-6. Track GitHub activity automatically** · Issue #11
+**US-6. Track GitHub activity automatically** · Issues #11, #115
 As a team member, I want our commits, PRs and reviews recorded automatically, so nobody types activity in by hand.
 - Webhook endpoint accepts `push`, `pull_request` and `pull_request_review` events.
-- Requests with an invalid signature are rejected.
+- Each team has its own webhook secret, generated when the team is created. A delivery is verified with the secret of the team whose repository it names; one with an invalid signature, or signed with another team's secret, is rejected (decision 005).
+- The lead sees the secret in Settings, masked to its last 4 characters, with "Copy" and "Rotate secret" (after a confirmation). Other roles never see it, and no API response or log contains it.
+- Teams created before #115 keep accepting the server-wide secret until GitHub sends a delivery signed with their own, so connected repositories keep working through the change.
 - Redelivered events are stored once.
 
 **US-7. Watch progress live** · Issue #12
