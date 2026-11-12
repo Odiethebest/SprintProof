@@ -46,6 +46,7 @@ export async function recordWebhookEvent({
       prAuthorLogin: activity.prAuthorLogin,
       sha: activity.sha,
       title: activity.title,
+      reviewState: activity.reviewState,
       occurredAt: activity.occurredAt,
     }));
     // Counting rule: commits deduplicate by SHA, across deliveries (AGENTS.md §1).
@@ -102,6 +103,7 @@ export async function listTeamActivities({
       prAuthorLogin: true,
       sha: true,
       title: true,
+      reviewState: true,
       occurredAt: true,
     },
   });

@@ -1,5 +1,6 @@
 import { tz } from "@date-fns/tz";
 import { format } from "date-fns";
+import type { ReviewState } from "@/lib/github/webhook-events";
 import {
   attributeActivities,
   type AttributeActivitiesOptions,
@@ -27,10 +28,20 @@ export type ActivityFeedItem =
       occurredAt: Date;
     }
   | {
-      kind: "PR_OPENED" | "REVIEW";
+      kind: "PR_OPENED";
       id: string;
       userId: string;
       prNumber: number | null;
+      summary: string | null;
+      occurredAt: Date;
+    }
+  | {
+      kind: "REVIEW";
+      id: string;
+      userId: string;
+      prNumber: number | null;
+      // Null for reviews stored before #57: the feed says "reviewed #N".
+      reviewState: ReviewState | null;
       summary: string | null;
       occurredAt: Date;
     }
@@ -87,6 +98,7 @@ export function buildActivityFeed({
             id: activity.id,
             userId,
             prNumber: activity.prNumber,
+            reviewState: activity.reviewState,
             summary: activity.title,
             occurredAt: activity.occurredAt,
           });
