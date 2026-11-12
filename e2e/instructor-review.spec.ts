@@ -28,8 +28,10 @@ const MEMBER: TestUser = {
   name: "Yunhong Huang",
 };
 
-const NOT_RECORDED =
-  "Retro items, action items and peer feedback aren't recorded in SprintProof yet.";
+// Retros are recorded (#13); peer feedback isn't yet (#14).
+const RETRO_NOT_OPENED = "The lead hasn't opened the Sprint 1 retro yet.";
+const PEER_FEEDBACK_NOT_RECORDED =
+  "Peer feedback isn't recorded in SprintProof yet.";
 
 // A team with a running Sprint 1 and one standup from its lead.
 async function createTeamWithStandup(lead: Page): Promise<string> {
@@ -116,7 +118,12 @@ test.describe("Instructor review", () => {
     const standups = main.getByRole("region", { name: "Standups" });
     await expect(standups.getByRole("heading", { level: 3 })).toHaveCount(1);
     await expect(standups).toContainText("Build the Markdown export.");
-    await expect(main.getByText(NOT_RECORDED, { exact: true })).toBeVisible();
+    const retro = main.getByRole("region", { name: "Retro", exact: true });
+    await expect(retro.getByText(RETRO_NOT_OPENED)).toBeVisible();
+    const peerFeedback = main.getByRole("region", { name: "Peer feedback" });
+    await expect(
+      peerFeedback.getByText(PEER_FEEDBACK_NOT_RECORDED, { exact: true })
+    ).toBeVisible();
 
     // Assert: no edit controls, only the export
     await expect(main.getByRole("textbox")).toHaveCount(0);
@@ -144,7 +151,8 @@ test.describe("Instructor review", () => {
     await expect(preview).toContainText(
       "**Today:** Build the Markdown export."
     );
-    await expect(preview).toContainText(NOT_RECORDED);
+    await expect(preview).toContainText(`## Retro\n${RETRO_NOT_OPENED}`);
+    await expect(preview).toContainText(PEER_FEEDBACK_NOT_RECORDED);
     await expectNoBlockingViolations(instructor);
     const markdown = await preview.locator("pre").textContent();
 
@@ -189,7 +197,14 @@ test.describe("Instructor review", () => {
       teamNav(page).getByRole("link", { name: "Review" })
     ).toHaveAttribute("aria-current", "page");
     const main = page.getByRole("main");
-    await expect(main.getByText(NOT_RECORDED, { exact: true })).toBeVisible();
+    await expect(
+      main
+        .getByRole("region", { name: "Retro", exact: true })
+        .getByText(RETRO_NOT_OPENED)
+    ).toBeVisible();
+    await expect(
+      main.getByRole("region", { name: "Peer feedback" })
+    ).toHaveCount(0);
     await expect(
       main.getByText(
         "Peer feedback is left out of this page and of the export.",
