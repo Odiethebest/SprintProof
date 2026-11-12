@@ -64,6 +64,12 @@ test.describe("Onboarding", () => {
     await expect(
       page.getByRole("heading", { level: 1, name: "Create a team" })
     ).toBeVisible();
+    // The lead invites the partner; the TA's link comes from course staff (#116).
+    await expect(
+      page.getByText(
+        "You'll be the team lead. Invite your partner from Settings next."
+      )
+    ).toBeVisible();
     await expect(page.getByLabel("Team timezone")).toHaveValue(
       "America/Los_Angeles"
     );
