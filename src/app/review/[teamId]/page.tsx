@@ -8,8 +8,11 @@ import type { TeamRole } from "@/lib/auth/team-access";
 import {
   buildSprintSummaryMarkdown,
   getExportAudience,
+  type ExportRetro,
 } from "@/lib/export/sprint-summary-markdown";
 import { getSummaryFileName } from "@/lib/export/summary-file-name";
+import { findNextSprint } from "@/lib/retro/next-sprint";
+import { tallyRetroItems } from "@/lib/retro/retro-votes";
 import {
   getSprintWindow,
   selectSprint,
@@ -32,7 +35,11 @@ import {
   RequirementsTable,
   type RequirementRowView,
 } from "@/components/review/requirements-table";
-import { RetroFeedbackCard } from "@/components/review/retro-feedback-card";
+import {
+  PeerFeedbackCard,
+  PeerFeedbackLeftOutNote,
+} from "@/components/review/peer-feedback-card";
+import { ReviewRetroCard } from "@/components/review/review-retro-card";
 import { ReviewStandups } from "@/components/review/review-standups";
 import type { StandupDayView } from "@/components/standups/standup-history";
 import {
@@ -44,6 +51,7 @@ import { requireTeamRole } from "@/server/auth";
 import { getCurrentUser } from "@/server/current-user";
 import { listTeamActivities } from "@/server/repositories/activities";
 import { listTeamMembers } from "@/server/repositories/memberships";
+import { findRetro, type RetroRecord } from "@/server/repositories/retros";
 import { listSprints } from "@/server/repositories/sprints";
 import {
   listSprintStandups,
@@ -153,6 +161,7 @@ async function TeamReview({
             team={team}
             memberships={memberships}
             role={access.role}
+            viewerId={user.id}
             now={now}
           />
         )}
@@ -217,6 +226,50 @@ function toStandupDays({
   }));
 }
 
+// The retro as the review page and the export show it (#13): items in vote
+// order, and the action items closing made, in the same order.
+function toExportRetro({
+  retro,
+  sprint,
+  sprints,
+  viewerId,
+}: {
+  retro: RetroRecord | null;
+  sprint: SprintRecord;
+  sprints: SprintRecord[];
+  viewerId: string;
+}): ExportRetro | null {
+  if (retro === null) {
+    return null;
+  }
+  const items = tallyRetroItems({
+    items: retro.items,
+    votes: retro.votes,
+    voterId: viewerId,
+  });
+  const actionItems = items.flatMap((item) => {
+    const made = retro.actionItems.find(
+      (actionItem) => actionItem.retroItemId === item.id
+    );
+    return made === undefined ? [] : [{ text: item.text, isDone: made.isDone }];
+  });
+  // Where closing put the action items, or the sprint that starts next.
+  const madeFor = sprints.find(
+    (other) => other.id === retro.actionItems.at(0)?.sprintId
+  );
+  const nextSprint = madeFor ?? findNextSprint({ sprint, sprints });
+  return {
+    closedAt: retro.closedAt,
+    items: items.map(({ column, text, voteCount }) => ({
+      column,
+      text,
+      voteCount,
+    })),
+    nextSprintName: nextSprint?.name ?? null,
+    actionItems,
+  };
+}
+
 // The same reads and counts as GET .../sprints/{sprintId}/summary.
 async function SprintReview({
   sprint,
@@ -224,6 +277,7 @@ async function SprintReview({
   team,
   memberships,
   role,
+  viewerId,
   now,
 }: {
   sprint: SprintRecord;
@@ -231,14 +285,22 @@ async function SprintReview({
   team: Team;
   memberships: Awaited<ReturnType<typeof listTeamMembers>>;
   role: TeamRole;
+  viewerId: string;
   now: Date;
 }) {
   const timeZone = team.timezone;
   const window = getSprintWindow({ sprint, timeZone });
-  const [standups, activities] = await Promise.all([
+  const [standups, activities, retroRecord] = await Promise.all([
     listSprintStandups({ sprint }),
     listTeamActivities({ teamId: team.id, from: window.start, to: window.end }),
+    findRetro({ sprintId: sprint.id }),
   ]);
+  const retro = toExportRetro({
+    retro: retroRecord,
+    sprint,
+    sprints,
+    viewerId,
+  });
   const summary = buildSprintSummary({
     sprint,
     timeZone,
@@ -305,6 +367,7 @@ async function SprintReview({
               summary,
               standups,
               audience,
+              retro,
             })}
             audience={audience}
           />
@@ -317,8 +380,14 @@ async function SprintReview({
           sprintName={sprint.name}
           days={toStandupDays({ standups, timeZone })}
         />
-        <RetroFeedbackCard audience={audience} />
+        <ReviewRetroCard sprintName={sprint.name} retro={retro} />
       </div>
+      {/* Peer feedback only ever reaches instructors (AGENTS.md §1, PRD R7). */}
+      {audience === "INSTRUCTOR" ? (
+        <PeerFeedbackCard />
+      ) : (
+        <PeerFeedbackLeftOutNote />
+      )}
     </>
   );
 }
