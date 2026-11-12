@@ -79,9 +79,9 @@ src/
 │   ├── realtime/                 # TeamLiveProvider (Pusher subscription, refetch on events), LiveIndicator, LiveCount
 │   └── <feature>/                # feature components: auth/, teams/, sprints/, dashboard/, standups/, api-tokens/, api-docs/, review/, retro/...
 ├── lib/                          # PURE business logic — no I/O
-│   ├── auth/                     # sign-in redirects, team role checks, test sign-in input
+│   ├── auth/                     # sign-in redirects, team role checks, test sign-in input, course staff logins (COURSE_STAFF_GITHUB_LOGINS)
 │   ├── teams/                    # create-team input (name, owner/name repo, timezone), team navigation pages and their paths
-│   ├── invites/                  # invite link expiry and validity
+│   ├── invites/                  # invite link expiry and validity, who manages which link (getManageableInviteRoles)
 │   ├── api/                      # list pagination: ?limit= and ?cursor= schema, rows → { data, nextCursor }
 │   ├── api-tokens/               # API token name input, SHA-256 hash, masked display (spk_live_••••last4), Bearer header parsing
 │   ├── checks/                   # requirement checks (standups, reviews per person)
@@ -97,12 +97,13 @@ src/
 ├── server/                       # everything with side effects
 │   ├── db.ts                     # single Prisma client
 │   ├── repositories/             # all database reads/writes (sprints.ts, standups.ts, activities.ts, api-tokens.ts, ...)
-│   ├── auth.ts                   # requireTeamRole(); requireApiTeamRole() and requireApiUser() for the read-only endpoints that take an API token
+│   ├── auth.ts                   # requireTeamRole(); requireApiTeamRole() and requireApiUser() for the read-only endpoints that take an API token; requireInviteAccess() for invite links
+│   ├── course-staff.ts           # isCourseStaff(): the user's GitHub login is in COURSE_STAFF_GITHUB_LOGINS
 │   ├── auth-config.ts            # Auth.js config: GitHub provider, test sign-in
 │   ├── auth-session.ts           # getSession(), getSessionUserId(); tests mock this
 │   ├── auth-proxy.ts             # cookie-only Auth.js instance for src/proxy.ts
 │   ├── current-user.ts           # getCurrentUser() for pages
-│   ├── api-response.ts           # errorResponse(), parseJsonBody(), accessDeniedResponse(), parsePaginationQuery(), catchUnexpectedErrors()
+│   ├── api-response.ts           # errorResponse(), parseJsonBody(), accessDeniedResponse(), inviteRoleForbiddenResponse(), parsePaginationQuery(), catchUnexpectedErrors()
 │   ├── api-tokens.ts             # createPersonalApiToken(): random token, stores only its hash
 │   ├── openapi-spec.ts           # reads docs/api/openapi.yaml for /api-docs
 │   ├── health.ts                 # checkHealth({ database }): the /api/health response; tests pass a client that can't connect
@@ -130,8 +131,8 @@ e2e/                              # Playwright specs
 - **All mutations go through route handlers** in `app/api/`. Do not use Server Actions; one mutation pattern keeps integration tests uniform.
 - **Real-time flow:** webhook or mutation → write to DB → `server/realtime.ts` triggers `team-{teamId}` channel with a small event (`activity.created`, `standup.created`) → client refetches the affected section. Never push full records through Pusher.
 - **API response shape:** success returns the resource or `{ data, nextCursor }` for lists. Errors always return `{ "error": { "code": "SNAKE_CASE_CODE", "message": "Human readable" } }` with the right HTTP status.
-- **Route handler helpers** live in `server/api-response.ts`: parse request bodies with `parseJsonBody({ request, schema })` (400 `VALIDATION_ERROR` with the first Zod message), parse `?limit=` and `?cursor=` with `parsePaginationQuery({ request })`, turn a denied `requireTeamRole()`, `requireApiTeamRole()` or `requireApiUser()` result into a 401 or 403 with `accessDeniedResponse()`, and build every other error with `errorResponse()`. Don't write error JSON by hand. Every exported handler under `app/api/v1/` runs its body through `catchUnexpectedErrors({ route, handler })`, so an unexpected error returns 500 `INTERNAL_ERROR` in the same shape and the log names only the route and the error's code or name; `tests/integration/api/unexpected-errors.test.ts` fails when a handler isn't covered.
-- **API tokens only read.** Only `GET /teams`, `GET /teams/{teamId}`, `GET /teams/{teamId}/sprints`, `.../sprints/{sprintId}/summary` and `.../sprints/{sprintId}/standups` take a token. `GET /teams` calls `requireApiUser()` and the others call `requireApiTeamRole()`; both take `Authorization: Bearer` or the session. Every other route keeps `requireTeamRole()` (session only), so a leaked token can't change data or create tokens.
+- **Route handler helpers** live in `server/api-response.ts`: parse request bodies with `parseJsonBody({ request, schema })` (400 `VALIDATION_ERROR` with the first Zod message), parse `?limit=` and `?cursor=` with `parsePaginationQuery({ request })`, turn a denied `requireTeamRole()`, `requireApiTeamRole()`, `requireApiUser()` or `requireInviteAccess()` result into a 401 or 403 with `accessDeniedResponse()`, answer an invite link role the caller can't manage with `inviteRoleForbiddenResponse()`, and build every other error with `errorResponse()`. Don't write error JSON by hand. Every exported handler under `app/api/v1/` runs its body through `catchUnexpectedErrors({ route, handler })`, so an unexpected error returns 500 `INTERNAL_ERROR` in the same shape and the log names only the route and the error's code or name; `tests/integration/api/unexpected-errors.test.ts` fails when a handler isn't covered.
+- **API tokens only read.** Only `GET /teams`, `GET /teams/{teamId}`, `GET /teams/{teamId}/sprints`, `.../sprints/{sprintId}/summary` and `.../sprints/{sprintId}/standups` take a token. `GET /teams` calls `requireApiUser()` and the others call `requireApiTeamRole()`; both take `Authorization: Bearer` or the session. Every other route keeps `requireTeamRole()` or, for invite links, `requireInviteAccess()` (both session only), so a leaked token can't change data or create tokens.
 - **The OpenAPI spec is part of the API.** A new or changed route under `app/api/v1/` updates `docs/api/openapi.yaml` in the same PR; `tests/unit/docs/openapi-coverage.test.ts` fails when a route and the spec disagree.
 
 ### Domain model and counting rules
@@ -154,6 +155,7 @@ Main Prisma models: `User`, `Team`, `Membership` (role: `LEAD` | `MEMBER` | `INS
   - Days left = the sprint's end date minus today's date, both in the team timezone, plus 1 (today counts). With a Nov 4 end: Nov 2 has 3 days left (`ON_TRACK`), Nov 3 has 2 (`AT_RISK`), Nov 4 has 1 (`AT_RISK`).
 - **Retro votes:** each member gets 3 votes per retro, max 1 per item. The top 3 items in "To improve" by vote count (ties broken by earliest created) become `ActionItem`s for the next sprint.
 - **Peer feedback** is visible only to users with the `INSTRUCTOR` role. Never return it to `LEAD` or `MEMBER`, in any page, API response or export.
+- **Invite links** (decision 006): the `LEAD` creates and revokes member links. Instructor links come only from course staff (the GitHub logins in `COURSE_STAFF_GITHUB_LOGINS`, comma-separated, case-insensitive; empty means nobody), who don't have to be on the team, and from the team's `INSTRUCTOR`s; they revoke them too. Everyone else gets 403, a `LEAD` included, so a lead can't join their own team as an instructor with a second account. Session only, through `requireInviteAccess()`.
 
 ### Naming conventions
 
@@ -224,10 +226,10 @@ Every signed-in page shares one top bar: the team mark, the team name with the r
 5. **Review** (`/review/[teamId]`, `05-instructor.png`): the title is "Sprint N review"; the meta line has the dates, days left, requirements and a "Read-only" pill; the `ExportButton` sits on the right. Cards: "Requirements" (a table with one row per member: standups and PR reviews as count plus `StatusLabel`, commits, PRs, and "Counts as of <date>"), "Standups" by day, "Retro" (both columns with vote counts, and the action items for the next sprint or "Set when the lead closes the retro"), and, for `INSTRUCTOR` only, "Peer feedback" with one entry per author and teammate ("Ziqi (Odie) Yang about Yunhong Huang", or "Not submitted yet"). No edit controls are rendered at all. A `LEAD` can open this page too: it shows the same summary without the peer feedback card, plus a note that peer feedback is left out of the page and of the export. The page sits outside the team layout and renders the same top bar; "Review" is in the team navigation for `LEAD` and `INSTRUCTOR` only. Until retros (#13) and peer feedback (#14) are built, a "Retro and peer feedback" card in place of the last two says they aren't recorded in SprintProof yet, and the export says the same.
 6. **Settings** (`/teams/[teamId]/settings`, `06-settings.png`), two columns on desktop:
    - **Repository:** the connected repo marked "Connected"; a team timezone select ("Sprint days and standup dates use this timezone."); the webhook URL with "Copy"; the subscribed events; the last delivery marked "Verified"; the masked webhook secret with "Rotate secret"; collapsible "Webhook setup steps"; and "Unmapped activity", which lists GitHub logins that aren't on the team (stored, not counted) and bots (ignored).
-   - **Members and invites:** members with role pills; a member invite link and an instructor invite link, each with its expiry date, "Copy link" and "Revoke", or "Create link" when none is active.
+   - **Members and invites:** members with role pills; the invite links the user can manage, each with its expiry date, "Copy link" and "Revoke", or "Create link" when none is active: the member link for the lead, the instructor link for course staff and the team's instructors. Without the instructor link, the lead sees "Instructor invite links come from course staff." Course staff who aren't on the team use the API from `/api-docs` (decision 006).
    - **Sprints and requirements** (full width): a table of sprints (dates, standups per person, PR reviews per person, Ended / Current / Upcoming, "Edit"). "Add sprint" opens an inline form (name, start date, end date, standups per person defaulting to 3, PR reviews per person defaulting to 5) with field errors for an end date before the start date, an overlap (naming the other sprint), and numbers outside 1–20.
    - **API tokens** (full width): the user's tokens (name, `spk_live_••••` plus the last 4 characters, created and last used dates, "Revoke"), then a "New token name" field with "Create token". A new token appears once, in a highlighted box with "Copy token" and "Copy your new token now. You won't see it again."
-   - Lead-only controls (timezone, webhook URL and secret, setup steps, invites, adding and editing sprints) aren't rendered for anyone else.
+   - Lead-only controls (timezone, webhook URL and secret, setup steps, the member invite link, adding and editing sprints) aren't rendered for anyone else. The instructor invite link is rendered only for course staff and the team's instructors.
 
 ### Key components and expected behavior
 
@@ -252,7 +254,7 @@ Every signed-in page shares one top bar: the team mark, the team name with the r
 2. **Daily standup:** standups page → fill in "Today's standup" → "Post standup" → the entry appears at the top of History, and teammates' dashboards update the standup count live. Posting again the same day updates that entry ("Update today's standup").
 3. **GitHub activity:** a member opens or reviews a PR on GitHub → the webhook hits `/api/webhooks/github` → signature verified → `Activity` stored (idempotent) → Pusher event → within seconds the item appears in the activity feed and the changed count is highlighted; Settings shows it as the last verified delivery.
 4. **End of sprint:** the lead opens the retro → members add items to "Went well" and "To improve" and vote (3 each, max 1 per item) → each member saves partner feedback → the lead clicks "Close retro" and confirms → the top 3 "To improve" items become action items, listed as "Carried into" on the next sprint's retro → the lead exports the team summary from the review page, without peer feedback.
-5. **Instructor:** opens an instructor invite link → `INSTRUCTOR` membership → read-only review page with peer feedback → "Export Markdown" includes the peer feedback.
+5. **Instructor:** course staff create an instructor invite link through the API (`/api-docs`), or an instructor already on the team copies it from Settings → the instructor opens it → `INSTRUCTOR` membership → read-only review page with peer feedback → "Export Markdown" includes the peer feedback.
 
 ---
 
@@ -318,7 +320,7 @@ Standups, planning notes and retros for our own team are recorded in SprintProof
 ### Do
 
 - Validate every external input with Zod: request bodies, query params, route params, webhook payloads. User text uses the shared `noNul` check from `lib/validation/text.ts`, because PostgreSQL can't store a NUL character. Webhook text (commit messages, PR titles) has NUL removed instead: a redelivery carries the same payload, so rejecting it would drop the event for good. An id from the URL that can't be valid is treated as unknown (the same 403 or 404), never a 500.
-- Call `requireTeamRole(teamId, roles)` at the top of every route handler and server page that touches team data (`requireApiTeamRole(request, teamId, roles)` in the token endpoints that read one team).
+- Call `requireTeamRole(teamId, roles)` at the top of every route handler and server page that touches team data (`requireApiTeamRole(request, teamId, roles)` in the token endpoints that read one team, `requireInviteAccess(teamId)` in the invite link routes, which course staff may call without being on the team).
 - Put logic in `src/lib/` as pure functions and test it first.
 - Use design tokens from `DESIGN.md` through Tailwind classes.
 - Write UI copy that is short, neutral and specific.
@@ -412,3 +414,4 @@ Standups, planning notes and retros for our own team are recorded in SprintProof
 | 2026-11-11 | Ziqi (Odie) Yang | Architecture tree lists `components/review/` and the `lib/export/` files; §2 Review and `ExportButton`: the page's top bar and Review link, the card and export text until #13 and #14, and how N in `sprint-N-summary.md` is chosen for names that aren't "Sprint N" (#15) | Issue #15: instructor view and Markdown export. The rules should match the code |
 | 2026-11-11 | Ziqi (Odie) Yang | §2 `StandupForm`: when the day changes while it's open, it keeps the unsent text and its old date until "Load today's form" shows the new date; PRD US-4; architecture tree lists the form state in `lib/standups/` (#91) | Issue #91, from Yunhong's review of PR #81: "Load today's form" reloaded the page and a live refresh after midnight emptied the fields, so unsent text was lost |
 | 2026-11-11 | Ziqi (Odie) Yang | §1 Coding standards: date math in `src/lib/` doesn't depend on the host time zone (`getDayStart()` in `lib/sprints/day-start.ts`), and the sprint window, days left and login attribution each have one implementation; Testing strategy: date tests run under several host time zones; architecture tree lists `day-start.ts` (#99) | Issue #99, from the Nov 11 audit of main: with `TZ=Europe/London` the Nuuk calendar test failed, because `TZDate` and `startOfDay()` read the host's offset near DST changes, and `requirement-status.ts` had its own copies of the window, days left and attribution |
+| 2026-11-11 | Ziqi (Odie) Yang | §1 Domain model: invite links (the lead manages member links; course staff from `COURSE_STAFF_GITHUB_LOGINS` and the team's instructors manage instructor links); Key patterns and §4 name `requireInviteAccess()` and `inviteRoleForbiddenResponse()`; §2 Settings and the Instructor flow; architecture tree lists `server/course-staff.ts` and the `lib/auth/` and `lib/invites/` additions (#116) | Issue #116, decision 006 from #78: a lead could create an instructor link, join their own team as an instructor with a second GitHub account and read peer feedback (PRD R7) |

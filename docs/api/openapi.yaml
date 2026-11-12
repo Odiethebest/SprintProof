@@ -163,8 +163,20 @@ paths:
       tags: [Invites]
       summary: Create an invite link
       description: |
-        Lead only. Links expire after 7 days. Creating a link revokes the team's
-        current link for the same role, so each role has at most one working link.
+        Who may create which link (decision 006):
+
+        - `MEMBER` links: the team's lead.
+        - `INSTRUCTOR` links: course staff (the GitHub logins in the server's
+          `COURSE_STAFF_GITHUB_LOGINS`), even when they aren't on the team, and
+          the team's instructors. A lead who isn't course staff can't.
+
+        Session only: an API token isn't accepted. Course staff who aren't on
+        the team can call this from `/api-docs` after signing in; the team id is
+        in the address of any team page (`/teams/{teamId}/...`). Join the link at
+        `/invite/{token}`.
+
+        Links expire after 7 days. Creating a link revokes the team's current
+        link for the same role, so each role has at most one working link.
       operationId: createInvite
       security:
         - sessionCookie: []
@@ -191,7 +203,19 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthenticated"
         "403":
-          $ref: "#/components/responses/Forbidden"
+          description: |
+            You can't create this link: a lead asking for an `INSTRUCTOR` link,
+            an instructor or course staff asking for a `MEMBER` link, a member,
+            or someone who isn't on the team and isn't course staff. A team that
+            doesn't exist gets the same answer, for course staff too.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error:
+                  code: FORBIDDEN
+                  message: Only course staff and the team's instructors can create and revoke instructor invite links.
         "500":
           $ref: "#/components/responses/InternalError"
   /teams/{teamId}/invites/{inviteId}:
@@ -205,7 +229,11 @@ paths:
     delete:
       tags: [Invites]
       summary: Revoke an invite link
-      description: Lead only. Revoking a link twice is not an error.
+      description: |
+        Whoever may create links for the link's role may revoke it: the lead
+        revokes member links; course staff (on the team or not) and the team's
+        instructors revoke instructor links (decision 006). Session only.
+        Revoking a link twice is not an error.
       operationId: revokeInvite
       security:
         - sessionCookie: []
@@ -215,7 +243,19 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthenticated"
         "403":
-          $ref: "#/components/responses/Forbidden"
+          description: |
+            You can't revoke this link: a lead revoking an instructor link, an
+            instructor or course staff revoking a member link, a member, or
+            someone who isn't on the team and isn't course staff. A team that
+            doesn't exist gets the same answer, for course staff too.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error:
+                  code: FORBIDDEN
+                  message: Only course staff and the team's instructors can create and revoke instructor invite links.
         "404":
           description: The team has no invite link with that id.
           content:
