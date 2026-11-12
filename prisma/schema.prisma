@@ -48,6 +48,9 @@ model Team {
   id           String            @id @default(cuid())
   name         String
   // GitHub's `full_name` ("owner/name"); webhooks find the team by it (#11).
+  // Also unique ignoring case: the index teams_repo_full_name_lower_key on
+  // lower(repo_full_name) is raw SQL in its migration, since Prisma can't
+  // express it (#94).
   repoFullName String            @unique @map("repo_full_name")
   // GitHub's numeric repository ID; set on first webhook delivery (#11).
   repoId       BigInt?           @unique @map("repo_id")
