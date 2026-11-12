@@ -2,7 +2,9 @@ import type { MappedActivity } from "@/lib/github/webhook-events";
 import { getSprintWindow, type SprintDateRange } from "@/lib/sprints";
 
 // An activity as it's stored: `occurredAt` is when it happened on GitHub.
-export interface ActivityRecord extends MappedActivity {
+// Counts don't read the commit key: it keeps a commit's copies out of storage,
+// so each stored commit is one commit (#114).
+export interface ActivityRecord extends Omit<MappedActivity, "commitKey"> {
   id: string;
 }
 

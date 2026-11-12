@@ -8,11 +8,13 @@ import prMergedPayload from "../../fixtures/github/pull-request-closed-merged.js
 import prUnmergedPayload from "../../fixtures/github/pull-request-closed-unmerged.json";
 import prReviewPayload from "../../fixtures/github/pull-request-review.json";
 import prReviewBotPayload from "../../fixtures/github/pull-request-review-bot.json";
+import { insertMembership, insertTeam, insertUser } from "../../factories/db";
 import {
-  insertMembership,
-  insertTeam,
-  insertUser,
-} from "../../factories/db";
+  createGithubCommit,
+  createPushCommit,
+  createPushPayload,
+  createRebasedCopy,
+} from "../../factories/github-push";
 import { releaseActivityInsertsTogether } from "../helpers/activity-inserts";
 import { signWebhookPayload, webhookRequest } from "../helpers/requests";
 import { clearDatabase } from "../setup/test-setup";
@@ -21,22 +23,39 @@ import { clearDatabase } from "../setup/test-setup";
 // Live update events are covered in realtime-events.test.ts.
 vi.mock("@/server/realtime", () => ({ triggerTeamEvent: vi.fn() }));
 
-const TEST_SECRET = "test-webhook-secret-12345";
+// Each team has its own webhook secret (decision 005, #115). Most tests use one
+// team whose GitHub webhook signs with TEAM_SECRET. SERVER_SECRET is the
+// server-wide GITHUB_WEBHOOK_SECRET, the fallback for teams connected before
+// #115 and for repositories no team has connected.
+const TEAM_SECRET = "test-webhook-secret-12345";
+const SERVER_SECRET = "test-server-webhook-secret-67890";
+
+function insertTeamWithSecret(
+  overrides: Parameters<typeof insertTeam>[0] = {}
+) {
+  return insertTeam({ webhookSecret: TEAM_SECRET, ...overrides });
+}
 
 function sendSigned(input: {
   event: string;
   payload: unknown;
   deliveryId: string;
+  secret?: string;
 }) {
   const body = JSON.stringify(input.payload);
   return POST(
     webhookRequest({
       event: input.event,
       body,
-      signature: signWebhookPayload(body, TEST_SECRET),
+      signature: signWebhookPayload(body, input.secret ?? TEAM_SECRET),
       deliveryId: input.deliveryId,
     })
   );
+}
+
+async function expectNothingStored() {
+  expect(await db.webhookDelivery.count()).toBe(0);
+  expect(await db.activity.count()).toBe(0);
 }
 
 // A push from alice with one commit per SHA, in the order given.
@@ -54,7 +73,7 @@ function pushWithShas(shas: string[]) {
 describe("POST /api/webhooks/github", () => {
   beforeEach(async () => {
     await clearDatabase();
-    process.env.GITHUB_WEBHOOK_SECRET = TEST_SECRET;
+    process.env.GITHUB_WEBHOOK_SECRET = SERVER_SECRET;
   });
 
   describe("signature verification", () => {
@@ -90,9 +109,11 @@ describe("POST /api/webhooks/github", () => {
       });
     });
 
+    // A body that isn't JSON names no repository, so only the server-wide
+    // secret can verify it.
     it("returns 400 when the body is not JSON", async () => {
       const invalidBody = "{not-valid-json";
-      const signature = signWebhookPayload(invalidBody, TEST_SECRET);
+      const signature = signWebhookPayload(invalidBody, SERVER_SECRET);
       const request = webhookRequest({
         event: "push",
         body: invalidBody,
@@ -109,20 +130,21 @@ describe("POST /api/webhooks/github", () => {
   });
 
   describe("configuration and required headers", () => {
-    async function expectNothingStored() {
-      expect(await db.webhookDelivery.count()).toBe(0);
-      expect(await db.activity.count()).toBe(0);
-    }
-
-    // Fail closed: with no secret, an empty HMAC key would let anyone sign events.
+    // Fail closed: with no server-wide secret, an empty HMAC key would let
+    // anyone sign events. Before #115 this answered 500 for every delivery;
+    // now each team's own secret still works, and the fallback simply isn't
+    // there (decision 005).
     it.each([
       ["unset", undefined],
       ["empty", ""],
     ])(
-      "returns 500 and stores nothing when GITHUB_WEBHOOK_SECRET is %s, even for a body signed with an empty key",
+      "returns 401 and stores nothing when GITHUB_WEBHOOK_SECRET is %s, even for a team that may still use it and a body signed with an empty key",
       async (_label, secret) => {
         // Arrange
-        await insertTeam({ repoFullName: "Odiethebest/SprintProof" });
+        await insertTeamWithSecret({
+          repoFullName: "Odiethebest/SprintProof",
+          canUseServerWebhookSecret: true,
+        });
         if (secret === undefined) {
           delete process.env.GITHUB_WEBHOOK_SECRET;
         } else {
@@ -140,23 +162,48 @@ describe("POST /api/webhooks/github", () => {
         const response = await POST(request);
 
         // Assert
-        expect(response.status).toBe(500);
+        expect(response.status).toBe(401);
         expect(await response.json()).toEqual({
-          error: { code: "WEBHOOK_NOT_CONFIGURED", message: expect.any(String) },
+          error: { code: "UNAUTHORIZED", message: expect.any(String) },
         });
         await expectNothingStored();
       }
     );
 
+    it("stores a delivery signed with the team's own secret when GITHUB_WEBHOOK_SECRET isn't set", async () => {
+      // Arrange
+      const user = await insertUser({ githubLogin: "alice" });
+      const team = await insertTeamWithSecret({
+        repoFullName: "Odiethebest/SprintProof",
+      });
+      await insertMembership({
+        userId: user.id,
+        teamId: team.id,
+        role: "MEMBER",
+      });
+      delete process.env.GITHUB_WEBHOOK_SECRET;
+
+      // Act
+      const response = await sendSigned({
+        event: "push",
+        payload: pushPayload,
+        deliveryId: "no-server-secret-delivery",
+      });
+
+      // Assert
+      expect(response.status).toBe(200);
+      expect(await db.activity.count({ where: { teamId: team.id } })).toBe(2);
+    });
+
     // Without a delivery id, every later header-less delivery would look like a duplicate.
     it("returns 400 and stores nothing when X-GitHub-Delivery is missing", async () => {
       // Arrange
-      await insertTeam({ repoFullName: "Odiethebest/SprintProof" });
+      await insertTeamWithSecret({ repoFullName: "Odiethebest/SprintProof" });
       const payloadString = JSON.stringify(pushPayload);
       const request = webhookRequest({
         event: "push",
         body: payloadString,
-        signature: signWebhookPayload(payloadString, TEST_SECRET),
+        signature: signWebhookPayload(payloadString, TEAM_SECRET),
         deliveryId: null,
       });
 
@@ -173,12 +220,12 @@ describe("POST /api/webhooks/github", () => {
 
     it("returns 400 and stores nothing when X-GitHub-Event is missing", async () => {
       // Arrange
-      await insertTeam({ repoFullName: "Odiethebest/SprintProof" });
+      await insertTeamWithSecret({ repoFullName: "Odiethebest/SprintProof" });
       const payloadString = JSON.stringify(pushPayload);
       const request = webhookRequest({
         event: null,
         body: payloadString,
-        signature: signWebhookPayload(payloadString, TEST_SECRET),
+        signature: signWebhookPayload(payloadString, TEAM_SECRET),
         deliveryId: "no-event-delivery",
       });
 
@@ -196,13 +243,13 @@ describe("POST /api/webhooks/github", () => {
 
   describe("ping event", () => {
     it("returns 200 for ping event and stores repoId on the matching team as BigInt", async () => {
-      const team = await insertTeam({
+      const team = await insertTeamWithSecret({
         repoFullName: "Odiethebest/SprintProof",
         repoId: null,
       });
 
       const payloadString = JSON.stringify(pingPayload);
-      const signature = signWebhookPayload(payloadString, TEST_SECRET);
+      const signature = signWebhookPayload(payloadString, TEAM_SECRET);
       const request = webhookRequest({
         event: "ping",
         body: payloadString,
@@ -230,9 +277,10 @@ describe("POST /api/webhooks/github", () => {
       });
     });
 
+    // No team has the repository, so only the server-wide secret can verify it.
     it("returns 200 for ping event even if repository is not yet connected", async () => {
       const payloadString = JSON.stringify(pingPayload);
-      const signature = signWebhookPayload(payloadString, TEST_SECRET);
+      const signature = signWebhookPayload(payloadString, SERVER_SECRET);
       const request = webhookRequest({
         event: "ping",
         body: payloadString,
@@ -248,14 +296,18 @@ describe("POST /api/webhooks/github", () => {
   describe("push event", () => {
     it("stores commit activities and sets repoId on the team", async () => {
       const user = await insertUser({ githubLogin: "alice" });
-      const team = await insertTeam({
+      const team = await insertTeamWithSecret({
         repoFullName: "odiethebest/sprintproof", // test case-insensitive match
         repoId: null,
       });
-      await insertMembership({ userId: user.id, teamId: team.id, role: "MEMBER" });
+      await insertMembership({
+        userId: user.id,
+        teamId: team.id,
+        role: "MEMBER",
+      });
 
       const payloadString = JSON.stringify(pushPayload);
-      const signature = signWebhookPayload(payloadString, TEST_SECRET);
+      const signature = signWebhookPayload(payloadString, TEAM_SECRET);
       const request = webhookRequest({
         event: "push",
         body: payloadString,
@@ -304,7 +356,7 @@ describe("POST /api/webhooks/github", () => {
     it("stores a commit whose message contains NUL with the NUL removed", async () => {
       // Arrange
       const user = await insertUser({ githubLogin: "alice" });
-      const team = await insertTeam({
+      const team = await insertTeamWithSecret({
         repoFullName: "Odiethebest/SprintProof",
         repoId: 987654321n,
       });
@@ -345,14 +397,18 @@ describe("POST /api/webhooks/github", () => {
   describe("pull_request event", () => {
     it("stores PR_OPENED activity on action: opened", async () => {
       const user = await insertUser({ githubLogin: "alice" });
-      const team = await insertTeam({
+      const team = await insertTeamWithSecret({
         repoFullName: "Odiethebest/SprintProof",
         repoId: 987654321n,
       });
-      await insertMembership({ userId: user.id, teamId: team.id, role: "LEAD" });
+      await insertMembership({
+        userId: user.id,
+        teamId: team.id,
+        role: "LEAD",
+      });
 
       const payloadString = JSON.stringify(prOpenedPayload);
-      const signature = signWebhookPayload(payloadString, TEST_SECRET);
+      const signature = signWebhookPayload(payloadString, TEAM_SECRET);
       const request = webhookRequest({
         event: "pull_request",
         body: payloadString,
@@ -377,14 +433,18 @@ describe("POST /api/webhooks/github", () => {
 
     it("stores PR_MERGED activity on action: closed with merged: true", async () => {
       const user = await insertUser({ githubLogin: "bob" });
-      const team = await insertTeam({
+      const team = await insertTeamWithSecret({
         repoFullName: "Odiethebest/SprintProof",
         repoId: 987654321n,
       });
-      await insertMembership({ userId: user.id, teamId: team.id, role: "MEMBER" });
+      await insertMembership({
+        userId: user.id,
+        teamId: team.id,
+        role: "MEMBER",
+      });
 
       const payloadString = JSON.stringify(prMergedPayload);
-      const signature = signWebhookPayload(payloadString, TEST_SECRET);
+      const signature = signWebhookPayload(payloadString, TEAM_SECRET);
       const request = webhookRequest({
         event: "pull_request",
         body: payloadString,
@@ -408,13 +468,13 @@ describe("POST /api/webhooks/github", () => {
     });
 
     it("does not store activity on action: closed when merged is false", async () => {
-      const team = await insertTeam({
+      const team = await insertTeamWithSecret({
         repoFullName: "Odiethebest/SprintProof",
         repoId: 987654321n,
       });
 
       const payloadString = JSON.stringify(prUnmergedPayload);
-      const signature = signWebhookPayload(payloadString, TEST_SECRET);
+      const signature = signWebhookPayload(payloadString, TEAM_SECRET);
       const request = webhookRequest({
         event: "pull_request",
         body: payloadString,
@@ -435,14 +495,18 @@ describe("POST /api/webhooks/github", () => {
   describe("pull_request_review event", () => {
     it("stores REVIEW activity on action: submitted", async () => {
       const user = await insertUser({ githubLogin: "bob" });
-      const team = await insertTeam({
+      const team = await insertTeamWithSecret({
         repoFullName: "Odiethebest/SprintProof",
         repoId: 987654321n,
       });
-      await insertMembership({ userId: user.id, teamId: team.id, role: "MEMBER" });
+      await insertMembership({
+        userId: user.id,
+        teamId: team.id,
+        role: "MEMBER",
+      });
 
       const payloadString = JSON.stringify(prReviewPayload);
-      const signature = signWebhookPayload(payloadString, TEST_SECRET);
+      const signature = signWebhookPayload(payloadString, TEAM_SECRET);
       const request = webhookRequest({
         event: "pull_request_review",
         body: payloadString,
@@ -473,7 +537,7 @@ describe("POST /api/webhooks/github", () => {
       "stores a review submitted as %s with the state %s",
       async (state, reviewState) => {
         // Arrange
-        const team = await insertTeam({
+        const team = await insertTeamWithSecret({
           repoFullName: "Odiethebest/SprintProof",
           repoId: 987654321n,
         });
@@ -505,7 +569,7 @@ describe("POST /api/webhooks/github", () => {
     // carries the same state. It's stored with no state instead.
     it("stores a review submitted with a state GitHub doesn't document, with no state", async () => {
       // Arrange
-      const team = await insertTeam({
+      const team = await insertTeamWithSecret({
         repoFullName: "Odiethebest/SprintProof",
         repoId: 987654321n,
       });
@@ -535,7 +599,7 @@ describe("POST /api/webhooks/github", () => {
     it("stores a review on a PR whose title contains NUL with the NUL removed", async () => {
       // Arrange
       const user = await insertUser({ githubLogin: "bob" });
-      const team = await insertTeam({
+      const team = await insertTeamWithSecret({
         repoFullName: "Odiethebest/SprintProof",
         repoId: 987654321n,
       });
@@ -576,13 +640,13 @@ describe("POST /api/webhooks/github", () => {
     });
 
     it("ignores reviews submitted by bots ending in [bot]", async () => {
-      const team = await insertTeam({
+      const team = await insertTeamWithSecret({
         repoFullName: "Odiethebest/SprintProof",
         repoId: 987654321n,
       });
 
       const payloadString = JSON.stringify(prReviewBotPayload);
-      const signature = signWebhookPayload(payloadString, TEST_SECRET);
+      const signature = signWebhookPayload(payloadString, TEAM_SECRET);
       const request = webhookRequest({
         event: "pull_request_review",
         body: payloadString,
@@ -600,14 +664,14 @@ describe("POST /api/webhooks/github", () => {
 
   describe("repo rename and repoId lookup", () => {
     it("matches team by repoId even if repoFullName was renamed on GitHub", async () => {
-      const team = await insertTeam({
+      const team = await insertTeamWithSecret({
         repoFullName: "old-owner/old-repo-name",
         repoId: 987654321n,
       });
 
       // Payload has full_name "Odiethebest/SprintProof" but same repo id 987654321
       const payloadString = JSON.stringify(prOpenedPayload);
-      const signature = signWebhookPayload(payloadString, TEST_SECRET);
+      const signature = signWebhookPayload(payloadString, TEAM_SECRET);
       const request = webhookRequest({
         event: "pull_request",
         body: payloadString,
@@ -626,7 +690,7 @@ describe("POST /api/webhooks/github", () => {
 
     it("supports GitHub repository ids exceeding 2^31 - 1 (BigInt)", async () => {
       const largeRepoId = 1437673028n;
-      const team = await insertTeam({
+      const team = await insertTeamWithSecret({
         repoFullName: "large-owner/large-repo",
         repoId: largeRepoId,
       });
@@ -639,7 +703,7 @@ describe("POST /api/webhooks/github", () => {
         },
       };
       const payloadString = JSON.stringify(customPayload);
-      const signature = signWebhookPayload(payloadString, TEST_SECRET);
+      const signature = signWebhookPayload(payloadString, TEAM_SECRET);
       const request = webhookRequest({
         event: "pull_request",
         body: payloadString,
@@ -659,13 +723,13 @@ describe("POST /api/webhooks/github", () => {
 
   describe("idempotency and duplicate delivery handling", () => {
     it("stores duplicate deliveries (same X-GitHub-Delivery) only once", async () => {
-      const team = await insertTeam({
+      const team = await insertTeamWithSecret({
         repoFullName: "Odiethebest/SprintProof",
         repoId: 987654321n,
       });
 
       const payloadString = JSON.stringify(prOpenedPayload);
-      const signature = signWebhookPayload(payloadString, TEST_SECRET);
+      const signature = signWebhookPayload(payloadString, TEAM_SECRET);
       const deliveryId = "exact-same-delivery-uuid";
 
       // First delivery
@@ -704,7 +768,7 @@ describe("POST /api/webhooks/github", () => {
     // until someone redelivered it by hand (#90).
     it("returns 200 for both of two concurrent deliveries with the same SHAs in opposite order, storing each commit once", async () => {
       // Arrange
-      await insertTeam({
+      await insertTeamWithSecret({
         repoFullName: "Odiethebest/SprintProof",
         repoId: 987654321n,
       });
@@ -737,10 +801,420 @@ describe("POST /api/webhooks/github", () => {
     }, 15000);
   });
 
+  // Decision 005 (#115): the route finds the team from the payload's
+  // repository, then verifies the signature with that team's secret.
+  describe("each team's own secret", () => {
+    it("returns 401 and stores nothing for a delivery signed with another team's secret", async () => {
+      // Arrange: team B's lead signs a push that names team A's repository
+      const author = await insertUser({ githubLogin: "alice" });
+      const teamA = await insertTeam({
+        repoFullName: "Odiethebest/SprintProof",
+        repoId: null,
+        webhookSecret: "team-a-webhook-secret",
+      });
+      await insertMembership({
+        userId: author.id,
+        teamId: teamA.id,
+        role: "MEMBER",
+      });
+      await insertTeam({
+        repoFullName: "santiaojun/other-repo",
+        webhookSecret: "team-b-webhook-secret",
+      });
+
+      // Act
+      const response = await sendSigned({
+        event: "push",
+        payload: pushPayload,
+        deliveryId: "forged-delivery",
+        secret: "team-b-webhook-secret",
+      });
+
+      // Assert: rejected before anything is stored, the repo id included
+      expect(response.status).toBe(401);
+      expect(await response.json()).toEqual({
+        error: { code: "UNAUTHORIZED", message: expect.any(String) },
+      });
+      await expectNothingStored();
+      const stored = await db.team.findUniqueOrThrow({
+        where: { id: teamA.id },
+      });
+      expect(stored.repoId).toBeNull();
+    });
+
+    it("stores a delivery signed with the secret of the team that has the repository", async () => {
+      // Arrange
+      const author = await insertUser({ githubLogin: "alice" });
+      const teamA = await insertTeam({
+        repoFullName: "Odiethebest/SprintProof",
+        webhookSecret: "team-a-webhook-secret",
+      });
+      await insertMembership({
+        userId: author.id,
+        teamId: teamA.id,
+        role: "MEMBER",
+      });
+      const teamB = await insertTeam({
+        repoFullName: "santiaojun/other-repo",
+        webhookSecret: "team-b-webhook-secret",
+      });
+
+      // Act
+      const response = await sendSigned({
+        event: "push",
+        payload: pushPayload,
+        deliveryId: "team-a-delivery",
+        secret: "team-a-webhook-secret",
+      });
+
+      // Assert
+      expect(response.status).toBe(200);
+      expect(await db.activity.count({ where: { teamId: teamA.id } })).toBe(2);
+      expect(await db.activity.count({ where: { teamId: teamB.id } })).toBe(0);
+    });
+
+    it("returns 401 and stores nothing for a repository no team has, unless the server-wide secret signed it", async () => {
+      // Arrange: the only team has another repository
+      await insertTeamWithSecret({ repoFullName: "santiaojun/other-repo" });
+
+      // Act
+      const response = await sendSigned({
+        event: "ping",
+        payload: pingPayload,
+        deliveryId: "unknown-repo-ping",
+      });
+
+      // Assert
+      expect(response.status).toBe(401);
+      await expectNothingStored();
+    });
+
+    it("rejects the server-wide secret for a team created after #115", async () => {
+      // Arrange: new teams start without the fallback
+      const user = await insertUser({ githubLogin: "alice" });
+      const team = await insertTeamWithSecret({
+        repoFullName: "Odiethebest/SprintProof",
+      });
+      await insertMembership({
+        userId: user.id,
+        teamId: team.id,
+        role: "MEMBER",
+      });
+
+      // Act
+      const response = await sendSigned({
+        event: "push",
+        payload: pushPayload,
+        deliveryId: "server-secret-new-team",
+        secret: SERVER_SECRET,
+      });
+
+      // Assert
+      expect(response.status).toBe(401);
+      await expectNothingStored();
+    });
+
+    it("accepts the server-wide secret for a team connected before #115 until GitHub signs a delivery with the team's own", async () => {
+      // Arrange: the team's GitHub webhook still signs with the server-wide secret
+      const user = await insertUser({ githubLogin: "alice" });
+      const team = await insertTeamWithSecret({
+        repoFullName: "Odiethebest/SprintProof",
+        repoId: 987654321n,
+        canUseServerWebhookSecret: true,
+      });
+      await insertMembership({
+        userId: user.id,
+        teamId: team.id,
+        role: "MEMBER",
+      });
+
+      // Act: a push signed with the server-wide secret
+      const before = await sendSigned({
+        event: "push",
+        payload: pushWithShas(["a".repeat(40)]),
+        deliveryId: "server-secret-before",
+        secret: SERVER_SECRET,
+      });
+
+      // Assert: stored, and the fallback stays on
+      expect(before.status).toBe(200);
+      expect(await db.activity.count({ where: { teamId: team.id } })).toBe(1);
+      expect(
+        await db.team.findUniqueOrThrow({ where: { id: team.id } })
+      ).toMatchObject({ canUseServerWebhookSecret: true });
+
+      // Act: the lead pastes the team's secret into GitHub, which pings
+      const ping = await sendSigned({
+        event: "ping",
+        payload: pingPayload,
+        deliveryId: "team-secret-ping",
+      });
+
+      // Assert: the fallback ends for this team
+      expect(ping.status).toBe(200);
+      expect(
+        await db.team.findUniqueOrThrow({ where: { id: team.id } })
+      ).toMatchObject({ canUseServerWebhookSecret: false });
+
+      // Act: another push signed with the server-wide secret
+      const after = await sendSigned({
+        event: "push",
+        payload: pushWithShas(["b".repeat(40)]),
+        deliveryId: "server-secret-after",
+        secret: SERVER_SECRET,
+      });
+
+      // Assert: rejected, and nothing more stored
+      expect(after.status).toBe(401);
+      expect(await db.activity.count({ where: { teamId: team.id } })).toBe(1);
+      expect(
+        await db.webhookDelivery.findUnique({
+          where: { id: "server-secret-after" },
+        })
+      ).toBeNull();
+    });
+
+    // The repository is read before the signature is checked, so a forged
+    // body must not be able to break the team lookup (#74: PostgreSQL text
+    // can't hold NUL).
+    it("returns 401 and stores nothing for an unsigned delivery whose repository name contains NUL", async () => {
+      // Arrange
+      await insertTeamWithSecret({ repoFullName: "Odiethebest/SprintProof" });
+      const payload = {
+        ...pingPayload,
+        repository: { id: 123, full_name: "Odiethebest/Sprint\u0000Proof" },
+      };
+
+      // Act
+      const response = await sendSigned({
+        event: "ping",
+        payload,
+        deliveryId: "nul-repo-name-ping",
+        secret: "not-the-team-secret",
+      });
+
+      // Assert
+      expect(response.status).toBe(401);
+      await expectNothingStored();
+    });
+
+    it("keeps the fallback after a delivery with a wrong signature", async () => {
+      // Arrange
+      const team = await insertTeamWithSecret({
+        repoFullName: "Odiethebest/SprintProof",
+        canUseServerWebhookSecret: true,
+      });
+
+      // Act
+      const response = await sendSigned({
+        event: "ping",
+        payload: pingPayload,
+        deliveryId: "wrong-secret-ping",
+        secret: "not-the-team-secret",
+      });
+
+      // Assert
+      expect(response.status).toBe(401);
+      expect(
+        await db.team.findUniqueOrThrow({ where: { id: team.id } })
+      ).toMatchObject({ canUseServerWebhookSecret: true });
+    });
+  });
+
+  // Counting rule (#114, decision 004): a commit counts once per author, author
+  // date and full message, and commits GitHub makes on the default branch
+  // (committer `web-flow`) don't count. Dedup by SHA and the bot rule stay.
+  describe("counting each commit once", () => {
+    const featureBranch = "refs/heads/feature/12-dashboard";
+
+    async function storedShas(teamId: string) {
+      const rows = await db.activity.findMany({
+        where: { teamId, type: "COMMIT" },
+        orderBy: { occurredAt: "asc" },
+        select: { sha: true },
+      });
+      return rows.map((row) => row.sha);
+    }
+
+    it("stores a rebased copy of a stored commit nothing more, though its SHA is new", async () => {
+      // Arrange: Alice pushes a commit, then rebases the branch and force-pushes
+      const team = await insertTeamWithSecret({
+        repoFullName: "Odiethebest/SprintProof",
+        repoId: 987654321n,
+      });
+      const original = createPushCommit();
+      const copy = createRebasedCopy(original, {
+        id: "0f9e8d7c6b5a4938271605f4e3d2c1b0a9876543",
+        committedAt: "2026-11-03T09:15:00Z",
+      });
+      await sendSigned({
+        event: "push",
+        payload: createPushPayload({ ref: featureBranch, commits: [original] }),
+        deliveryId: "branch-push",
+      });
+
+      // Act
+      const response = await sendSigned({
+        event: "push",
+        payload: createPushPayload({ ref: featureBranch, commits: [copy] }),
+        deliveryId: "force-push-after-rebase",
+      });
+
+      // Assert
+      expect(response.status).toBe(200);
+      expect(await storedShas(team.id)).toEqual([original.id]);
+    });
+
+    it("stores a PR's commits once from its branch, and never GitHub's merge commit, even when a later push brings it into another branch", async () => {
+      // Arrange
+      const team = await insertTeamWithSecret({
+        repoFullName: "Odiethebest/SprintProof",
+        repoId: 987654321n,
+      });
+      const first = createPushCommit();
+      const second = createPushCommit({
+        id: "2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c",
+        message: "test(dashboard): cover the empty sprint",
+        timestamp: "2026-11-02T18:05:00Z",
+        author: { ...first.author, date: "2026-11-02T18:05:00Z" },
+      });
+      const merge = createGithubCommit();
+      const alreadyPushed = { distinct: false };
+
+      // Act: the branch push, the merge button, then Bob merges main into his branch
+      const responses = [
+        await sendSigned({
+          event: "push",
+          payload: createPushPayload({
+            ref: featureBranch,
+            commits: [first, second],
+          }),
+          deliveryId: "feature-branch-push",
+        }),
+        await sendSigned({
+          event: "push",
+          payload: createPushPayload({
+            ref: "refs/heads/main",
+            commits: [
+              { ...first, ...alreadyPushed },
+              { ...second, ...alreadyPushed },
+              merge,
+            ],
+          }),
+          deliveryId: "merge-button-push",
+        }),
+        await sendSigned({
+          event: "push",
+          payload: createPushPayload({
+            ref: "refs/heads/feature/13-retro",
+            commits: [{ ...merge, ...alreadyPushed }],
+          }),
+          deliveryId: "sync-main-into-branch",
+        }),
+      ];
+
+      // Assert
+      expect(responses.map((response) => response.status)).toEqual([
+        200, 200, 200,
+      ]);
+      expect(await storedShas(team.id)).toEqual([first.id, second.id]);
+    });
+
+    // "Update branch" on a PR, or GitHub's web editor on a feature branch.
+    it("stores a commit GitHub made on a feature branch once, after it reaches the default branch too", async () => {
+      // Arrange
+      const team = await insertTeamWithSecret({
+        repoFullName: "Odiethebest/SprintProof",
+        repoId: 987654321n,
+      });
+      const updateBranch = createGithubCommit({
+        message: "Merge branch 'main' into feature/12-dashboard",
+      });
+
+      // Act
+      await sendSigned({
+        event: "push",
+        payload: createPushPayload({
+          ref: featureBranch,
+          commits: [updateBranch],
+        }),
+        deliveryId: "update-branch-push",
+      });
+      await sendSigned({
+        event: "push",
+        payload: createPushPayload({
+          ref: "refs/heads/main",
+          commits: [{ ...updateBranch, distinct: false }],
+        }),
+        deliveryId: "merge-push",
+      });
+
+      // Assert
+      const stored = await db.activity.findMany({
+        where: { teamId: team.id },
+        select: { sha: true, actorLogin: true },
+      });
+      expect(stored).toEqual([{ sha: updateBranch.id, actorLogin: "alice" }]);
+    });
+
+    // Two refs pushed at once can carry a commit and its rebased copy. Inserted
+    // in SHA order, each delivery could wait on a copy the other inserted first,
+    // and PostgreSQL would abort one as a deadlock (as in #90).
+    it("returns 200 for both of two concurrent deliveries carrying copies of the same commits, storing each commit once", async () => {
+      // Arrange: copies whose SHAs sort the other way round from the originals'
+      const team = await insertTeamWithSecret({
+        repoFullName: "Odiethebest/SprintProof",
+        repoId: 987654321n,
+      });
+      const originals = Array.from({ length: 300 }, (_, index) =>
+        createPushCommit({
+          id: index.toString(16).padStart(40, "0"),
+          message: `Commit ${index}`,
+        })
+      );
+      const copies = originals.map((commit, index) =>
+        createRebasedCopy(commit, {
+          id: (999 - index).toString(16).padStart(40, "f"),
+          committedAt: "2026-11-03T09:15:00Z",
+        })
+      );
+
+      // Act
+      const responses = await releaseActivityInsertsTogether({
+        count: 2,
+        run: () =>
+          Promise.all([
+            sendSigned({
+              event: "push",
+              payload: createPushPayload({
+                ref: featureBranch,
+                commits: originals,
+              }),
+              deliveryId: "originals",
+            }),
+            sendSigned({
+              event: "push",
+              payload: createPushPayload({
+                ref: "refs/heads/feature/12-dashboard-rebased",
+                commits: copies,
+              }),
+              deliveryId: "copies",
+            }),
+          ]),
+      });
+
+      // Assert
+      expect(responses.map((response) => response.status)).toEqual([200, 200]);
+      expect(
+        await db.activity.count({ where: { teamId: team.id, type: "COMMIT" } })
+      ).toBe(originals.length);
+    }, 15000);
+  });
+
   describe("unknown repository", () => {
     it("returns 404 when repository is not connected to any team", async () => {
       const payloadString = JSON.stringify(pushPayload);
-      const signature = signWebhookPayload(payloadString, TEST_SECRET);
+      const signature = signWebhookPayload(payloadString, SERVER_SECRET);
       const request = webhookRequest({
         event: "push",
         body: payloadString,
@@ -760,14 +1234,17 @@ describe("POST /api/webhooks/github", () => {
   describe("payload validation and commit attribution", () => {
     it("returns 400 and stores nothing for a push whose commit has no timestamp", async () => {
       // Arrange
-      await insertTeam({ repoFullName: "Odiethebest/SprintProof" });
+      await insertTeamWithSecret({ repoFullName: "Odiethebest/SprintProof" });
       const commit: Record<string, unknown> = { ...pushPayload.commits[0] };
       delete commit.timestamp;
-      const payloadString = JSON.stringify({ ...pushPayload, commits: [commit] });
+      const payloadString = JSON.stringify({
+        ...pushPayload,
+        commits: [commit],
+      });
       const request = webhookRequest({
         event: "push",
         body: payloadString,
-        signature: signWebhookPayload(payloadString, TEST_SECRET),
+        signature: signWebhookPayload(payloadString, TEAM_SECRET),
         deliveryId: "malformed-push-delivery",
       });
 
@@ -790,8 +1267,14 @@ describe("POST /api/webhooks/github", () => {
     it("doesn't credit the pusher with a commit whose author has no GitHub username", async () => {
       // Arrange: Odie pushes a commit Yunhong wrote with an email not linked to GitHub
       const pusher = await insertUser({ githubLogin: "Odiethebest" });
-      const team = await insertTeam({ repoFullName: "Odiethebest/SprintProof" });
-      await insertMembership({ userId: pusher.id, teamId: team.id, role: "LEAD" });
+      const team = await insertTeamWithSecret({
+        repoFullName: "Odiethebest/SprintProof",
+      });
+      await insertMembership({
+        userId: pusher.id,
+        teamId: team.id,
+        role: "LEAD",
+      });
       const payloadString = JSON.stringify({
         ...pushPayload,
         sender: { login: "Odiethebest" },
@@ -811,7 +1294,7 @@ describe("POST /api/webhooks/github", () => {
       const request = webhookRequest({
         event: "push",
         body: payloadString,
-        signature: signWebhookPayload(payloadString, TEST_SECRET),
+        signature: signWebhookPayload(payloadString, TEAM_SECRET),
         deliveryId: "unlinked-author-delivery",
       });
 

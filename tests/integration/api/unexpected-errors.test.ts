@@ -39,6 +39,7 @@ import { PATCH as updateActionItem } from "@/app/api/v1/teams/[teamId]/sprints/[
 import { GET as listPeerFeedback } from "@/app/api/v1/teams/[teamId]/sprints/[sprintId]/peer-feedback/route";
 import { PUT as savePeerFeedback } from "@/app/api/v1/teams/[teamId]/sprints/[sprintId]/peer-feedback/[recipientId]/route";
 import { POST as postStandup } from "@/app/api/v1/teams/[teamId]/standups/route";
+import { POST as rotateWebhookSecret } from "@/app/api/v1/teams/[teamId]/webhook-secret/route";
 import { POST as createToken } from "@/app/api/v1/tokens/route";
 import { DELETE as revokeToken } from "@/app/api/v1/tokens/[tokenId]/route";
 import {
@@ -396,6 +397,14 @@ const ROUTES: Array<{
     call: ({ teamId }) =>
       postStandup(
         apiRequest("POST", `/teams/${teamId}/standups`, createStandupInput()),
+        routeContext({ teamId })
+      ),
+  },
+  {
+    route: "POST /api/v1/teams/{teamId}/webhook-secret",
+    call: ({ teamId }) =>
+      rotateWebhookSecret(
+        apiRequest("POST", `/teams/${teamId}/webhook-secret`),
         routeContext({ teamId })
       ),
   },

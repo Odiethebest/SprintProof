@@ -24,7 +24,9 @@ export function countMemberActivity(
   }
 
   for (const { userId, activity } of attributeActivities(options)) {
-    // Counting rule: commits are deduplicated by SHA (AGENTS.md §1).
+    // Counting rule: commits are deduplicated by SHA (AGENTS.md §1). Copies
+    // under a new SHA and GitHub's own commits on the default branch are never
+    // stored (recordWebhookEvent, #114), so a SHA here is one authored commit.
     if (activity.type === "COMMIT" && activity.sha !== null) {
       shas.get(userId)?.add(activity.sha);
     }

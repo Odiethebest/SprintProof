@@ -84,10 +84,12 @@ As someone who hates deadline surprises, I want the app to tell me which require
 - For each member and requirement: count, required number, and status (`MET`, `ON_TRACK`, `AT_RISK`, `MISSED`) following the rules in section 6.
 - Copy is neutral and specific ("3 more PR reviews"), never judgmental.
 
-**US-6. Track GitHub activity automatically** · Issue #11
+**US-6. Track GitHub activity automatically** · Issues #11, #115
 As a team member, I want our commits, PRs and reviews recorded automatically, so nobody types activity in by hand.
 - Webhook endpoint accepts `push`, `pull_request` and `pull_request_review` events.
-- Requests with an invalid signature are rejected.
+- Each team has its own webhook secret, generated when the team is created. A delivery is verified with the secret of the team whose repository it names; one with an invalid signature, or signed with another team's secret, is rejected (decision 005).
+- The lead sees the secret in Settings, masked to its last 4 characters, with "Copy" and "Rotate secret" (after a confirmation). Other roles never see it, and no API response or log contains it.
+- Teams created before #115 keep accepting the server-wide secret until GitHub sends a delivery signed with their own, so connected repositories keep working through the change.
 - Redelivered events are stored once.
 
 **US-7. Watch progress live** · Issue #12
@@ -142,7 +144,7 @@ These rules are the source of truth for `src/lib/` and are mirrored in `AGENTS.m
 - **R1. Timezone.** Timestamps are stored in UTC. Sprint boundaries are computed in the team's timezone. A sprint runs from 00:00 on its start date through 23:59:59.999 on its end date, inclusive. The end is computed as the start of the next day minus 1 ms, so it stays right in timezones where a DST change skips midnight.
 - **R2. Standups.** At most one standup counts per person per calendar day in the team's timezone. A standup counts on its stored day, never by when it was saved. A form opened on an earlier day doesn't file under today: the API rejects it (409 `STANDUP_DAY_CHANGED`) and the form offers today's form. A standup counts in the sprint whose dates contain its day, so it moves with its day when sprint dates change; one on a day outside every sprint is kept but not counted.
 - **R3. Reviews.** A review counts when a member submits a review (approved, changes requested, or commented) on a PR authored by someone else. Count distinct PRs per reviewer. Reviews on your own PR never count.
-- **R4. Commits.** Count commits from `push` events on any branch, so commits on a feature branch are recorded before a merge or squash can hide them (decision 001). Deduplicate by SHA. Attribute by the commit author's GitHub login mapped to a team member, never the committer or the pusher; skip commits whose author isn't linked to a GitHub account. Commits from fork PRs and commits pushed before the webhook was connected aren't counted. Bots (logins ending in `[bot]`) are ignored for every activity type, not only commits.
+- **R4. Commits.** Count commits from `push` events on any branch, so commits on a feature branch are recorded before a merge or squash can hide them (decision 001). Deduplicate by SHA, and count a commit once per author, author date and full message, so the copy a rebase, an amend or a force-push makes under a new SHA doesn't count again. Commits GitHub itself makes on the repository's default branch (committer `web-flow`: merge commits and the copies "Rebase and merge" and "Squash and merge" make) don't count, because the PR's own commits already counted from its branch; one GitHub makes on another branch, such as "Update branch" on a PR, counts (decision 004). Attribute by the commit author's GitHub login mapped to a team member, never the committer or the pusher; skip commits whose author isn't linked to a GitHub account. Commits from fork PRs and commits pushed before the webhook was connected aren't counted. Bots (logins ending in `[bot]`) are ignored for every activity type, not only commits.
 - **R5. Requirement status.**
   - `MET`: count ≥ required
   - `ON_TRACK`: not met, sprint running, more than 2 days left

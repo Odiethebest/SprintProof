@@ -1,4 +1,5 @@
 import type { Activity } from "@/lib/checks/requirement-status";
+import type { MappedActivity } from "@/lib/github/webhook-events";
 import type { ActivityRecord } from "@/lib/stats/member-activity";
 
 let activitySeq = 1;
@@ -35,6 +36,26 @@ export function createActivityRecord(
     sha: `sha-${id}`,
     title: "Add the dashboard page",
     reviewState: null,
+    occurredAt: new Date("2026-11-02T18:00:00Z"),
+    ...overrides,
+  };
+}
+
+// An activity as the webhook mapper returns it, before it's stored. Defaults to
+// a commit without a commit key, so it's deduplicated by SHA only.
+export function createMappedActivity(
+  overrides: Partial<MappedActivity> = {}
+): MappedActivity {
+  const id = activitySeq++;
+  return {
+    type: "COMMIT",
+    actorLogin: "user1",
+    prNumber: null,
+    prAuthorLogin: null,
+    sha: `sha-${id}`,
+    title: "Add the dashboard page",
+    reviewState: null,
+    commitKey: null,
     occurredAt: new Date("2026-11-02T18:00:00Z"),
     ...overrides,
   };

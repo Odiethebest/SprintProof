@@ -11,6 +11,7 @@ export const COURSE_STAFF = {
   liveStandup: { login: "staff-live-standup-e2e", name: "Course staff" },
   onboarding: { login: "staff-onboarding-e2e", name: "Course staff" },
   retro: { login: "staff-retro-e2e", name: "Course staff" },
+  webhookSecret: { login: "staff-webhook-secret-e2e", name: "Course staff" },
   peerFeedback: { login: "staff-peer-feedback-e2e", name: "Course staff" },
 } as const satisfies Record<string, TestUser>;
 

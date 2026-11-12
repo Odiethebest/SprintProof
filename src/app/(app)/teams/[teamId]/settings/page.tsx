@@ -4,6 +4,7 @@ import { notFound, redirect } from "next/navigation";
 import { TZDate } from "@date-fns/tz";
 import { maskApiToken } from "@/lib/api-tokens/api-token";
 import { toSignInPath } from "@/lib/auth/sign-in-redirect";
+import { toWebhookSecretLast4 } from "@/lib/github/webhook-secret";
 import {
   getManageableInviteRoles,
   type InviteRole,
@@ -22,6 +23,7 @@ import {
 import type { InviteLinkView } from "@/components/teams/invite-links";
 import { MembersCard } from "@/components/teams/members-card";
 import { RepositoryCard } from "@/components/teams/repository-card";
+import type { WebhookSecretView } from "@/components/teams/webhook-secret-field";
 import { requireTeamRole } from "@/server/auth";
 import { isCourseStaff } from "@/server/course-staff";
 import { getCurrentUser } from "@/server/current-user";
@@ -30,7 +32,7 @@ import { listApiTokens } from "@/server/repositories/api-tokens";
 import { listActiveInvites } from "@/server/repositories/invites";
 import { listTeamMembers } from "@/server/repositories/memberships";
 import { listSprints } from "@/server/repositories/sprints";
-import { findTeam } from "@/server/repositories/teams";
+import { findTeam, findTeamWebhookSecret } from "@/server/repositories/teams";
 import { getRequestOrigin } from "@/server/request-origin";
 
 export const metadata: Metadata = { title: "Settings · SprintProof" };
@@ -118,6 +120,8 @@ async function TeamSettings({ params }: { params: Params }) {
           origin,
         })
       : null;
+  const webhookSecret =
+    access.role === "LEAD" ? await loadWebhookSecret({ teamId }) : null;
   const members = memberships.map(({ role, user: member }) => ({
     userId: member.id,
     displayName: member.name ?? member.githubLogin ?? "GitHub user",
@@ -155,10 +159,12 @@ async function TeamSettings({ params }: { params: Params }) {
         />
         <div className="grid gap-4 lg:grid-cols-2">
           <RepositoryCard
+            teamId={team.id}
             repoFullName={team.repoFullName}
             webhookUrl={
               access.role === "LEAD" ? `${origin}/api/webhooks/github` : null
             }
+            webhookSecret={webhookSecret}
             isLead={access.role === "LEAD"}
             lastDelivery={
               lastDelivery === null
@@ -190,6 +196,24 @@ async function TeamSettings({ params }: { params: Params }) {
       </main>
     </>
   );
+}
+
+// Lead only: the full secret goes to the page so "Copy" can put it on the
+// clipboard for GitHub. Other roles never load it (decision 005, #115).
+async function loadWebhookSecret({
+  teamId,
+}: {
+  teamId: string;
+}): Promise<WebhookSecretView | null> {
+  const stored = await findTeamWebhookSecret({ teamId });
+  if (stored === null) {
+    return null;
+  }
+  return {
+    secret: stored.webhookSecret,
+    last4: toWebhookSecretLast4({ webhookSecret: stored.webhookSecret }),
+    canUseServerWebhookSecret: stored.canUseServerWebhookSecret,
+  };
 }
 
 // "Nov 3, 2:41 PM" in the team's timezone (DESIGN.md §9).

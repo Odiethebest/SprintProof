@@ -170,10 +170,12 @@ describe("real-time events", () => {
       vi.restoreAllMocks();
     });
 
+    // Its GitHub webhook signs with the team's own secret (#115).
     async function connectedTeam() {
       return insertTeam({
         repoFullName: "Odiethebest/SprintProof",
         repoId: 987654321n,
+        webhookSecret: TEST_SECRET,
       });
     }
 
