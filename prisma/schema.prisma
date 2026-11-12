@@ -34,19 +34,22 @@ enum RetroColumn {
 }
 
 model User {
-  id          String       @id @default(cuid())
-  githubId    String       @unique @map("github_id")
+  id               String         @id @default(cuid())
+  githubId         String         @unique @map("github_id")
   // Nullable: after a GitHub rename the login can move to another account (#6).
-  githubLogin String?      @unique @map("github_login")
-  name        String?
-  avatarUrl   String?      @map("avatar_url")
-  createdAt   DateTime     @default(now()) @map("created_at")
-  updatedAt   DateTime     @updatedAt @map("updated_at")
-  memberships Membership[]
-  standups    Standup[]
-  apiTokens   ApiToken[]
-  retroItems  RetroItem[]
-  retroVotes  RetroVote[]
+  githubLogin      String?        @unique @map("github_login")
+  name             String?
+  avatarUrl        String?        @map("avatar_url")
+  createdAt        DateTime       @default(now()) @map("created_at")
+  updatedAt        DateTime       @updatedAt @map("updated_at")
+  memberships      Membership[]
+  standups         Standup[]
+  apiTokens        ApiToken[]
+  retroItems       RetroItem[]
+  retroVotes       RetroVote[]
+  // Partner feedback this user wrote, and feedback teammates wrote about them (#14).
+  feedbackGiven    PeerFeedback[] @relation("PeerFeedbackAuthor")
+  feedbackReceived PeerFeedback[] @relation("PeerFeedbackRecipient")
 
   @@map("users")
 }
@@ -108,19 +111,20 @@ model Invite {
 }
 
 model Sprint {
-  id                String       @id @default(cuid())
-  teamId            String       @map("team_id")
+  id                String         @id @default(cuid())
+  teamId            String         @map("team_id")
   name              String
-  startDate         DateTime     @map("start_date") @db.Date
-  endDate           DateTime     @map("end_date") @db.Date
-  standupsPerPerson Int          @default(3) @map("standups_per_person")
-  reviewsPerPerson  Int          @default(5) @map("reviews_per_person")
-  createdAt         DateTime     @default(now()) @map("created_at")
-  updatedAt         DateTime     @updatedAt @map("updated_at")
-  team              Team         @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  startDate         DateTime       @map("start_date") @db.Date
+  endDate           DateTime       @map("end_date") @db.Date
+  standupsPerPerson Int            @default(3) @map("standups_per_person")
+  reviewsPerPerson  Int            @default(5) @map("reviews_per_person")
+  createdAt         DateTime       @default(now()) @map("created_at")
+  updatedAt         DateTime       @updatedAt @map("updated_at")
+  team              Team           @relation(fields: [teamId], references: [id], onDelete: Cascade)
   retro             Retro?
   // Carried in from the previous sprint's retro (#13).
   actionItems       ActionItem[]
+  peerFeedback      PeerFeedback[]
 
   @@index([teamId])
   @@map("sprints")
@@ -187,6 +191,28 @@ model ActionItem {
 
   @@index([sprintId])
   @@map("action_items")
+}
+
+// Partner feedback (#14): one entry per author, teammate and sprint, written
+// while the sprint's retro is open. Only instructors read it (rule R7); its
+// author reads their own entries back in the retro form, and no one else on
+// the team ever does. Peer feedback is uncountable, so the table name is too.
+model PeerFeedback {
+  id          String   @id @default(cuid())
+  sprintId    String   @map("sprint_id")
+  authorId    String   @map("author_id")
+  recipientId String   @map("recipient_id")
+  text        String
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  sprint      Sprint   @relation(fields: [sprintId], references: [id], onDelete: Cascade)
+  author      User     @relation("PeerFeedbackAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  recipient   User     @relation("PeerFeedbackRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+
+  @@unique([sprintId, authorId, recipientId])
+  @@index([authorId])
+  @@index([recipientId])
+  @@map("peer_feedback")
 }
 
 // A standup belongs to its team and day. It's listed under the sprint whose

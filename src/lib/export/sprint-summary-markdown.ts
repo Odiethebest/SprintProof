@@ -2,6 +2,7 @@ import { tz } from "@date-fns/tz";
 import { format } from "date-fns";
 import type { TeamRole } from "@/lib/auth/team-access";
 import type { RequirementStatus } from "@/lib/checks";
+import type { PeerFeedbackPair } from "@/lib/peer-feedback/peer-feedback-pairs";
 import { MAX_VOTES_PER_RETRO, type RetroColumn } from "@/lib/retro/retro-votes";
 import type { MemberSummary, SprintSummary } from "@/lib/stats/sprint-summary";
 
@@ -35,6 +36,8 @@ export interface BuildSprintSummaryMarkdownOptions {
   standups: ExportStandup[];
   audience: ExportAudience;
   retro: ExportRetro | null;
+  // Every author and teammate (#14). Only an instructor's export writes it.
+  peerFeedback: PeerFeedbackPair[];
 }
 
 const STATUS_LABELS: Record<RequirementStatus, string> = {
@@ -44,11 +47,9 @@ const STATUS_LABELS: Record<RequirementStatus, string> = {
   MISSED: "Missed",
 };
 
-// Peer feedback (#14) isn't built yet; an instructor's export says so.
-const PEER_FEEDBACK_NOTES: Record<ExportAudience, string> = {
-  TEAM: "Team exports leave out peer feedback.",
-  INSTRUCTOR: "Peer feedback isn't recorded in SprintProof yet.",
-};
+const TEAM_EXPORT_NOTE = "Team exports leave out peer feedback.";
+const NO_FEEDBACK_PAIRS_NOTE =
+  "The team has one member, so there's no partner feedback.";
 
 const RETRO_COLUMN_TITLES: Record<RetroColumn, string> = {
   WENT_WELL: "Went well",
@@ -79,7 +80,9 @@ function pluralize(count: number, noun: string): string {
   return `${count} ${noun}${count === 1 ? "" : "s"}`;
 }
 
-function toDisplayName(member: MemberSummary): string {
+function toDisplayName(
+  member: Pick<MemberSummary, "name" | "githubLogin">
+): string {
   return toInline(member.name ?? member.githubLogin ?? "GitHub user");
 }
 
@@ -244,15 +247,66 @@ function buildRetro({
   ];
 }
 
+// One author's feedback about one teammate, like the "Partner feedback"
+// section of docs/sprints/*/retro.md. The labels start each line, so the
+// author's text can't start a heading or a list.
+function buildFeedbackEntry({
+  pair,
+  timeZone,
+}: {
+  pair: PeerFeedbackPair;
+  timeZone: string;
+}): string[] {
+  const heading = `### ${toDisplayName(pair.author)} about ${toDisplayName(pair.recipient)}`;
+  if (pair.feedback === null) {
+    return [heading, "Not submitted yet.", ""];
+  }
+  // Exports use ISO dates (DESIGN.md §9), in the team's timezone.
+  const updated = format(pair.feedback.updatedAt, "yyyy-MM-dd", {
+    in: tz(timeZone),
+  });
+  return [
+    heading,
+    `**Feedback:** ${toInline(pair.feedback.text)}`,
+    `**Updated:** ${updated}`,
+    "",
+  ];
+}
+
+// Peer feedback only ever goes into an instructor's export (AGENTS.md §1, PRD
+// R7): a team export leaves it out even when it's passed in.
+function buildPeerFeedback({
+  audience,
+  peerFeedback,
+  timeZone,
+}: {
+  audience: ExportAudience;
+  peerFeedback: PeerFeedbackPair[];
+  timeZone: string;
+}): string[] {
+  if (audience === "TEAM") {
+    return ["## Peer feedback", TEAM_EXPORT_NOTE, ""];
+  }
+  if (peerFeedback.length === 0) {
+    return ["## Peer feedback", NO_FEEDBACK_PAIRS_NOTE, ""];
+  }
+  return [
+    "## Peer feedback",
+    ...peerFeedback.flatMap((pair) => buildFeedbackEntry({ pair, timeZone })),
+  ];
+}
+
 // A sprint's summary as Markdown, in the style of the files in docs/sprints/:
-// the sprint, each member's counts and status, standups by person, and the
-// retro. Only the members the summary counts are listed, so instructors aren't.
+// the sprint, each member's counts and status, standups by person, the retro,
+// and for instructors the peer feedback. Only the members the summary counts
+// are listed, so instructors aren't.
 export function buildSprintSummaryMarkdown({
   team,
   summary,
   standups,
   audience,
   retro,
+  peerFeedback,
 }: BuildSprintSummaryMarkdownOptions): string {
   const sprintName = toInline(summary.sprint.name);
   return [
@@ -266,8 +320,6 @@ export function buildSprintSummaryMarkdown({
       buildMemberStandups({ member, standups, sprintName })
     ),
     ...buildRetro({ retro, sprintName, timeZone: team.timezone }),
-    "## Peer feedback",
-    PEER_FEEDBACK_NOTES[audience],
-    "",
+    ...buildPeerFeedback({ audience, peerFeedback, timeZone: team.timezone }),
   ].join("\n");
 }

@@ -7,7 +7,8 @@ import type { Prisma } from "@/generated/prisma/client";
 export const REPO_CLAIM_LOCK = 1;
 export const TEAM_INVITES_LOCK = 2;
 export const TEAM_SPRINTS_LOCK = 3;
-// A sprint's retro: items, votes, closing it and its carried action items (#13).
+// A sprint's retro: items, votes, closing it and its carried action items
+// (#13), and its partner feedback (#14).
 export const SPRINT_RETRO_LOCK = 4;
 
 type WriteLockKind =
