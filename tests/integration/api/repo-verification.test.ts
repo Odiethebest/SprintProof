@@ -493,3 +493,100 @@ describe("the database", () => {
     expect(await db.team.count()).toBe(4);
   });
 });
+
+// Repository names are compared ignoring case, and nothing else: "_" (which
+// GitHub allows in names) and "%" match only themselves, never other
+// characters.
+describe("repository names with _ or %", () => {
+  it("lets a team claim owner/a_b while another team is verified for owner/aXb", async () => {
+    // Arrange
+    await insertTeam({ repoFullName: "owner/aXb", repoId: 1n });
+
+    // Act
+    const response = await createTeamAsNewUser("owner/a_b");
+
+    // Assert
+    expect(response.status).toBe(201);
+  });
+
+  it("verifies a pending team for owner/a_b while another team is verified for owner/aXb", async () => {
+    // Arrange
+    await insertTeam({ repoFullName: "owner/aXb", repoId: 1n });
+    const pending = await createPendingTeam("owner/a_b");
+
+    // Act
+    const response = await deliver({
+      event: "ping",
+      payload: {
+        ...pingPayload,
+        repository: { id: 2, name: "a_b", full_name: "owner/a_b" },
+      },
+      deliveryId: "ping-underscore",
+      secret: pending.webhookSecret,
+    });
+
+    // Assert
+    expect(response.status).toBe(200);
+    expect(await teamState(pending.id)).toEqual({
+      repoVerifiedAt: expect.any(Date),
+      repoId: 2n,
+    });
+  });
+
+  // The payload isn't trusted until a team's secret verifies it, and even
+  // then it can only verify that team for the repository it claimed.
+  it("returns 401 for a ping naming %/% signed with a pending team's secret, and verifies nothing", async () => {
+    // Arrange
+    const pending = await createPendingTeam("owner/claimed");
+
+    // Act
+    const response = await deliver({
+      event: "ping",
+      payload: {
+        ...pingPayload,
+        repository: { id: 3, name: "%", full_name: "%/%" },
+      },
+      deliveryId: "ping-percent",
+      secret: pending.webhookSecret,
+    });
+
+    // Assert
+    expect(response.status).toBe(401);
+    expect(await teamState(pending.id)).toEqual({
+      repoVerifiedAt: null,
+      repoId: null,
+    });
+  });
+
+  it("returns 401 for a push naming owner/a_b signed with the secret of the team verified for owner/aXb", async () => {
+    // Arrange: with no repository id stored, only the name finds the team
+    const verified = await insertTeam({
+      repoFullName: "owner/aXb",
+      repoId: null,
+    });
+    await insertMembership({
+      userId: (await insertUser({ githubLogin: "alice" })).id,
+      teamId: verified.id,
+      role: "MEMBER",
+    });
+
+    // Act
+    const response = await deliver({
+      event: "push",
+      payload: {
+        ...pushPayload,
+        repository: {
+          ...pushPayload.repository,
+          id: 2,
+          full_name: "owner/a_b",
+        },
+      },
+      deliveryId: "push-underscore",
+      secret: verified.webhookSecret,
+    });
+
+    // Assert
+    expect(response.status).toBe(401);
+    expect(await db.activity.count()).toBe(0);
+  });
+});
