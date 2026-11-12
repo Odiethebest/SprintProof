@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- The SprintProof mark (AppMark): a rounded square in the primary token with lucide's Check in
+       the primary-fg token. Hex values because a favicon can't read CSS tokens, and the check is
+       drawn larger than in the top bar so it stays readable at 16 px. XML comments can't contain
+       two hyphens in a row, so the token names are spelled without them. -->
+  <rect width="32" height="32" rx="6" fill="#0f766e"/>
+  <path d="M20 6 9 17l-5-5" transform="translate(6 6) scale(0.8333)" fill="none" stroke="#ffffff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
