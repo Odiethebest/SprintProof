@@ -93,9 +93,10 @@ src/
 │   ├── github/                   # GitHub login and profile rules, webhook payload → Activity mapping
 │   ├── realtime/                 # team channel name (team-{teamId}) and the events it carries
 │   ├── validation/               # shared text rules: noNul for user text, databaseTextSchema for ids from the URL
+│   ├── database/                 # node-postgres pool options: TLS verified against DATABASE_CA_CERT when it's set
 │   └── export/                   # sprint summary → Markdown, team or instructor export, sprint-N-summary.md file name
 ├── server/                       # everything with side effects
-│   ├── db.ts                     # single Prisma client
+│   ├── db.ts                     # single Prisma client; pool options from lib/database/
 │   ├── repositories/             # all database reads/writes (sprints.ts, standups.ts, activities.ts, api-tokens.ts, ...)
 │   ├── auth.ts                   # requireTeamRole(); requireApiTeamRole() and requireApiUser() for the read-only endpoints that take an API token
 │   ├── auth-config.ts            # Auth.js config: GitHub provider, test sign-in
@@ -357,6 +358,7 @@ Standups, planning notes and retros for our own team are recorded in SprintProof
 - **API tokens:** generate with `crypto.randomBytes`, show once, store only a SHA-256 hash. Public API endpoints require `Authorization: Bearer <token>`.
 - **GitHub OAuth:** request the minimum scopes needed; the choice and reasoning live in `docs/decisions/`.
 - **Database:** only Prisma queries or `$queryRaw` tagged templates. Never build SQL with string concatenation.
+- **Database connection:** deployed environments connect over TLS and verify the server certificate against `DATABASE_CA_CERT`, the Supabase root CA ([decision 002](docs/decisions/002-database-hosting.md#connecting-over-tls)). Never turn verification off in code (`rejectUnauthorized: false`, `sslmode=no-verify`).
 - **Dependencies and code scanning:** CI runs `npm audit --audit-level=high`, dependency review on PRs (fails on high or critical) and CodeQL. Don't add or upgrade to a package version with a high or critical advisory, and fix CodeQL alerts instead of dismissing them without a reason.
 - Never log request bodies that may contain standup text, feedback, or tokens.
 
@@ -412,4 +414,5 @@ Standups, planning notes and retros for our own team are recorded in SprintProof
 | 2026-11-11 | Ziqi (Odie) Yang | Architecture tree lists `components/review/` and the `lib/export/` files; §2 Review and `ExportButton`: the page's top bar and Review link, the card and export text until #13 and #14, and how N in `sprint-N-summary.md` is chosen for names that aren't "Sprint N" (#15) | Issue #15: instructor view and Markdown export. The rules should match the code |
 | 2026-11-11 | Ziqi (Odie) Yang | §2 `StandupForm`: when the day changes while it's open, it keeps the unsent text and its old date until "Load today's form" shows the new date; PRD US-4; architecture tree lists the form state in `lib/standups/` (#91) | Issue #91, from Yunhong's review of PR #81: "Load today's form" reloaded the page and a live refresh after midnight emptied the fields, so unsent text was lost |
 | 2026-11-11 | Ziqi (Odie) Yang | §1 Coding standards: date math in `src/lib/` doesn't depend on the host time zone (`getDayStart()` in `lib/sprints/day-start.ts`), and the sprint window, days left and login attribution each have one implementation; Testing strategy: date tests run under several host time zones; architecture tree lists `day-start.ts` (#99) | Issue #99, from the Nov 11 audit of main: with `TZ=Europe/London` the Nuuk calendar test failed, because `TZDate` and `startOfDay()` read the host's offset near DST changes, and `requirement-status.ts` had its own copies of the window, days left and attribution |
+| 2026-11-11 | Ziqi (Odie) Yang | Architecture tree lists `lib/database/`; §4 Security requirements: deployed database connections verify the Supabase certificate against `DATABASE_CA_CERT` (#53) | Issue #53: the `PGSSLMODE=no-verify` stopgap encrypted the connection without checking the certificate |
 | 2026-11-11 | Ziqi (Odie) Yang | §1 Domain model: `Activity.reviewState` for reviews; §2 `ActivityFeed`: the review wording comes from GitHub's `review.state`, and a review stored without one says "reviewed #N" and still counts (#57) | Issue #57: the feed said "reviewed #N" for every review because the webhook didn't store the state. Reviews stored before the change, or with a state GitHub doesn't document, have none |
