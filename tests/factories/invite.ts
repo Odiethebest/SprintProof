@@ -4,6 +4,7 @@ export function createInviteLink(
   overrides: Partial<InviteLink> = {}
 ): InviteLink {
   return {
+    role: "MEMBER",
     expiresAt: new Date("2026-11-12T18:00:00.000Z"),
     revokedAt: null,
     ...overrides,

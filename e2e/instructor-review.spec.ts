@@ -1,10 +1,12 @@
 import { readFile } from "node:fs/promises";
 import { expect, test, type Page } from "@playwright/test";
 import { signInAsTestUser, type TestUser } from "./helpers/auth";
+import { COURSE_STAFF } from "./helpers/course-staff";
 import {
   addSprint,
   createTeam,
   expectNoBlockingViolations,
+  joinAsInstructor,
   joinTeam,
   signedInPage,
 } from "./helpers/teams";
@@ -62,13 +64,9 @@ test.describe("Instructor review", () => {
     // Arrange
     await signInAsTestUser(page, INSTRUCTOR_LEAD);
     const teamId = await createTeamWithStandup(page);
+    const staff = await signedInPage(browser, COURSE_STAFF.review);
     const instructor = await signedInPage(browser, INSTRUCTOR);
-    await joinTeam({
-      lead: page,
-      joiner: instructor,
-      teamId,
-      role: "INSTRUCTOR",
-    });
+    await joinAsInstructor({ staff, joiner: instructor, teamId });
     await instructor
       .context()
       .grantPermissions(["clipboard-read", "clipboard-write"]);

@@ -1,6 +1,8 @@
 import { expect, test, type Browser, type Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import { signInAsTestUser, type TestUser } from "./helpers/auth";
+import { COURSE_STAFF } from "./helpers/course-staff";
+import { createInviteToken } from "./helpers/teams";
 
 // One login per test, so parallel sign-ins never create the same user at once.
 const POSTER: TestUser = {
@@ -198,7 +200,8 @@ test.describe("Daily standup", () => {
     page,
     browser,
   }) => {
-    // Arrange: the lead posts a standup and invites an instructor
+    // Arrange: the lead posts a standup; course staff invite an instructor,
+    // because instructor links don't come from the lead (decision 006, #116)
     await signInAsTestUser(page, LEAD);
     const teamId = await createTeam(page, "Instructor standup team");
     await addCurrentSprint(page, teamId);
@@ -206,14 +209,13 @@ test.describe("Daily standup", () => {
       data: { yesterday: "Wrote the API.", today: "Review #50." },
     });
     expect(posted.status()).toBe(201);
-    await page.goto(`/teams/${teamId}/settings`);
-    const panel = page.getByRole("region", { name: "Instructor invite link" });
-    await panel.getByRole("button", { name: "Create link" }).click();
-    const link = panel.getByText(/\/invite\//);
-    await expect(link).toBeVisible();
-    const inviteUrl = (await link.textContent()) ?? "";
+    const staff = await signedInPage(browser, COURSE_STAFF.standup);
+    const token = await createInviteToken(staff, {
+      teamId,
+      role: "INSTRUCTOR",
+    });
     const instructor = await signedInPage(browser, INSTRUCTOR);
-    await instructor.goto(inviteUrl);
+    await instructor.goto(`/invite/${token}`);
     await instructor.getByRole("button", { name: "Join team" }).click();
     await expect(instructor).toHaveURL(/\/teams\/[^/]+\/dashboard$/);
 

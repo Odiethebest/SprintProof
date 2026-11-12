@@ -1,11 +1,19 @@
 import { expect, test, type Browser, type Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import { signInAsTestUser, type TestUser } from "./helpers/auth";
+import { COURSE_STAFF } from "./helpers/course-staff";
 
 // Needs the dev server started with E2E_TEST_AUTH=true, AUTH_SECRET and DATABASE_URL.
 // Data stays in the database between runs, so every team gets its own repo.
 const LEAD: TestUser = { login: "ziqi-e2e", name: "Ziqi (Odie) Yang" };
 const PARTNER: TestUser = { login: "yunhong-e2e", name: "Yunhong Huang" };
+const INSTRUCTOR_LEAD: TestUser = {
+  login: "ziqi-onboarding-instructor-lead-e2e",
+  name: "Ziqi (Odie) Yang",
+};
+const INSTRUCTOR: TestUser = { login: "ta-onboarding-e2e", name: "Course TA" };
+
+const COURSE_STAFF_NOTE = "Instructor invite links come from course staff.";
 
 function uniqueRepo(): string {
   return `e2e-${Date.now()}-${Math.floor(Math.random() * 1000)}/sprintproof`;
@@ -20,12 +28,14 @@ async function expectNoBlockingViolations(page: Page) {
   expect(blocking).toEqual([]);
 }
 
-async function createTeam(page: Page, name: string): Promise<void> {
+// Returns the new team's id.
+async function createTeam(page: Page, name: string): Promise<string> {
   await page.goto("/teams/new");
   await page.getByLabel("Team name").fill(name);
   await page.getByLabel("GitHub repo").fill(uniqueRepo());
   await page.getByRole("button", { name: "Create team" }).click();
   await expect(page).toHaveURL(/\/teams\/[^/]+\/settings$/);
+  return page.url().split("/").at(-2) ?? "";
 }
 
 async function createMemberLink(page: Page): Promise<string> {
@@ -213,6 +223,87 @@ test.describe("Onboarding", () => {
     ).toHaveCount(0);
     await expect(partner.getByRole("button", { name: "Revoke" })).toHaveCount(
       0
+    );
+    await expect(partner.getByText(COURSE_STAFF_NOTE)).toHaveCount(0);
+  });
+
+  test("doesn't offer the lead an instructor link and says who creates them", async ({
+    page,
+  }) => {
+    // Arrange: decision 006, #116: otherwise a lead could join their own team
+    // as an instructor with a second account and read peer feedback.
+    await signInAsTestUser(page, LEAD);
+
+    // Act
+    const teamId = await createTeam(page, "Lead invites team");
+
+    // Assert
+    const members = page.getByRole("region", { name: "Members and invites" });
+    await expect(
+      members.getByRole("region", { name: "Member invite link" })
+    ).toBeVisible();
+    await expect(
+      page.getByRole("region", { name: "Instructor invite link" })
+    ).toHaveCount(0);
+    await expect(members.getByText(COURSE_STAFF_NOTE)).toBeVisible();
+    const refused = await page.request.post(`/api/v1/teams/${teamId}/invites`, {
+      data: { role: "INSTRUCTOR" },
+    });
+    expect(refused.status()).toBe(403);
+    await expectNoBlockingViolations(page);
+  });
+
+  test("lets course staff invite an instructor, who then manages the instructor link in Settings", async ({
+    page,
+    browser,
+  }) => {
+    // Arrange: course staff aren't on the team; they create the link through
+    // the API with their session, the way /api-docs sends it.
+    await signInAsTestUser(page, INSTRUCTOR_LEAD);
+    const teamId = await createTeam(page, "Staff invites team");
+    const staff = await signedInPage(browser, COURSE_STAFF.onboarding);
+    const created = await staff.request.post(
+      `/api/v1/teams/${teamId}/invites`,
+      { data: { role: "INSTRUCTOR" } }
+    );
+    expect(created.status()).toBe(201);
+    const { token } = (await created.json()) as { token: string };
+    const instructor = await signedInPage(browser, INSTRUCTOR);
+    await instructor.goto(`/invite/${token}`);
+    await expect(
+      instructor.getByText(
+        "You'll join as an instructor, with read-only access."
+      )
+    ).toBeVisible();
+    await instructor.getByRole("button", { name: "Join team" }).click();
+    await expect(instructor).toHaveURL(/\/teams\/[^/]+\/dashboard$/);
+
+    // Act
+    await instructor.goto(`/teams/${teamId}/settings`);
+
+    // Assert: the instructor link, and no member link or note
+    const panel = instructor.getByRole("region", {
+      name: "Instructor invite link",
+    });
+    await expect(panel.getByText(`/invite/${token}`)).toBeVisible();
+    await expect(
+      instructor.getByRole("region", { name: "Member invite link" })
+    ).toHaveCount(0);
+    await expect(instructor.getByText(COURSE_STAFF_NOTE)).toHaveCount(0);
+    await expectNoBlockingViolations(instructor);
+
+    // Act: revoke it and create a new one
+    await panel.getByRole("button", { name: "Revoke" }).click();
+    await panel.getByRole("button", { name: "Create link" }).click();
+
+    // Assert
+    await expect(panel.getByText(/\/invite\//)).toBeVisible();
+    await expect(panel.getByText(`/invite/${token}`)).toHaveCount(0);
+    await page.reload();
+    const members = page.getByRole("region", { name: "Members and invites" });
+    await expect(members.getByRole("listitem")).toHaveCount(2);
+    await expect(members.getByRole("listitem").nth(1)).toContainText(
+      "Instructor"
     );
   });
 

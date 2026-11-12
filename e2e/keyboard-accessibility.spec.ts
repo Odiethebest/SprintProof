@@ -1,9 +1,11 @@
 import { test, expect, type Page } from "@playwright/test";
 import { signInAsTestUser } from "./helpers/auth";
+import { COURSE_STAFF } from "./helpers/course-staff";
 import {
   createTeam,
   addSprint,
   isoDate,
+  joinAsInstructor,
   joinTeam,
   signedInPage,
   expectNoBlockingViolations,
@@ -161,8 +163,17 @@ for (const role of ["MEMBER", "INSTRUCTOR"] as const) {
       login: `live-viewer-${role.toLowerCase()}`,
       name: "Viewer",
     });
+    // Instructor links come from course staff (decision 006, #116).
+    const staff =
+      role === "INSTRUCTOR"
+        ? await signedInPage(browser, COURSE_STAFF.liveStandup)
+        : null;
     try {
-      await joinTeam({ lead: page, joiner: viewer, teamId, role });
+      if (staff === null) {
+        await joinTeam({ lead: page, joiner: viewer, teamId, role: "MEMBER" });
+      } else {
+        await joinAsInstructor({ staff, joiner: viewer, teamId });
+      }
       await viewer.goto(`/teams/${teamId}/standups`);
       await expect(viewer.getByText("Live", { exact: true })).toBeVisible();
       const nav = viewer.getByRole("link", { name: "Settings", exact: true });
@@ -181,6 +192,7 @@ for (const role of ["MEMBER", "INSTRUCTOR"] as const) {
       await expectNoBlockingViolations(viewer);
     } finally {
       await viewer.context().close();
+      await staff?.context().close();
     }
   });
 }
