@@ -2,12 +2,16 @@ import { expect, test, type Browser, type Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import { signInAsTestUser, type TestUser } from "./helpers/auth";
 import { COURSE_STAFF } from "./helpers/course-staff";
-import { createInviteToken } from "./helpers/teams";
+import { createInviteToken, joinTeam } from "./helpers/teams";
 
 // One login per test, so parallel sign-ins never create the same user at once.
 const POSTER: TestUser = {
   login: "ziqi-standup-e2e",
   name: "Ziqi (Odie) Yang",
+};
+const WATCHER: TestUser = {
+  login: "yunhong-standup-watcher-e2e",
+  name: "Yunhong Huang",
 };
 const VALIDATOR: TestUser = {
   login: "ziqi-standup-errors-e2e",
@@ -71,13 +75,26 @@ async function signedInPage(browser: Browser, user: TestUser): Promise<Page> {
 }
 
 test.describe("Daily standup", () => {
-  test("posts today's standup, lists it in History and updates it the same day", async ({
+  // AGENTS.md §2 User flows, flow 2. The live update needs Soketi, like
+  // live-dashboard.spec.ts.
+  test("posts today's standup, lists it in History and on a teammate's live dashboard, and updates it the same day", async ({
     page,
+    browser,
   }) => {
-    // Arrange
+    // Arrange: a teammate has the dashboard open
     await signInAsTestUser(page, POSTER);
     const teamId = await createTeam(page, "Standup team");
     await addCurrentSprint(page, teamId);
+    const watcher = await signedInPage(browser, WATCHER);
+    await joinTeam({ lead: page, joiner: watcher, teamId, role: "MEMBER" });
+    await watcher.goto(`/teams/${teamId}/dashboard`);
+    await expect(watcher.getByText("Live", { exact: true })).toBeVisible({
+      timeout: 10_000,
+    });
+    // A full page load would drop this marker.
+    await watcher.evaluate(() => Object.assign(window, { noReload: true }));
+    const posterCard = watcher.getByRole("article", { name: POSTER.name });
+    const watcherFeed = watcher.getByRole("region", { name: "Activity" });
     await page.goto(`/teams/${teamId}/standups`);
     await expect(
       page.getByRole("heading", { level: 1, name: "Standups" })
@@ -112,6 +129,11 @@ test.describe("Daily standup", () => {
     await expect(entries.first()).toContainText("None");
     await expect(history.getByText("1 standup", { exact: true })).toBeVisible();
 
+    // Assert: the teammate's dashboard counts it within 5 seconds
+    await expect(posterCard.locator("dl")).toHaveText(/Standups\s*1$/, {
+      timeout: 5_000,
+    });
+
     // Act: save again the same day
     await form
       .getByLabel("Today", { exact: true })
@@ -126,6 +148,15 @@ test.describe("Daily standup", () => {
     await expect(entries.first()).toContainText("Waiting on a review.");
     await expect(entries.first()).toContainText("edited");
     await expectNoBlockingViolations(page);
+
+    // Assert: the teammate's dashboard shows the new text, still one standup
+    await expect(watcherFeed.getByRole("listitem")).toHaveText(
+      [/Write the E2E spec for #9\./],
+      { timeout: 5_000 }
+    );
+    await expect(posterCard.locator("dl")).toHaveText(/Standups\s*1$/);
+    expect(await watcher.evaluate(() => "noReload" in window)).toBe(true);
+    await expectNoBlockingViolations(watcher);
   });
 
   test("shows each error under its field and moves focus to the first one", async ({

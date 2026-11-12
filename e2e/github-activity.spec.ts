@@ -143,11 +143,20 @@ test.describe("GitHub activity", () => {
       },
     });
 
-    // Assert: within 5 seconds, without a reload
+    // Assert: within 5 seconds, without a reload, and the changed count gets
+    // the highlight, which lasts 1 s (DESIGN.md §8), so poll often
     expect(response.status()).toBe(200);
+    const reviewsCount = reviewerCard
+      .locator("dl > div", { hasText: "Reviews" })
+      .locator("dd > span");
+    await expect
+      .poll(() => reviewsCount.getAttribute("class"), {
+        intervals: [50],
+        timeout: 5_000,
+      })
+      .toContain("bg-primary/10");
     await expect(reviewerCard.locator("dl")).toHaveText(
-      /Commits\s*0\s*PRs\s*0\s*Reviews\s*1\s*Standups\s*0/,
-      { timeout: 5_000 }
+      /Commits\s*0\s*PRs\s*0\s*Reviews\s*1\s*Standups\s*0/
     );
     await expect(
       reviewerCard.getByRole("listitem").filter({ hasText: "PR reviews" })
