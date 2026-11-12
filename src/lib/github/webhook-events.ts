@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { toCommitKey } from "./commit-key";
 
 export type ReviewState = "APPROVED" | "CHANGES_REQUESTED" | "COMMENTED";
 
@@ -11,6 +12,9 @@ export interface MappedActivity {
   title: string | null;
   // Set only on a REVIEW, and null there when GitHub's state is one we don't know.
   reviewState: ReviewState | null;
+  // Set only on a COMMIT, from its author, author date and message (#114), and
+  // null there when the payload leaves one out: it's then deduplicated by SHA only.
+  commitKey: string | null;
   occurredAt: Date;
 }
 
@@ -42,17 +46,39 @@ const webhookTextSchema = z
   .string()
   .transform((text) => text.replaceAll("\u0000", ""));
 
+// GitHub leaves out `username` when the email isn't linked to an account.
+const usernameSchema = z.string().min(1).nullish();
+
+// `ref`, the default branch, the committer and `distinct` only leave out
+// GitHub's own commits, and GitHub always sends them. A push without them maps
+// as it did before #114 rather than being rejected, which would drop its commits.
 const pushSchema = z.object({
+  ref: z.string().nullish(),
+  repository: z.object({ default_branch: z.string().nullish() }).nullish(),
   commits: z.array(
     z.object({
       id: z.string().min(1),
       message: webhookTextSchema,
+      // The committer date: a rebase or an amend moves it, not the author date.
       timestamp: timestampSchema,
-      // GitHub leaves out `username` when the author's email isn't linked to an account.
-      author: z.object({ username: z.string().min(1).nullish() }),
+      distinct: z.boolean().nullish(),
+      author: z.object({
+        name: z.string().nullish(),
+        email: z.string().nullish(),
+        date: timestampSchema.nullish(),
+        username: usernameSchema,
+      }),
+      committer: z.object({ username: usernameSchema }).nullish(),
     })
   ),
 });
+
+type PushPayload = z.infer<typeof pushSchema>;
+type PushCommit = PushPayload["commits"][number];
+
+// The account GitHub commits as when it makes a commit itself: merge commits,
+// the copies "Rebase and merge" and "Squash and merge" make, web editor edits.
+const GITHUB_COMMITTER_LOGIN = "web-flow";
 
 const openedPullRequestSchema = z.object({
   pull_request: z.object({
@@ -142,17 +168,59 @@ function toCommitTitle(message: string): string | null {
   return firstLine === "" ? null : firstLine;
 }
 
+function isPushToDefaultBranch(push: PushPayload): boolean {
+  const defaultBranch = push.repository?.default_branch;
+  return Boolean(defaultBranch) && push.ref === `refs/heads/${defaultBranch}`;
+}
+
+// Counting rule: commits GitHub makes on the default branch don't count
+// (AGENTS.md §1, decision 004); the PR's own commits counted from its branch.
+// Such a commit reaches other branches too (`git merge main`), but only with
+// `distinct: false`, which GitHub sets on a commit an earlier push carried. A
+// first push decides: one GitHub made on a feature branch ("Update branch")
+// was stored then, and a later push of it is a duplicate by SHA anyway.
+function isGithubCommitOnDefaultBranch({
+  commit,
+  isDefaultBranchPush,
+}: {
+  commit: PushCommit;
+  isDefaultBranchPush: boolean;
+}): boolean {
+  const committer = commit.committer?.username?.toLowerCase();
+  if (committer !== GITHUB_COMMITTER_LOGIN) {
+    return false;
+  }
+  return isDefaultBranchPush || commit.distinct === false;
+}
+
+function toPushCommitKey(commit: PushCommit): string | null {
+  const { name, email, date } = commit.author;
+  if (!name || !email || !date) {
+    return null;
+  }
+  return toCommitKey({
+    authorName: name,
+    authorEmail: email,
+    authorDate: new Date(date),
+    message: commit.message,
+  });
+}
+
 function mapPush({ payload }: { payload: unknown }): WebhookMapping {
   const parsed = pushSchema.safeParse(payload);
   if (!parsed.success) {
     return invalid("push");
   }
 
+  const isDefaultBranchPush = isPushToDefaultBranch(parsed.data);
   const activities = parsed.data.commits.flatMap((commit): MappedActivity[] => {
     const authorLogin = commit.author.username;
     // Counting rule: commits count for their author's GitHub login, never for the
     // committer or the pusher, and bots never count (AGENTS.md §1).
     if (!authorLogin || isBot(authorLogin)) {
+      return [];
+    }
+    if (isGithubCommitOnDefaultBranch({ commit, isDefaultBranchPush })) {
       return [];
     }
     return [
@@ -164,6 +232,7 @@ function mapPush({ payload }: { payload: unknown }): WebhookMapping {
         sha: commit.id,
         title: toCommitTitle(commit.message),
         reviewState: null,
+        commitKey: toPushCommitKey(commit),
         occurredAt: new Date(commit.timestamp),
       },
     ];
@@ -194,6 +263,7 @@ function mapOpenedPullRequest({
       sha: null,
       title: pr.title,
       reviewState: null,
+      commitKey: null,
       occurredAt: new Date(pr.created_at),
     },
   ]);
@@ -230,6 +300,7 @@ function mapClosedPullRequest({
       sha: null,
       title: pr.title,
       reviewState: null,
+      commitKey: null,
       occurredAt: new Date(pr.merged_at),
     },
   ]);
@@ -278,6 +349,7 @@ function mapReview({ payload }: { payload: unknown }): WebhookMapping {
       sha: null,
       title: pr.title,
       reviewState: review.state,
+      commitKey: null,
       occurredAt: new Date(review.submitted_at),
     },
   ]);
