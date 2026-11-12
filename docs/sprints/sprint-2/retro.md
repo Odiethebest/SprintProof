@@ -2,7 +2,7 @@
 
 **Date:** 2026-11-12 · **Attendees:** Ziqi (Odie) Yang, Yunhong Huang
 
-<!-- Still to fill: Ziqi's votes and the vote totals, then confirm the action items, then "Ziqi → Yunhong". Delete this comment when done. -->
+All counts run through the end of the sprint (Nov 11, 23:59 Pacific).
 
 ## Results
 | | Planned | Completed |
@@ -10,26 +10,31 @@
 | Issues | 8 | 8 (#7, #8, #9, #11, #12, #16, #17, and #41 with this retro) |
 | Story points | 30 | 30 |
 
-Added during the sprint: 10 bug issues, all closed. #56 came from Yunhong's review of #51, #62 from the axe check in the new E2E stage (#61), #68 from running the tests on Windows, and #71–#77 from a bug audit of `main` on Nov 9. Together they're 17 estimated points; #56 and #68 have no estimate.
+Added during the sprint: 30 issues with 51 estimated points, more than the 30 we committed. 17 of them are bugs. #56, #68, #88 and #89 have no estimate.
+- From reviews and tests: #56 (Yunhong's review of #51), #62 (the axe check in the new E2E stage, #61), #68 (running the tests on Windows), and #90–#94 (Yunhong's reviews of #79–#83).
+- From audits of `main`: #71–#78 on Nov 9, #97–#100 on Nov 11, and #114–#117, the four rule changes decided in #78 (decision records 004–007).
+- Other: #53 (verify the Supabase certificate), #57 (review state in the activity feed), #88 and #89 (end-of-sprint docs), #112 (favicon) and #126 (the dashboard on phone screens).
+
+26 of the 30 were closed by the end of the sprint. #114, #115 and #117 closed in the first hour of Nov 12, and #126 closed on Nov 12 with #132.
 
 Yunhong's end-of-sprint docs (feature status table, schema diagram and the contribution log draft) merged in #96, which closed #89; #88 and #89 track the same work.
 
-Cut at planning and still in the Backlog: #13, #14, #15 and #43 (15 points). From the "If we fall behind" list, only the first item was dropped: `requirement-status.ts` still takes `Date`. The Swagger UI and live Pusher updates both shipped.
+Cut at planning: #13, #14, #15 and #43 (15 points). We built them anyway at the end: #15 and #13 merged on Nov 11, and #14 and #43 early on Nov 12, after the sprint. From the "If we fall behind" list, only the first item was dropped: `requirement-status.ts` still takes `Date`. The Swagger UI and live Pusher updates both shipped.
 
 Sprint goal met? Yes. Creating and joining teams, sprint setup, standups, GitHub webhooks, the live dashboard, the public API with OpenAPI docs, and the CI pipeline (E2E, security scanning, separate environments) are all on `main`.
 
 | P2 requirement | Ziqi (Odie) Yang | Yunhong Huang | Required |
 | --- | --- | --- | --- |
 | Standups (Nov 5 – Nov 11) | 3 | 3 | 3 |
-| PRs reviewed (distinct, authored by the partner) | 8 | 18 | 5 |
-| PRs opened and merged | 24 | 8 | — |
+| PRs reviewed (distinct, authored by the partner) | 9 | 18 | 5 |
+| PRs opened and merged | 42 | 9 | — |
 
 ### Action items from Sprint 1
 | Action item | Owner | Outcome |
 | --- | --- | --- |
 | Merge blocking issues first and start dependent work on fixtures | Yunhong | Done. #7 merged on day 1 (Nov 5). #8, #9 and #11 merged on Nov 6, and #12 on Nov 8. |
 | Plan within capacity and list what we cut | Ziqi | Done. We committed 30 points against an estimate of 29, and the cut list (#13–#15, #43) is in `planning.md`. |
-| Approve only after CI is green, with at least one substantive comment, and say when a migration was checked | Ziqi and Yunhong | Partly. Most feature PRs got detailed reviews: #47 and #49 had changes requested, and the review of #51 led to #56. But 10 of 32 PRs were merged without a partner approval, and 8 approvals said only "lgtm" or "approved". |
+| Approve only after CI is green, with at least one substantive comment, and say when a migration was checked | Ziqi and Yunhong | Partly. Most feature PRs got detailed reviews: #47, #49 and #65 had changes requested, and the review of #51 led to #56. But 28 of 51 PRs were merged without a partner approval, and 9 approvals said only "lgtm" or "approved", or nothing. |
 
 ## Went well
 - All 8 committed issues are done (30 of 30 points, against 22 of 33 in Sprint 1), and we didn't have to cut the Swagger UI or live updates.
@@ -39,23 +44,25 @@ Sprint goal met? Yes. Creating and joining teams, sprint setup, standups, GitHub
   - Ziqi's review of #49 changed who gets credit for a commit: the commit author, not the committer or the pusher.
   - Yunhong's review of #51 found the sprint-date bug that became #56.
   - Running the tests on Windows found the CRLF failure in the OpenAPI coverage test (#68).
-  - Yunhong's reviews of #79–#85 became #90–#94.
+  - Yunhong's reviews of #79–#83 became #90–#94.
 - Every PR now goes through lint, typecheck, unit and integration tests, E2E (with Soketi for live updates), a production build, CodeQL, `npm audit` and dependency review. The production guard also checks daily that `E2E_TEST_AUTH` is off (#17).
-- The bug audit of `main` on Nov 9 found 8 issues (#71–#78) before the P2 deadline. We fixed 7 of them the same day, each one starting from a failing test.
+- The bug audit of `main` on Nov 9 found 8 issues (#71–#78) before the P2 deadline. We fixed 7 of them the same day, each one starting from a failing test. A second audit on Nov 11 found #97–#100, and all four were fixed that day.
 
 ## To improve
 <!-- Each person has 3 votes, at most 1 per item. Top 3 become action items. -->
 | Item | Votes |
 | --- | --- |
-| 10 of 32 PRs were merged without a partner approval: #58, #60, #61 and #63 within 11 minutes around midnight on Nov 7, and #79–#83 and #85 within an hour on Nov 9. To merge #79–#85, we turned off admin enforcement on `main`'s branch protection and turned it back on afterwards. | Yunhong |
-| The bugs found on Nov 9 were in code that had passed review, CI and E2E: concurrent webhook deliveries dropped commits and still returned 200 (#71), standups near midnight counted on the wrong day (#73), and concurrent requests could create overlapping sprints and duplicate invites (#75). We had no tests for concurrent requests or the minutes around midnight. | Yunhong |
-| Unplanned bug work (17 estimated points across 10 issues) came to more than half of the 30 committed points. #71–#77 alone (16 points) were opened and merged on Nov 9. | |
-| We apply migrations to Supabase by hand after merging. Production ran without #64's `api_tokens` table for about 3 hours, and without #69's standups migration for about 6. | Yunhong |
-| 8 approvals had no comment beyond "lgtm" or "approved" (#48, #50, #54, #55, #61, #67, #69, #70). Most of these were one-file standup PRs. | |
-| The board's fields drifted from the plan during the sprint. #17 showed 5 points on the board but 3 in `planning.md`, and #41 and #62 had no points on the board until we fixed them on Nov 10. #56 and #68 were never estimated. | |
+| 28 of 51 PRs were merged without a partner approval: #58, #60, #61 and #63 within 11 minutes around midnight on Nov 7, #79–#83 and #85 within an hour on Nov 9, and 18 on Nov 11 (#101–#111, #113 and #118–#123). To merge #79–#85 and the Nov 11 PRs, we turned off admin enforcement on `main`'s branch protection and turned it back on afterwards. | 2 |
+| The bugs found on Nov 9 were in code that had passed review, CI and E2E: concurrent webhook deliveries dropped commits and still returned 200 (#71), standups near midnight counted on the wrong day (#73), and concurrent requests could create overlapping sprints and duplicate invites (#75). We had no tests for concurrent requests or the minutes around midnight. | 2 |
+| Unplanned work outgrew the plan: the 30 issues added during the sprint (51 estimated points, 17 of them bugs) were more than the 30 points we committed. #71–#77 alone (16 points) were opened and merged on Nov 9. | 0 |
+| We applied migrations to Supabase by hand after merging, until #104 automated it on Nov 11. Production ran without #64's `api_tokens` table for about 3 hours, and without #69's standups migration for about 6. | 1 |
+| 9 approvals had no comment beyond "lgtm" or "approved", or none at all (#48, #50, #54, #55, #61, #64, #67, #69, #70). Five were one-file standup PRs, but #64 and #69 each added a migration. | 1 |
+| The board's fields drifted from the plan during the sprint. #17 showed 5 points on the board but 3 in `planning.md`, and #41 and #62 had no points on the board until we fixed them on Nov 10. #56, #68, #88 and #89 were never estimated. | 0 |
+
+Yunhong voted for the 1st, 2nd and 4th items, and Ziqi for the 1st, 2nd and 5th. The 4th and 5th tie at 1 vote, and the 4th is listed first.
 
 ## Action items for our next project
-<!-- Top 3 "To improve" items by votes (ties: earliest listed). Confirm once Ziqi has voted. -->
+<!-- Top 3 "To improve" items by votes (ties: earliest listed). -->
 - [ ] Every PR gets a partner approval with a substantive comment before it merges, and branch protection stays on. If PRs come faster than the partner can review, open fewer at once. Owner: Ziqi and Yunhong
 - [ ] Issues that write shared data or count by day list tests for concurrent requests and for the minutes around midnight in their acceptance criteria. Owner: Ziqi
 - [ ] Migrations run automatically after merge (the Database workflow from #104), and a PR that adds one says so in its description. Owner: Yunhong
@@ -93,6 +100,10 @@ Sprint goal met? Yes. Creating and joining teams, sprint setup, standups, GitHub
 ## Partner feedback
 <!-- Each person writes their own section. -->
 **Ziqi → Yunhong:**
+
+Your reviews kept finding what CI didn't. On #51 you found that editing sprint dates could leave standups outside their sprint (#56). Your reviews of #79–#83 became five follow-up issues, #90–#94, and we fixed all of them. You ran the tests on Windows and found the CRLF failure in the OpenAPI coverage test (#68). You reviewed 18 of my PRs against the 5 required, and the E2E stage, production guard and security scans from #17 checked every PR after them.
+
+Two things I'd like to change. You opened 9 of the sprint's 51 merged PRs and I opened 42, partly because I picked up issues you had agreed to take, like #71 and #73. Next time let's split the issues at planning and both keep to the split, so the work and the reviews stay balanced. And 6 of your approvals said only "approved" or nothing (#48, #54, #64, #67, #69, #70), and #64 and #69 added migrations. I left three like that myself (#50, #55, #61), so this one is for both of us again: write what you checked, and say whether you checked the migration.
 
 **Yunhong → Ziqi:**
 - **Keep doing:** The Nov 9 audit of `main` found bugs that had passed review, CI and E2E, and every fix started from a failing test. When my #49 had review findings, you fixed them on my branch test-first and explained each commit, which got #11 merged on time. You also set up the Vercel environments and documented them (#52), and your PR descriptions made reviewing easy.
