@@ -9,6 +9,7 @@ const PLACEHOLDER_ORIGIN = "http://sprintproof.invalid";
 const PAGE_NAMES: ReadonlyArray<{ pattern: RegExp; page: string }> = [
   { pattern: /^\/teams\/[^/]+\/dashboard$/, page: "the dashboard" },
   { pattern: /^\/teams\/[^/]+\/standups$/, page: "standups" },
+  { pattern: /^\/teams\/[^/]+\/retro$/, page: "the retro" },
   { pattern: /^\/teams\/[^/]+\/sprints\/[^/]+\/retro$/, page: "the retro" },
   { pattern: /^\/teams\/[^/]+\/settings$/, page: "settings" },
   { pattern: /^\/review\/[^/]+$/, page: "the review page" },

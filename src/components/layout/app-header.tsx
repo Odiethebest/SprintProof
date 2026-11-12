@@ -4,7 +4,7 @@ import { UserMenu } from "@/components/auth/user-menu";
 import { AppMark } from "@/components/ui/app-mark";
 import {
   SprintSelector,
-  type SprintOptionView,
+  type SprintLinkView,
 } from "@/components/layout/sprint-selector";
 import { TeamNav, type TeamNavProps } from "@/components/layout/team-nav";
 import { LiveIndicator } from "@/components/realtime/live-indicator";
@@ -16,7 +16,7 @@ interface AppHeaderProps {
   // Team pages only; null elsewhere.
   teamNav: TeamNavProps | null;
   // Pages that show one sprint; null when there's nothing to pick from.
-  sprintSelector: { options: SprintOptionView[]; selectedId: string } | null;
+  sprintSelector: { options: SprintLinkView[]; selectedId: string } | null;
 }
 
 // The shared top bar (AGENTS.md §2 Screens). The LiveIndicator shows only on

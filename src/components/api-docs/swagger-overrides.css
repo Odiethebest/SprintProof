@@ -68,3 +68,9 @@
   border-color: var(--missed);
   color: var(--missed);
 }
+
+/* Error codes in descriptions: Swagger's purple inline code is 4.44:1 on a
+   DELETE operation's pink background, below AA (#13). */
+#api-reference .swagger-ui .renderedMarkdown code {
+  color: var(--text);
+}

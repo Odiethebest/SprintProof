@@ -25,6 +25,17 @@ import {
 import { PATCH as editSprint } from "@/app/api/v1/teams/[teamId]/sprints/[sprintId]/route";
 import { GET as getSummary } from "@/app/api/v1/teams/[teamId]/sprints/[sprintId]/summary/route";
 import { GET as listSprintStandups } from "@/app/api/v1/teams/[teamId]/sprints/[sprintId]/standups/route";
+import {
+  GET as getRetro,
+  PATCH as closeRetro,
+  POST as openRetro,
+} from "@/app/api/v1/teams/[teamId]/sprints/[sprintId]/retro/route";
+import { POST as addRetroItem } from "@/app/api/v1/teams/[teamId]/sprints/[sprintId]/retro/items/route";
+import {
+  DELETE as unvoteRetroItem,
+  PUT as voteRetroItem,
+} from "@/app/api/v1/teams/[teamId]/sprints/[sprintId]/retro/items/[itemId]/vote/route";
+import { PATCH as updateActionItem } from "@/app/api/v1/teams/[teamId]/sprints/[sprintId]/retro/action-items/[actionItemId]/route";
 import { POST as postStandup } from "@/app/api/v1/teams/[teamId]/standups/route";
 import { POST as createToken } from "@/app/api/v1/tokens/route";
 import { DELETE as revokeToken } from "@/app/api/v1/tokens/[tokenId]/route";
@@ -274,6 +285,80 @@ const ROUTES: Array<{
       listSprintStandups(
         apiGetRequest(`/teams/${teamId}/sprints/${sprintId}/standups`),
         routeContext({ teamId, sprintId })
+      ),
+  },
+  {
+    route: "GET /api/v1/teams/{teamId}/sprints/{sprintId}/retro",
+    call: ({ teamId, sprintId }) =>
+      getRetro(
+        apiGetRequest(`/teams/${teamId}/sprints/${sprintId}/retro`),
+        routeContext({ teamId, sprintId })
+      ),
+  },
+  {
+    route: "POST /api/v1/teams/{teamId}/sprints/{sprintId}/retro",
+    call: ({ teamId, sprintId }) =>
+      openRetro(
+        apiRequest("POST", `/teams/${teamId}/sprints/${sprintId}/retro`),
+        routeContext({ teamId, sprintId })
+      ),
+  },
+  {
+    route: "PATCH /api/v1/teams/{teamId}/sprints/{sprintId}/retro",
+    call: ({ teamId, sprintId }) =>
+      closeRetro(
+        apiRequest("PATCH", `/teams/${teamId}/sprints/${sprintId}/retro`, {
+          status: "CLOSED",
+        }),
+        routeContext({ teamId, sprintId })
+      ),
+  },
+  {
+    route: "POST /api/v1/teams/{teamId}/sprints/{sprintId}/retro/items",
+    call: ({ teamId, sprintId }) =>
+      addRetroItem(
+        apiRequest("POST", `/teams/${teamId}/sprints/${sprintId}/retro/items`, {
+          column: "WENT_WELL",
+          text: "CI catches broken builds before review",
+        }),
+        routeContext({ teamId, sprintId })
+      ),
+  },
+  {
+    route:
+      "PUT /api/v1/teams/{teamId}/sprints/{sprintId}/retro/items/{itemId}/vote",
+    call: ({ teamId, sprintId }) =>
+      voteRetroItem(
+        apiRequest(
+          "PUT",
+          `/teams/${teamId}/sprints/${sprintId}/retro/items/item-1/vote`
+        ),
+        routeContext({ teamId, sprintId, itemId: "item-1" })
+      ),
+  },
+  {
+    route:
+      "DELETE /api/v1/teams/{teamId}/sprints/{sprintId}/retro/items/{itemId}/vote",
+    call: ({ teamId, sprintId }) =>
+      unvoteRetroItem(
+        apiRequest(
+          "DELETE",
+          `/teams/${teamId}/sprints/${sprintId}/retro/items/item-1/vote`
+        ),
+        routeContext({ teamId, sprintId, itemId: "item-1" })
+      ),
+  },
+  {
+    route:
+      "PATCH /api/v1/teams/{teamId}/sprints/{sprintId}/retro/action-items/{actionItemId}",
+    call: ({ teamId, sprintId }) =>
+      updateActionItem(
+        apiRequest(
+          "PATCH",
+          `/teams/${teamId}/sprints/${sprintId}/retro/action-items/action-item-1`,
+          { isDone: true }
+        ),
+        routeContext({ teamId, sprintId, actionItemId: "action-item-1" })
       ),
   },
   {

@@ -22,12 +22,19 @@ erDiagram
   User ||--o{ Membership : has
   User ||--o{ Standup : submits
   User ||--o{ ApiToken : owns
+  User ||--o{ RetroItem : writes
+  User ||--o{ RetroVote : casts
   Team ||--o{ Membership : has
   Team ||--o{ Invite : issues
   Team ||--o{ Sprint : plans
   Team ||--o{ Standup : collects
   Team ||--o{ Activity : tracks
   Team |o--o{ WebhookDelivery : receives
+  Sprint ||--o| Retro : has
+  Retro ||--o{ RetroItem : collects
+  RetroItem ||--o{ RetroVote : gets
+  RetroItem ||--o| ActionItem : becomes
+  Sprint ||--o{ ActionItem : "carries in"
 
   User {
     string id PK "cuid"
@@ -116,6 +123,40 @@ erDiagram
     datetime deliveredAt "delivered_at"
   }
 
+  Retro {
+    string id PK "cuid"
+    string sprintId FK,UK "sprint_id, one retro per sprint"
+    datetime closedAt "closed_at, null while open"
+    datetime createdAt "created_at"
+    datetime updatedAt "updated_at"
+  }
+
+  RetroItem {
+    string id PK "cuid"
+    string retroId FK "retro_id"
+    string authorId FK "author_id"
+    enum column "WENT_WELL | TO_IMPROVE"
+    string text
+    datetime createdAt "created_at, breaks vote ties"
+    datetime updatedAt "updated_at"
+  }
+
+  RetroVote {
+    string id PK "cuid"
+    string itemId FK "item_id"
+    string userId FK "user_id"
+    datetime createdAt "created_at"
+  }
+
+  ActionItem {
+    string id PK "cuid"
+    string sprintId FK "sprint_id, the next sprint"
+    string retroItemId FK,UK "retro_item_id"
+    boolean isDone "is_done, default false"
+    datetime createdAt "created_at"
+    datetime updatedAt "updated_at"
+  }
+
   ApiToken {
     string id PK "cuid"
     string userId FK "user_id"
@@ -140,6 +181,10 @@ erDiagram
 | `activities` | `Activity` | `[team_id, type, sha]`, `[team_id, commit_key]` | `team_id`, `actor_login` |
 | `webhook_deliveries` | `WebhookDelivery` | `id` (primary key) | `team_id` |
 | `api_tokens` | `ApiToken` | `token_hash` | `user_id` |
+| `retros` | `Retro` | `sprint_id` | — |
+| `retro_items` | `RetroItem` | — | `retro_id`, `author_id` |
+| `retro_votes` | `RetroVote` | `[item_id, user_id]` | `user_id` |
+| `action_items` | `ActionItem` | `retro_item_id` | `sprint_id` |
 
 - **`users` (`User`)**: `github_id` is required and unique. `github_login` is unique but nullable: after a GitHub rename the login can move to another account, and the previous holder's login is cleared until they sign in again (#6). No email column (`docs/decisions/001-github-oauth-scopes.md`).
 - **`teams` (`Team`)**: Holds the connected GitHub repo (`repo_full_name`, GitHub's `owner/name`, unique so a webhook delivery maps to one team), GitHub's numeric repository ID (`repo_id`, nullable and unique, set on the first webhook delivery, #11) and the team timezone (`timezone`, default `America/Los_Angeles`).
@@ -150,6 +195,10 @@ erDiagram
 - **`activities` (`Activity`)**: Activity records with `occurred_at` for event time and `@@unique([team_id, type, sha])` deduplicating commit SHAs. `review_state` holds GitHub's `review.state` for a `REVIEW` row, so the activity feed can say "approved", "requested changes on" or "commented on" #N (#57). It's null for every other type, for reviews stored before #57, and for a review whose state GitHub doesn't document. Those reviews show as "reviewed #N". Every state counts the same under R3. `commit_key` is a SHA-256 of a `COMMIT` row's author name, email, author date and full message, unique per team, so the copy a rebase or an amend makes under a new SHA is stored once (#114, `docs/decisions/004-count-each-commit-once.md`). It's null for other types, for commits stored before #114 until `scripts/backfill-commit-keys.mjs` fills it, and when a payload leaves out the author's name, email or date; those commits are deduplicated by SHA only. GitHub's own commits on the default branch aren't stored at all.
 - **`webhook_deliveries` (`WebhookDelivery`)**: One row per GitHub delivery, keyed by the `X-GitHub-Delivery` id so a redelivered event is stored once (#11). `team_id` is nullable because a delivery can arrive for a repo that no team has connected.
 - **`api_tokens` (`ApiToken`)**: Personal tokens for the public API (#16). Only the SHA-256 hash (`token_hash`, unique) is stored; the token itself is shown once. `last4` lets Settings tell tokens apart, and `last_used_at` is updated when a token is used. Revoking deletes the row.
+- **`retros` (`Retro`)**: One per sprint (`sprint_id` is unique), opened by the lead (#13). `closed_at` is null while it's open; closing sets it and makes the action items, after which its items and votes don't change. Writes take the `SPRINT_RETRO_LOCK` advisory lock for the sprint, so a member's concurrent votes can't pass 3 and no vote lands after closing has counted them.
+- **`retro_items` (`RetroItem`)**: An item in "Went well" or "To improve" (`column`), with its author. `created_at` breaks vote ties (rule R6).
+- **`retro_votes` (`RetroVote`)**: One member's vote on one item; `@@unique([item_id, user_id])` keeps it to 1 per item. The 3 per retro are checked when voting.
+- **`action_items` (`ActionItem`)**: A "To improve" item carried into the sprint that starts next (`sprint_id`) when its retro closed; `retro_item_id` is unique, so an item is carried once. Its text and votes stay on the retro item. `is_done` is the done checkbox on the next sprint's retro.
 
 ### Enums
 
@@ -158,6 +207,7 @@ erDiagram
 | `MembershipRole` | `LEAD`, `MEMBER`, `INSTRUCTOR` | `Membership.role`, `Invite.role` |
 | `ActivityType` | `COMMIT`, `PR_OPENED`, `PR_MERGED`, `REVIEW` | `Activity.type` |
 | `ReviewState` | `APPROVED`, `CHANGES_REQUESTED`, `COMMENTED` | `Activity.reviewState` |
+| `RetroColumn` | `WENT_WELL`, `TO_IMPROVE` | `RetroItem.column` |
 
 ### Migrations
 
@@ -172,3 +222,4 @@ In `prisma/migrations/`, applied in order:
 | `20261108081720_add_api_tokens` | #16 | The `api_tokens` table |
 | `20261109224149_standups_belong_to_team` | #56 | Fills `standups.team_id` from each standup's sprint, drops `sprint_id`, and replaces the unique key with `[team_id, user_id, date]`. Fails if a person already has two standups on one day in a team |
 | `20261112025033_add_activity_review_state` | #57 | The `ReviewState` enum and `activities.review_state` (nullable, no default, so existing rows stay null) |
+| `20261112050000_add_retros` | #13 | The `RetroColumn` enum and the `retros`, `retro_items`, `retro_votes` and `action_items` tables (new tables only) |

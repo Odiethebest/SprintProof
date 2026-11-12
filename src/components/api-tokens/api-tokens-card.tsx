@@ -297,6 +297,7 @@ export function ApiTokensCard({ tokens }: { tokens: ApiTokenView[] }) {
         isOpen={revoking !== null}
         title={`Revoke ${revoking?.name ?? "token"}?`}
         confirmLabel="Revoke token"
+        confirmVariant="destructive"
         isBusy={isRevoking}
         error={revokeError}
         onConfirm={() => {

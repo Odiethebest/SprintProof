@@ -85,6 +85,7 @@ describe("toContinueMessage", () => {
       "Sign in to continue to the dashboard.",
     ],
     ["/teams/team-1/standups", "Sign in to continue to standups."],
+    ["/teams/team-1/retro", "Sign in to continue to the retro."],
     ["/teams/team-1/sprints/s-1/retro", "Sign in to continue to the retro."],
     ["/teams/team-1/settings", "Sign in to continue to settings."],
     ["/review/team-1", "Sign in to continue to the review page."],

@@ -100,9 +100,10 @@ As someone who never knows if we're on track, I want a dashboard that updates th
 
 **US-8. Run a retro that leads somewhere** · Issue #13
 As someone who wants retros to change something, I want to vote on what to improve and have the top items become next sprint's action items, so retros don't just get forgotten.
-- Two columns: "Went well" and "To improve".
-- Each member has 3 votes per retro, max 1 per item.
-- When the lead closes the retro, the top 3 "To improve" items become action items on the next sprint.
+- The lead opens a retro for a sprint; members add items to two columns, "Went well" and "To improve".
+- Each member has 3 votes per retro, max 1 per item. Voting again on an item takes the vote back, and the page shows how many votes are left.
+- When the lead closes the retro, the top 3 "To improve" items become action items on the sprint that starts next, which has to exist first. After that, the retro's items and votes don't change.
+- The next sprint's retro lists those action items with a done checkbox.
 
 **US-9. Give honest partner feedback** · Issue #14
 As someone in a team of two, I want to leave partner feedback that only the instructor sees, so I can be honest without making things awkward.
