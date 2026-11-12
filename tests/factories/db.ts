@@ -37,6 +37,10 @@ export async function insertTeam(
     repoFullName?: string;
     timezone?: string;
     repoId?: bigint | number | null;
+    webhookSecret?: string;
+    // true for a team connected before #115, whose GitHub webhook may still
+    // sign with the server-wide GITHUB_WEBHOOK_SECRET (decision 005).
+    canUseServerWebhookSecret?: boolean;
   } = {}
 ) {
   const n = recordSeq++;
@@ -46,6 +50,9 @@ export async function insertTeam(
       name: `Team ${n}`,
       repoFullName: `owner${n}/repo${n}`,
       repoId: repoId !== undefined && repoId !== null ? BigInt(repoId) : repoId,
+      // Different for every team, so a delivery signed for one team never
+      // verifies for another by accident.
+      webhookSecret: `test-team-webhook-secret-${n}`,
       ...rest,
     },
   });

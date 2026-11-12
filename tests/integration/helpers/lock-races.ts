@@ -81,7 +81,11 @@ export async function claimRepoPastTheLock<T>({
   const { claim } = await db.$transaction(
     async (tx) => {
       await tx.team.create({
-        data: { name: "Claimed past the lock", repoFullName },
+        data: {
+          name: "Claimed past the lock",
+          repoFullName,
+          webhookSecret: "claimed-past-the-lock-webhook-secret",
+        },
       });
       const pid = await backendPid(tx);
       const claim = track(run);

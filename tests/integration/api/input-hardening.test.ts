@@ -14,6 +14,7 @@ import { POST as postStandup } from "@/app/api/v1/teams/[teamId]/standups/route"
 import { POST as createTeam } from "@/app/api/v1/teams/route";
 import { POST as createToken } from "@/app/api/v1/tokens/route";
 import { POST as join } from "@/app/api/v1/memberships/route";
+import { POST as rotateWebhookSecret } from "@/app/api/v1/teams/[teamId]/webhook-secret/route";
 import { insertUser, insertTeam, insertMembership } from "../../factories/db";
 import {
   createTeamInput,
@@ -38,6 +39,7 @@ it("treats NUL URL ids exactly like unknown ids across all routes", async () => 
       () => createSprint(apiRequest("POST", "/", createSprintInput()), context),
       () => createInvite(apiRequest("POST", "/", { role: "MEMBER" }), context),
       () => postStandup(apiRequest("POST", "/", createStandupInput()), context),
+      () => rotateWebhookSecret(apiRequest("POST", "/", undefined), context),
     ])
       expect((await run()).status).toBe(403);
   }
