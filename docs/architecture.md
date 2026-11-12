@@ -242,4 +242,4 @@ In `prisma/migrations/`, applied in order:
 | `20261112050000_add_retros` | #13 | The `RetroColumn` enum and the `retros`, `retro_items`, `retro_votes` and `action_items` tables (new tables only) |
 | `20261112074050_add_activity_commit_key` | #114 | `activities.commit_key` (nullable, so existing rows stay null until `scripts/backfill-commit-keys.mjs` fills them) and the unique index on `[team_id, commit_key]` |
 | `20261112090000_add_team_webhook_secret` | #115 | `teams.webhook_secret`, filled for existing teams from `gen_random_uuid()` and then required, and `teams.can_use_server_webhook_secret` (true for existing teams, default false) |
-| `20261112080628_add_peer_feedback` | #14 | The `peer_feedback` table (new table only) |
+| `20261112100000_add_peer_feedback` | #14 | The `peer_feedback` table (new table only) |
