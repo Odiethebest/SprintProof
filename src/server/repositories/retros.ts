@@ -12,6 +12,7 @@ import { databaseTextSchema } from "@/lib/validation/text";
 import type { Prisma } from "@/generated/prisma/client";
 import { db } from "@/server/db";
 import { isUniqueViolation } from "@/server/prisma-errors";
+import { SPRINT_RETRO_LOCK, lockForWrite } from "@/server/write-locks";
 
 export interface RetroAuthor {
   userId: string;
@@ -139,19 +140,20 @@ function toCarriedRecord(row: CarriedRow): CarriedActionItemRecord {
   };
 }
 
-// Every write to a retro runs after this row lock, so writes to one retro
-// happen one at a time: a member's votes can't pass 3 by racing each other,
-// and nothing changes between closing a retro's count and its closedAt.
-// Returns null when the sprint has no retro.
+// Every write to a sprint's retro and its carried action items checks the
+// retro first, so it takes this lock (AGENTS.md Key patterns): writes to one
+// retro happen one at a time, a member's votes can't pass 3 by racing each
+// other, and nothing changes between a closing retro's count and its closedAt.
+// Returns the retro as it is under the lock, or null when the sprint has none.
 async function lockRetro(
   tx: Prisma.TransactionClient,
   sprintId: string
 ): Promise<{ id: string; closedAt: Date | null } | null> {
-  const rows = await tx.$queryRaw<
-    Array<{ id: string; closed_at: Date | null }>
-  >`SELECT "id", "closed_at" FROM "retros" WHERE "sprint_id" = ${sprintId} FOR UPDATE`;
-  const row = rows.at(0);
-  return row === undefined ? null : { id: row.id, closedAt: row.closed_at };
+  await lockForWrite({ tx, kind: SPRINT_RETRO_LOCK, id: sprintId });
+  return tx.retro.findUnique({
+    where: { sprintId },
+    select: { id: true, closedAt: true },
+  });
 }
 
 // The sprint's retro with its items, votes and the action items it made, or
