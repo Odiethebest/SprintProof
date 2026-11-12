@@ -18,6 +18,18 @@ const TEAM_FIELDS = {
 // has it. A pending team's repo_verified_at is null.
 const VERIFIED_REPO = { repoVerifiedAt: { not: null } } as const;
 
+// A filter for repository names equal to this one ignoring case, and nothing
+// else. Prisma runs `equals` with `mode: "insensitive"` as ILIKE without
+// escaping the value, so "_" (which GitHub allows in names) and "%" (which a
+// forged payload can hold) would match other characters too. Escaped with
+// PostgreSQL's default LIKE escape, the backslash, they match only themselves.
+function sameRepoName(repoFullName: string) {
+  return {
+    equals: repoFullName.replace(/[\\%_]/g, "\\$&"),
+    mode: "insensitive",
+  } as const;
+}
+
 // The new team's repository is pending until GitHub's ping verifies it
 // (decision 007, #117). Returns null when another team is verified for the
 // repository; teams that only have it pending don't block anyone.
@@ -38,7 +50,7 @@ export async function createTeamWithLead({
     });
     const verified = await tx.team.findFirst({
       where: {
-        repoFullName: { equals: input.repoFullName, mode: "insensitive" },
+        repoFullName: sameRepoName(input.repoFullName),
         ...VERIFIED_REPO,
       },
       select: { id: true },
@@ -100,7 +112,7 @@ export async function findTeamByRepo({
   }
   const byFullName = await db.team.findFirst({
     where: {
-      repoFullName: { equals: repoFullName, mode: "insensitive" },
+      repoFullName: sameRepoName(repoFullName),
       ...VERIFIED_REPO,
     },
     select: WEBHOOK_TEAM_FIELDS,
@@ -131,7 +143,7 @@ export async function findPendingTeamsByRepo({
   }
   return db.team.findMany({
     where: {
-      repoFullName: { equals: repoFullName, mode: "insensitive" },
+      repoFullName: sameRepoName(repoFullName),
       repoVerifiedAt: null,
     },
     orderBy: [{ createdAt: "asc" }, { id: "asc" }],
@@ -166,10 +178,7 @@ export async function verifyTeamRepo({
         where: {
           id: { not: teamId },
           ...VERIFIED_REPO,
-          OR: [
-            { repoId },
-            { repoFullName: { equals: repoFullName, mode: "insensitive" } },
-          ],
+          OR: [{ repoId }, { repoFullName: sameRepoName(repoFullName) }],
         },
         select: { id: true },
       });
