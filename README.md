@@ -247,7 +247,7 @@ The team lead connects a repository from **Settings**, then adds a webhook on Gi
 
 | Webhook event | Recorded as |
 |---|---|
-| `push` | `COMMIT` activity from any branch, deduplicated by SHA and credited to the commit author (see [Counting Rules](#counting-rules)) |
+| `push` | `COMMIT` activity from any branch, counted once per commit and credited to the commit author (see [Counting Rules](#counting-rules)) |
 | `pull_request` | `PR_OPENED` / `PR_MERGED` activity |
 | `pull_request_review` | `REVIEW` activity |
 
@@ -381,7 +381,7 @@ Each team has a timezone (default `America/Los_Angeles`). Timestamps are stored 
 |---|---|
 | Standup | At most one per person per calendar day (team timezone), counted on its stored day, never by when it was saved. Editing the same day's standup updates it instead of adding another. A form opened on an earlier day doesn't file under today (409 `STANDUP_DAY_CHANGED`). A standup counts in the sprint whose dates contain its day, so it moves with its day when sprint dates change; one on a day outside every sprint is kept but not counted. |
 | Review | Distinct PRs reviewed per member (approved, changes requested, or commented). Three reviews on the same PR count as one. Reviews on your own PR never count. |
-| Commit | Read from pushes to any branch and deduplicated by SHA. Attributed to the commit author's mapped GitHub login, never the committer or the pusher; commits whose author isn't linked to a GitHub account are skipped. Commits from fork PRs or pushed before the webhook was connected aren't counted. |
+| Commit | Read from pushes to any branch and deduplicated by SHA. A commit counts once per author, author date and full message, so the copy a rebase, an amend or a force-push makes under a new SHA doesn't count again. Commits GitHub makes on the default branch (committer `web-flow`: merge commits, rebase-merge and squash copies) don't count; one GitHub makes on another branch, such as "Update branch" on a PR, does ([decision 004](docs/decisions/004-count-each-commit-once.md)). Attributed to the commit author's mapped GitHub login, never the committer or the pusher; commits whose author isn't linked to a GitHub account are skipped. Commits from fork PRs or pushed before the webhook was connected aren't counted. |
 | Bot | Activity of every type (commits, opened and merged PRs, reviews) from logins ending in `[bot]` is ignored. |
 
 ### Requirement status

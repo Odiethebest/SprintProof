@@ -103,6 +103,7 @@ erDiagram
     string sha "nullable, commit SHA"
     string title "nullable"
     enum reviewState "review_state, nullable: APPROVED | CHANGES_REQUESTED | COMMENTED"
+    string commitKey "commit_key, nullable: hash of author, author date, message"
     datetime occurredAt "occurred_at (timestamp on GitHub)"
     datetime createdAt "created_at (row insertion time)"
     datetime updatedAt "updated_at"
@@ -136,7 +137,7 @@ erDiagram
 | `invites` | `Invite` | `token` | `team_id` |
 | `sprints` | `Sprint` | — | `team_id` |
 | `standups` | `Standup` | `[team_id, user_id, date]` | `[team_id, date]`, `user_id` |
-| `activities` | `Activity` | `[team_id, type, sha]` | `team_id`, `actor_login` |
+| `activities` | `Activity` | `[team_id, type, sha]`, `[team_id, commit_key]` | `team_id`, `actor_login` |
 | `webhook_deliveries` | `WebhookDelivery` | `id` (primary key) | `team_id` |
 | `api_tokens` | `ApiToken` | `token_hash` | `user_id` |
 
@@ -146,7 +147,7 @@ erDiagram
 - **`invites` (`Invite`)**: Invite links. `role` is `MEMBER` or `INSTRUCTOR`; a link works until `expires_at` (7 days after creation) unless `revoked_at` is set. At most one active link per team and role: creating a new one revokes the previous one. `token` is stored as is rather than hashed so whoever manages the link can copy it again from Settings (#7): the lead for member links, course staff and the team's instructors for instructor links (#116).
 - **`sprints` (`Sprint`)**: Calendar boundaries stored as `@db.Date` (`start_date`, `end_date`), along with `standups_per_person` (default 3) and `reviews_per_person` (default 5).
 - **`standups` (`Standup`)**: Belongs to a team and a calendar day (`date`, `@db.Date`, in the team timezone), not to a stored sprint. It's listed under the sprint whose dates contain its day, so it follows its day when sprint dates change (#56, `docs/decisions/003-standups-belong-to-days.md`). `@@unique([team_id, user_id, date])` keeps at most one standup per person per day.
-- **`activities` (`Activity`)**: Activity records with `occurred_at` for event time and `@@unique([team_id, type, sha])` deduplicating commit SHAs. `review_state` holds GitHub's `review.state` for a `REVIEW` row, so the activity feed can say "approved", "requested changes on" or "commented on" #N (#57). It's null for every other type, for reviews stored before #57, and for a review whose state GitHub doesn't document. Those reviews show as "reviewed #N". Every state counts the same under R3.
+- **`activities` (`Activity`)**: Activity records with `occurred_at` for event time and `@@unique([team_id, type, sha])` deduplicating commit SHAs. `review_state` holds GitHub's `review.state` for a `REVIEW` row, so the activity feed can say "approved", "requested changes on" or "commented on" #N (#57). It's null for every other type, for reviews stored before #57, and for a review whose state GitHub doesn't document. Those reviews show as "reviewed #N". Every state counts the same under R3. `commit_key` is a SHA-256 of a `COMMIT` row's author name, email, author date and full message, unique per team, so the copy a rebase or an amend makes under a new SHA is stored once (#114, `docs/decisions/004-count-each-commit-once.md`). It's null for other types, for commits stored before #114 until `scripts/backfill-commit-keys.mjs` fills it, and when a payload leaves out the author's name, email or date; those commits are deduplicated by SHA only. GitHub's own commits on the default branch aren't stored at all.
 - **`webhook_deliveries` (`WebhookDelivery`)**: One row per GitHub delivery, keyed by the `X-GitHub-Delivery` id so a redelivered event is stored once (#11). `team_id` is nullable because a delivery can arrive for a repo that no team has connected.
 - **`api_tokens` (`ApiToken`)**: Personal tokens for the public API (#16). Only the SHA-256 hash (`token_hash`, unique) is stored; the token itself is shown once. `last4` lets Settings tell tokens apart, and `last_used_at` is updated when a token is used. Revoking deletes the row.
 
