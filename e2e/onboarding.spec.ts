@@ -1,12 +1,25 @@
+import crypto from "node:crypto";
 import { expect, test, type Browser, type Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import { signInAsTestUser, type TestUser } from "./helpers/auth";
 import { COURSE_STAFF } from "./helpers/course-staff";
+import { isoDate } from "./helpers/teams";
+import { copyWebhookSecret, deliverWebhook } from "./helpers/webhooks";
 
 // Needs the dev server started with E2E_TEST_AUTH=true, AUTH_SECRET and DATABASE_URL.
 // Data stays in the database between runs, so every team gets its own repo.
 const LEAD: TestUser = { login: "ziqi-e2e", name: "Ziqi (Odie) Yang" };
 const PARTNER: TestUser = { login: "yunhong-e2e", name: "Yunhong Huang" };
+// The journey's own logins, so parallel sign-ins never create the same user
+// at once.
+const JOURNEY_LEAD: TestUser = {
+  login: "ziqi-onboarding-journey-lead-e2e",
+  name: "Ziqi (Odie) Yang",
+};
+const JOURNEY_PARTNER: TestUser = {
+  login: "yunhong-onboarding-journey-partner-e2e",
+  name: "Yunhong Huang",
+};
 const INSTRUCTOR_LEAD: TestUser = {
   login: "ziqi-onboarding-instructor-lead-e2e",
   name: "Ziqi (Odie) Yang",
@@ -54,6 +67,128 @@ async function signedInPage(browser: Browser, user: TestUser): Promise<Page> {
 }
 
 test.describe("Onboarding", () => {
+  // AGENTS.md §2 User flows, flow 1, from sign-in to the dashboard. The tests
+  // below cover each step's details.
+  test("takes a new lead from sign-in through Settings to the Sprint 1 dashboard", async ({
+    page,
+    browser,
+  }) => {
+    // Arrange: a signed-out visitor on the sign-in page
+    await page.goto("/signin");
+    await expect(
+      page
+        .getByRole("main")
+        .getByRole("button", { name: "Sign in with GitHub" })
+    ).toBeVisible();
+
+    // Act: sign in (the test provider stands in for GitHub) and create a team
+    await signInAsTestUser(page, JOURNEY_LEAD);
+    await page.goto("/");
+    await page.getByRole("link", { name: "Create a team" }).click();
+    const repo = { id: Date.now(), fullName: uniqueRepo() };
+    await page.getByLabel("Team name").fill("Journey team");
+    await page.getByLabel("GitHub repo").fill(repo.fullName);
+    await page.getByRole("button", { name: "Create team" }).click();
+
+    // Assert: the creator is the lead, in Settings
+    await expect(page).toHaveURL(/\/teams\/[^/]+\/settings$/);
+    const teamId = page.url().split("/").at(-2) ?? "";
+    const members = page.getByRole("region", { name: "Members and invites" });
+    await expect(members.getByRole("listitem")).toContainText("Lead");
+
+    // Act: the partner joins with the member invite link
+    const inviteUrl = await createMemberLink(page);
+    const partner = await signedInPage(browser, JOURNEY_PARTNER);
+    await partner.goto(inviteUrl);
+    await partner.getByRole("button", { name: "Join team" }).click();
+
+    // Assert
+    await expect(partner).toHaveURL(/\/teams\/[^/]+\/dashboard$/);
+
+    // Act: the lead copies the webhook URL and secret into GitHub, following
+    // the setup steps
+    const secret = await copyWebhookSecret(page, teamId);
+    const repository = page.getByRole("region", { name: "Repository" });
+    // Pending until GitHub's ping arrives (decision 007, #117).
+    const connection = repository.getByTestId("repository-connection");
+    await expect(connection).toHaveText("Waiting for GitHub's ping");
+    const webhookUrl =
+      (await repository.getByText(/\/api\/webhooks\/github$/).textContent()) ??
+      "";
+    await repository.getByText("Webhook setup steps").click();
+    await expect(
+      repository.getByText("Paste the Webhook URL into Payload URL.")
+    ).toBeVisible();
+    await expectNoBlockingViolations(page);
+    // GitHub then sends a ping to that URL, signed with that secret.
+    const pinged = await deliverWebhook(page.request, {
+      secret,
+      event: "ping",
+      deliveryId: crypto.randomUUID(),
+      payload: {
+        zen: "Keep it logically awesome.",
+        hook_id: 1,
+        repository: {
+          id: repo.id,
+          name: "sprintproof",
+          full_name: repo.fullName,
+        },
+        sender: { login: JOURNEY_LEAD.login },
+      },
+    });
+
+    // Assert: the ping connected the repository, and Settings shows it as
+    // the verified delivery
+    expect(new URL(webhookUrl).pathname).toBe("/api/webhooks/github");
+    expect(pinged.status()).toBe(200);
+    await page.reload();
+    await expect(connection).toHaveText("Connected");
+    await expect(repository).toContainText(
+      /Last delivery\s*ping at .+Verified/
+    );
+
+    // Act: the lead adds Sprint 1 under "Sprints and requirements"
+    const sprints = page.getByRole("region", {
+      name: "Sprints and requirements",
+    });
+    await sprints.getByRole("button", { name: "Add sprint" }).click();
+    await sprints.getByLabel("Sprint name").fill("Sprint 1");
+    await sprints.getByLabel("Start date").fill(isoDate(-3));
+    await sprints.getByLabel("End date").fill(isoDate(3));
+    await expect(sprints.getByLabel("Standups per person")).toHaveValue("3");
+    await expect(sprints.getByLabel("PR reviews per person")).toHaveValue("5");
+    await sprints.getByRole("button", { name: "Save sprint" }).click();
+
+    // Assert
+    await expect(sprints.getByRole("row", { name: /Sprint 1/ })).toContainText(
+      "Current"
+    );
+
+    // Act: open the dashboard
+    await page
+      .getByRole("navigation", { name: "Team" })
+      .getByRole("link", { name: "Dashboard" })
+      .click();
+
+    // Assert: Sprint 1, with a card per member, the lead's first
+    await expect(page).toHaveURL(new RegExp(`/teams/${teamId}/dashboard$`));
+    const main = page.getByRole("main");
+    await expect(
+      main.getByRole("heading", { level: 1, name: "Sprint 1" })
+    ).toBeVisible();
+    await expect(
+      main.getByText("3 standups and 5 PR reviews per person")
+    ).toBeVisible();
+    await expect(
+      main.getByRole("region", { name: "Your requirements" })
+    ).toBeVisible();
+    const cards = main.getByRole("article");
+    await expect(cards).toHaveCount(2);
+    await expect(cards.first()).toContainText("Ziqi (Odie) Yang (you)");
+    await expect(cards.nth(1)).toContainText(JOURNEY_PARTNER.name);
+    await expectNoBlockingViolations(page);
+  });
+
   test("creates a team and makes the creator its lead", async ({ page }) => {
     // Arrange
     await signInAsTestUser(page, LEAD);

@@ -353,6 +353,8 @@ The webhook specs sign their deliveries with the team's own secret, which they c
 
 Specs that add an instructor sign in as a course staff test user from `e2e/helpers/course-staff.ts`, and `playwright.config.ts` gives the dev server those logins as `COURSE_STAFF_GITHUB_LOGINS`. If Playwright reuses a dev server you started yourself, set `COURSE_STAFF_GITHUB_LOGINS` there to the logins in that file.
 
+Each user flow in [`AGENTS.md` §2](AGENTS.md) has a test that walks it from start to end: onboarding in `e2e/onboarding.spec.ts`, the daily standup in `e2e/daily-standup.spec.ts`, GitHub activity in `e2e/github-activity.spec.ts`, the end of a sprint in `e2e/end-of-sprint.spec.ts` and the instructor in `e2e/instructor.spec.ts`. The other specs cover each screen in detail.
+
 We follow red-green-refactor, and the git history shows it: every feature starts with a commit containing only failing tests, followed by the implementation commit.
 
 ```
