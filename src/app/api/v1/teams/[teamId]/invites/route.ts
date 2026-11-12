@@ -3,10 +3,11 @@ import { createInviteSchema } from "@/lib/invites/invite-link";
 import {
   accessDeniedResponse,
   catchUnexpectedErrors,
+  inviteRoleForbiddenResponse,
   parseInput,
   parseJsonBody,
 } from "@/server/api-response";
-import { requireTeamRole } from "@/server/auth";
+import { requireInviteAccess } from "@/server/auth";
 import { createInvite } from "@/server/repositories/invites";
 
 const paramsSchema = z.object({ teamId: z.string().min(1) });
@@ -15,7 +16,9 @@ interface Context {
   params: Promise<{ teamId: string }>;
 }
 
-// Creates a member or instructor invite link. Lead only.
+// Creates a member or instructor invite link. Member links: the lead.
+// Instructor links: course staff, on the team or not, and the team's
+// instructors (decision 006, #116).
 export async function POST(request: Request, context: Context) {
   return catchUnexpectedErrors({
     route: "POST /api/v1/teams/{teamId}/invites",
@@ -32,7 +35,7 @@ async function handlePost(request: Request, { params }: Context) {
     return parsedParams.response;
   }
   const { teamId } = parsedParams.data;
-  const access = await requireTeamRole(teamId, ["LEAD"]);
+  const access = await requireInviteAccess(teamId);
   if (!access.isAllowed) {
     return accessDeniedResponse(access);
   }
@@ -40,10 +43,10 @@ async function handlePost(request: Request, { params }: Context) {
   if (!parsed.isValid) {
     return parsed.response;
   }
-  const invite = await createInvite({
-    teamId,
-    role: parsed.data.role,
-    now: new Date(),
-  });
+  const { role } = parsed.data;
+  if (!access.inviteRoles.includes(role)) {
+    return inviteRoleForbiddenResponse({ role });
+  }
+  const invite = await createInvite({ teamId, role, now: new Date() });
   return Response.json(invite, { status: 201 });
 }

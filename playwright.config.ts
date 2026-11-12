@@ -1,4 +1,5 @@
 import { defineConfig, devices } from "@playwright/test";
+import { COURSE_STAFF_GITHUB_LOGINS } from "./e2e/helpers/course-staff";
 
 export default defineConfig({
   testDir: "./e2e",
@@ -40,6 +41,10 @@ export default defineConfig({
       GITHUB_WEBHOOK_SECRET:
         process.env.GITHUB_WEBHOOK_SECRET ??
         "e2e-webhook-secret-not-a-real-secret",
+      // The test users from e2e/helpers/course-staff.ts, who may create
+      // instructor invite links on any team (decision 006, #116). Not taken
+      // from the shell: the specs sign in as exactly these logins.
+      COURSE_STAFF_GITHUB_LOGINS,
     },
   },
 });

@@ -41,7 +41,7 @@ async function NewTeam() {
       <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-8 md:px-6">
         <PageHeader
           title="Create a team"
-          meta="You'll be the team lead. Invite your partner and TA from Settings next."
+          meta="You'll be the team lead. Invite your partner from Settings next."
           action={null}
         />
         <section className="w-full max-w-xl rounded-lg border border-border bg-surface p-4 md:p-6">

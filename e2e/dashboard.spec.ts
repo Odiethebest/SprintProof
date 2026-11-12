@@ -1,9 +1,11 @@
 import { expect, test } from "@playwright/test";
 import { signInAsTestUser, type TestUser } from "./helpers/auth";
+import { COURSE_STAFF } from "./helpers/course-staff";
 import {
   addSprint,
   createTeam,
   expectNoBlockingViolations,
+  joinAsInstructor,
   joinTeam,
   signedInPage,
 } from "./helpers/teams";
@@ -235,13 +237,9 @@ test.describe("Team dashboard", () => {
       startOffset: -3,
       endOffset: 3,
     });
+    const staff = await signedInPage(browser, COURSE_STAFF.dashboard);
     const instructor = await signedInPage(browser, INSTRUCTOR);
-    await joinTeam({
-      lead: page,
-      joiner: instructor,
-      teamId,
-      role: "INSTRUCTOR",
-    });
+    await joinAsInstructor({ staff, joiner: instructor, teamId });
 
     // Act
     await instructor.goto(`/teams/${teamId}/dashboard`);

@@ -1,3 +1,4 @@
+import { databaseTextSchema } from "@/lib/validation/text";
 import { db } from "@/server/db";
 import { isUniqueViolation } from "@/server/prisma-errors";
 import { lockForWrite, REPO_CLAIM_LOCK } from "@/server/write-locks";
@@ -53,6 +54,8 @@ export async function createTeamWithLead({
 }
 
 export async function findTeam({ teamId }: { teamId: string }) {
+  // An id PostgreSQL can't store (a NUL character) is an unknown team (#74).
+  if (!databaseTextSchema.safeParse(teamId).success) return null;
   return db.team.findUnique({ where: { id: teamId }, select: TEAM_FIELDS });
 }
 

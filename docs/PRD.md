@@ -33,8 +33,8 @@ Project courses require visible Scrum evidence: a minimum number of standups per
 | Role | Who | Can do |
 | --- | --- | --- |
 | `MEMBER` | A student on the team | Submit standups, add retro items and votes, submit private peer feedback, view the team dashboard |
-| `LEAD` | The student who created the team | Everything a member can, plus: connect the repo, create sprints and set requirements, invite people, open and close retros, export (without peer feedback) |
-| `INSTRUCTOR` | TA or professor | Read-only access to everything, including peer feedback; export the full summary |
+| `LEAD` | The student who created the team | Everything a member can, plus: connect the repo, create sprints and set requirements, invite members, open and close retros, export (without peer feedback) |
+| `INSTRUCTOR` | TA or professor | Read-only access to everything, including peer feedback; export the full summary; create and revoke the team's instructor invite links |
 
 **Personas**
 
@@ -55,9 +55,10 @@ As someone tired of new accounts, I want to sign in with GitHub, so my activity 
 - Signed-out visitors to any team page are redirected to sign-in.
 
 **US-2. Create a team and invite people** · Issue #7
-As a team lead, I want to create a team linked to our GitHub repo and invite my partner and our TA, so everyone lands in the right place with the right role.
+As a team lead, I want to create a team linked to our GitHub repo and invite my partner, and have our TA join as an instructor, so everyone lands in the right place with the right role.
 - Creator becomes `LEAD`; team stores repo (`owner/name`) and timezone (default `America/Los_Angeles`).
 - Separate member and instructor invite links; links expire after 7 days and can be revoked.
+- The lead creates and revokes member links. Instructor links come only from course staff (the GitHub logins in `COURSE_STAFF_GITHUB_LOGINS`, who don't have to be on the team) or from the team's instructors, who also revoke them. The lead's Settings says that instructor links come from course staff (decision 006, #116).
 - Opening a valid link adds the right role; opening it twice never duplicates membership.
 
 ### Epic B — Sprints and standups
@@ -147,7 +148,7 @@ These rules are the source of truth for `src/lib/` and are mirrored in `AGENTS.m
   - No status before the sprint starts: the sprint summary API returns `null` for an upcoming sprint.
   - Days left = the sprint's end date minus today's date, both in the team timezone, plus 1 (today counts). With a Nov 4 end: Nov 2 has 3 days left (`ON_TRACK`), Nov 3 has 2 (`AT_RISK`), Nov 4 has 1 (`AT_RISK`).
 - **R6. Retro votes.** 3 votes per member per retro, max 1 per item. The top 3 "To improve" items by votes (ties broken by earliest created) become action items for the next sprint.
-- **R7. Peer feedback visibility.** Readable only by `INSTRUCTOR`. Never returned to `LEAD` or `MEMBER` in any page, API response or export.
+- **R7. Peer feedback visibility.** Readable only by `INSTRUCTOR`. Never returned to `LEAD` or `MEMBER` in any page, API response or export. Only course staff and the team's instructors can create instructor invite links, so a lead can't join their own team as an instructor with a second GitHub account (decision 006, #116).
 
 ## 7. Screens
 
