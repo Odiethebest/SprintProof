@@ -1,9 +1,11 @@
 import { expect, test, type Page } from "@playwright/test";
 import { signInAsTestUser, type TestUser } from "./helpers/auth";
+import { COURSE_STAFF } from "./helpers/course-staff";
 import {
   addSprint,
   createTeam,
   expectNoBlockingViolations,
+  joinAsInstructor,
   joinTeam,
   signedInPage,
 } from "./helpers/teams";
@@ -313,13 +315,10 @@ test.describe("Retro", () => {
     expect(
       (await page.request.put(`${retroPath}/items/${itemId}/vote`)).status()
     ).toBe(200);
+    // Instructor links come from course staff (decision 006, #116).
+    const staff = await signedInPage(browser, COURSE_STAFF.retro);
     const instructor = await signedInPage(browser, INSTRUCTOR);
-    await joinTeam({
-      lead: page,
-      joiner: instructor,
-      teamId,
-      role: "INSTRUCTOR",
-    });
+    await joinAsInstructor({ staff, joiner: instructor, teamId });
 
     // Act
     await instructor.goto(`/teams/${teamId}/dashboard`);
