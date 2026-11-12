@@ -54,6 +54,8 @@ tags:
     description: Session only. Create a team for a GitHub repo.
   - name: Invites
     description: Session only, lead only. Member and instructor invite links.
+  - name: Webhook secret
+    description: Session only, lead only. Rotate the secret that signs the team's GitHub webhook.
   - name: Memberships
     description: Session only. Join a team through an invite link.
   - name: Sprints
@@ -273,6 +275,35 @@ paths:
                 error:
                   code: INVITE_NOT_FOUND
                   message: This team has no invite link with that id.
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /teams/{teamId}/webhook-secret:
+    parameters:
+      - $ref: "#/components/parameters/TeamId"
+    post:
+      tags: [Webhook secret]
+      summary: Rotate the team's webhook secret
+      description: |
+        Lead only, with a session. Replaces the secret that signs the team's
+        GitHub webhook deliveries with a new random one (decision 005).
+        Deliveries signed with the old secret get 401 from then on, so paste
+        the new one into the webhook on GitHub: copy it from Settings →
+        Repository. No response contains the secret itself, only its last 4
+        characters.
+      operationId: rotateWebhookSecret
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: The secret was replaced.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WebhookSecretRotation"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "500":
           $ref: "#/components/responses/InternalError"
   /memberships:
@@ -1200,6 +1231,14 @@ components:
         expiresAt:
           type: string
           format: date-time
+    WebhookSecretRotation:
+      type: object
+      required: [last4]
+      properties:
+        last4:
+          type: string
+          description: The new secret's last 4 characters, as Settings shows them.
+          example: 3f9a
     Membership:
       type: object
       required: [teamId, role]

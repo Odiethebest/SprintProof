@@ -1,10 +1,14 @@
 import { errorResponse } from "@/server/api-response";
-import { verifyWebhookSignature } from "@/lib/github/webhook-signature";
+import { matchWebhookSecret } from "@/lib/github/webhook-signature";
 import {
   extractWebhookRepository,
   mapWebhookToActivities,
 } from "@/lib/github/webhook-events";
-import { findTeamByRepo } from "@/server/repositories/teams";
+import {
+  findTeamByRepo,
+  recordTeamRepoId,
+  stopServerWebhookSecret,
+} from "@/server/repositories/teams";
 import { recordWebhookEvent } from "@/server/repositories/activities";
 import { triggerTeamEvent } from "@/server/realtime";
 import { describeDatabaseError } from "@/server/prisma-errors";
@@ -31,25 +35,57 @@ export async function POST(request: Request): Promise<Response> {
   }
 }
 
-async function handleWebhook(request: Request): Promise<Response> {
-  const secret = process.env.GITHUB_WEBHOOK_SECRET;
-  // Fail closed: without a secret, no signature can prove the sender is GitHub.
-  if (!secret) {
-    return errorResponse({
-      status: 500,
-      code: "WEBHOOK_NOT_CONFIGURED",
-      message: "GitHub webhooks aren't set up on this server yet.",
-    });
+// The body as JSON, or null when it isn't JSON. Nothing in it is trusted until
+// the signature check passes.
+function parseJson(rawBody: string): { payload: unknown } | null {
+  try {
+    return { payload: JSON.parse(rawBody) };
+  } catch {
+    return null;
   }
+}
 
-  const signatureHeader = request.headers.get("x-hub-signature-256");
+async function handleWebhook(request: Request): Promise<Response> {
   const rawBody = await request.text();
-  if (!verifyWebhookSignature({ rawBody, signatureHeader, secret })) {
+  // Decision 005 (#115): the payload names the repository, the repository
+  // gives the team, and the team's secret verifies the signature. Reading the
+  // repository first means parsing an unverified body once; nothing is stored
+  // or trusted before the check below.
+  const parsed = parseJson(rawBody);
+  const repo =
+    parsed === null
+      ? null
+      : extractWebhookRepository({ payload: parsed.payload });
+  const team =
+    repo === null
+      ? null
+      : await findTeamByRepo({
+          repoId: BigInt(repo.id),
+          repoFullName: repo.fullName,
+        });
+  const signer = matchWebhookSecret({
+    rawBody,
+    signatureHeader: request.headers.get("x-hub-signature-256"),
+    team,
+    // Only the transition fallback now (decision 005). Unset or empty, it
+    // verifies nothing.
+    serverSecret: process.env.GITHUB_WEBHOOK_SECRET ?? null,
+  });
+  if (signer === null) {
     return errorResponse({
       status: 401,
       code: "UNAUTHORIZED",
       message: "Invalid webhook signature.",
     });
+  }
+  if (
+    team !== null &&
+    signer === "TEAM_SECRET" &&
+    team.canUseServerWebhookSecret
+  ) {
+    // GitHub now signs with the team's own secret, so the transition is over
+    // for this team (decision 005).
+    await stopServerWebhookSecret({ teamId: team.id });
   }
 
   const event = request.headers.get("x-github-event");
@@ -63,27 +99,19 @@ async function handleWebhook(request: Request): Promise<Response> {
     });
   }
 
-  let payload: unknown;
-  try {
-    payload = JSON.parse(rawBody);
-  } catch {
+  if (parsed === null) {
     return errorResponse({
       status: 400,
       code: "VALIDATION_ERROR",
       message: "Send the request body as JSON.",
     });
   }
-
-  const repo = extractWebhookRepository({ payload });
+  const { payload } = parsed;
 
   if (event === "ping") {
-    const team =
-      repo === null
-        ? null
-        : await findTeamByRepo({
-            repoId: BigInt(repo.id),
-            repoFullName: repo.fullName,
-          });
+    if (team !== null && repo !== null) {
+      await recordTeamRepoId({ teamId: team.id, repoId: BigInt(repo.id) });
+    }
     await recordWebhookEvent({
       teamId: team?.id ?? null,
       event: "ping",
@@ -93,7 +121,7 @@ async function handleWebhook(request: Request): Promise<Response> {
     return Response.json({ ok: true }, { status: 200 });
   }
 
-  // Validate before the team lookup, which stores the repo id on first contact.
+  // Validate before storing the team's repo id on first contact.
   const mapping = mapWebhookToActivities({ event, payload });
   if (!mapping.isValid) {
     return errorResponse({
@@ -111,11 +139,6 @@ async function handleWebhook(request: Request): Promise<Response> {
     });
   }
 
-  const team = await findTeamByRepo({
-    repoId: BigInt(repo.id),
-    repoFullName: repo.fullName,
-  });
-
   if (team === null) {
     return errorResponse({
       status: 404,
@@ -124,6 +147,7 @@ async function handleWebhook(request: Request): Promise<Response> {
     });
   }
 
+  await recordTeamRepoId({ teamId: team.id, repoId: BigInt(repo.id) });
   const result = await recordWebhookEvent({
     teamId: team.id,
     event,

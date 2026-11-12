@@ -51,6 +51,8 @@ erDiagram
     string name
     string repoFullName UK "repo_full_name (owner/name)"
     bigint repoId UK "repo_id, nullable, set on first webhook delivery"
+    string webhookSecret "webhook_secret, signs the team's deliveries"
+    boolean canUseServerWebhookSecret "can_use_server_webhook_secret, default false"
     string timezone "default America/Los_Angeles"
     datetime createdAt "created_at"
     datetime updatedAt "updated_at"
@@ -187,7 +189,7 @@ erDiagram
 | `action_items` | `ActionItem` | `retro_item_id` | `sprint_id` |
 
 - **`users` (`User`)**: `github_id` is required and unique. `github_login` is unique but nullable: after a GitHub rename the login can move to another account, and the previous holder's login is cleared until they sign in again (#6). No email column (`docs/decisions/001-github-oauth-scopes.md`).
-- **`teams` (`Team`)**: Holds the connected GitHub repo (`repo_full_name`, GitHub's `owner/name`, unique so a webhook delivery maps to one team), GitHub's numeric repository ID (`repo_id`, nullable and unique, set on the first webhook delivery, #11) and the team timezone (`timezone`, default `America/Los_Angeles`).
+- **`teams` (`Team`)**: Holds the connected GitHub repo (`repo_full_name`, GitHub's `owner/name`, unique so a webhook delivery maps to one team), GitHub's numeric repository ID (`repo_id`, nullable and unique, set on the first webhook delivery, #11), the secret that signs the team's webhook deliveries (`webhook_secret`, random, shown only to the lead, #115) with `can_use_server_webhook_secret` (true only for teams from before #115 that may still sign with the server-wide secret, decision 005) and the team timezone (`timezone`, default `America/Los_Angeles`).
 - **`memberships` (`Membership`)**: Join model between `User` and `Team` with `role` (`LEAD`, `MEMBER`, `INSTRUCTOR`; default `MEMBER`). Compound unique constraint on `[user_id, team_id]`.
 - **`invites` (`Invite`)**: Invite links. `role` is `MEMBER` or `INSTRUCTOR`; a link works until `expires_at` (7 days after creation) unless `revoked_at` is set. At most one active link per team and role: creating a new one revokes the previous one. `token` is stored as is rather than hashed so whoever manages the link can copy it again from Settings (#7): the lead for member links, course staff and the team's instructors for instructor links (#116).
 - **`sprints` (`Sprint`)**: Calendar boundaries stored as `@db.Date` (`start_date`, `end_date`), along with `standups_per_person` (default 3) and `reviews_per_person` (default 5).
@@ -223,3 +225,5 @@ In `prisma/migrations/`, applied in order:
 | `20261109224149_standups_belong_to_team` | #56 | Fills `standups.team_id` from each standup's sprint, drops `sprint_id`, and replaces the unique key with `[team_id, user_id, date]`. Fails if a person already has two standups on one day in a team |
 | `20261112025033_add_activity_review_state` | #57 | The `ReviewState` enum and `activities.review_state` (nullable, no default, so existing rows stay null) |
 | `20261112050000_add_retros` | #13 | The `RetroColumn` enum and the `retros`, `retro_items`, `retro_votes` and `action_items` tables (new tables only) |
+| `20261112074050_add_activity_commit_key` | #114 | `activities.commit_key` (nullable, so existing rows stay null until `scripts/backfill-commit-keys.mjs` fills them) and the unique index on `[team_id, commit_key]` |
+| `20261112090000_add_team_webhook_secret` | #115 | `teams.webhook_secret`, filled for existing teams from `gen_random_uuid()` and then required, and `teams.can_use_server_webhook_secret` (true for existing teams, default false) |

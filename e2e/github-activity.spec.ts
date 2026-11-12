@@ -1,12 +1,5 @@
 import crypto from "node:crypto";
-import {
-  expect,
-  test,
-  type APIRequestContext,
-  type APIResponse,
-  type Browser,
-  type Page,
-} from "@playwright/test";
+import { expect, test, type Browser, type Page } from "@playwright/test";
 import { signInAsTestUser, type TestUser } from "./helpers/auth";
 import {
   addSprint,
@@ -14,15 +7,11 @@ import {
   joinTeam,
   signedInPage,
 } from "./helpers/teams";
+import { copyWebhookSecret, deliverWebhook } from "./helpers/webhooks";
 
 // AGENTS.md §2 User flows, flow 3: a review or a push on GitHub reaches
 // /api/webhooks/github, is verified and stored, and a teammate's open
 // dashboard shows it within seconds. Needs Soketi, like live-dashboard.spec.ts.
-
-// The same fixed test value as webServer.env in playwright.config.ts and the
-// e2e job in ci.yml. It isn't a real secret: it only signs these deliveries.
-const WEBHOOK_SECRET =
-  process.env.GITHUB_WEBHOOK_SECRET ?? "e2e-webhook-secret-not-a-real-secret";
 
 // One login per test, so parallel sign-ins never create the same user at once.
 const REVIEW_LEAD: TestUser = {
@@ -56,11 +45,13 @@ function uniqueRepo(): GithubRepo {
 
 // The lead creates the team and Sprint 1, and the member joins. The team is
 // created through the API, so the test knows the repo its deliveries name.
+// GitHub signs them with the team's own secret, which the lead copies from
+// Settings (#115).
 async function setUpTeam(
   page: Page,
   browser: Browser,
   { lead, member }: { lead: TestUser; member: TestUser }
-): Promise<{ teamId: string; repo: GithubRepo }> {
+): Promise<{ teamId: string; repo: GithubRepo; secret: string }> {
   await signInAsTestUser(page, lead);
   const repo = uniqueRepo();
   const created = await page.request.post("/api/v1/teams", {
@@ -76,7 +67,8 @@ async function setUpTeam(
   });
   const memberPage = await signedInPage(browser, member);
   await joinTeam({ lead: page, joiner: memberPage, teamId, role: "MEMBER" });
-  return { teamId, repo };
+  const secret = await copyWebhookSecret(page, teamId);
+  return { teamId, repo, secret };
 }
 
 async function openLiveDashboard(page: Page, teamId: string): Promise<void> {
@@ -86,28 +78,6 @@ async function openLiveDashboard(page: Page, teamId: string): Promise<void> {
   });
   // A full page load would drop this marker.
   await page.evaluate(() => Object.assign(window, { noReload: true }));
-}
-
-// Sends a delivery the way GitHub does: the raw JSON body, signed with
-// HMAC-SHA256 under the webhook secret, plus the event and delivery headers.
-function deliver(
-  request: APIRequestContext,
-  delivery: { event: string; deliveryId: string; payload: unknown }
-): Promise<APIResponse> {
-  const body = JSON.stringify(delivery.payload);
-  const signature = crypto
-    .createHmac("sha256", WEBHOOK_SECRET)
-    .update(body)
-    .digest("hex");
-  return request.post("/api/webhooks/github", {
-    data: body,
-    headers: {
-      "content-type": "application/json",
-      "x-github-event": delivery.event,
-      "x-github-delivery": delivery.deliveryId,
-      "x-hub-signature-256": `sha256=${signature}`,
-    },
-  });
 }
 
 function repositoryField(repo: GithubRepo) {
@@ -140,7 +110,7 @@ test.describe("GitHub activity", () => {
     request,
   }) => {
     // Arrange: the lead watches the dashboard
-    const { teamId, repo } = await setUpTeam(page, browser, {
+    const { teamId, repo, secret } = await setUpTeam(page, browser, {
       lead: REVIEW_LEAD,
       member: REVIEWER,
     });
@@ -151,7 +121,8 @@ test.describe("GitHub activity", () => {
     );
 
     // Act: the member reviews the lead's PR, and GitHub delivers the review
-    const response = await deliver(request, {
+    const response = await deliverWebhook(request, {
+      secret,
       event: "pull_request_review",
       deliveryId: crypto.randomUUID(),
       payload: {
@@ -194,7 +165,8 @@ test.describe("GitHub activity", () => {
     await expectNoBlockingViolations(page);
 
     // Act: the member requests changes on another of the lead's PRs
-    const changesRequested = await deliver(request, {
+    const changesRequested = await deliverWebhook(request, {
+      secret,
       event: "pull_request_review",
       deliveryId: crypto.randomUUID(),
       payload: {
@@ -244,7 +216,7 @@ test.describe("GitHub activity", () => {
     request,
   }) => {
     // Arrange: the lead watches the dashboard
-    const { teamId, repo } = await setUpTeam(page, browser, {
+    const { teamId, repo, secret } = await setUpTeam(page, browser, {
       lead: PUSH_LEAD,
       member: PUSHER,
     });
@@ -275,7 +247,7 @@ test.describe("GitHub activity", () => {
     };
 
     // Act: the member pushes two commits, and GitHub delivers the push
-    const response = await deliver(request, delivery);
+    const response = await deliverWebhook(request, { secret, ...delivery });
 
     // Assert: within 5 seconds, without a reload
     expect(response.status()).toBe(200);
@@ -295,7 +267,7 @@ test.describe("GitHub activity", () => {
     await expectNoBlockingViolations(page);
 
     // Act: the lead redelivers it from the webhook's Recent Deliveries
-    const redelivered = await deliver(request, delivery);
+    const redelivered = await deliverWebhook(request, { secret, ...delivery });
 
     // Assert: stored once, so the count stays the same after a reload
     expect(redelivered.status()).toBe(200);

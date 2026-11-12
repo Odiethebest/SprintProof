@@ -1,4 +1,8 @@
 import { Check } from "lucide-react";
+import {
+  WebhookSecretField,
+  type WebhookSecretView,
+} from "@/components/teams/webhook-secret-field";
 import { Pill } from "@/components/ui/pill";
 
 export interface WebhookDeliveryView {
@@ -7,14 +11,20 @@ export interface WebhookDeliveryView {
   deliveredAtLabel: string;
 }
 
+// The webhook URL, secret and setup steps are passed in for the lead only;
+// for anyone else they aren't rendered at all (AGENTS.md §2 Settings).
 export function RepositoryCard({
+  teamId,
   repoFullName,
   webhookUrl,
+  webhookSecret,
   isLead,
   lastDelivery,
 }: {
+  teamId: string;
   repoFullName: string;
   webhookUrl: string | null;
+  webhookSecret: WebhookSecretView | null;
   isLead: boolean;
   lastDelivery: WebhookDeliveryView | null;
 }) {
@@ -80,6 +90,10 @@ export function RepositoryCard({
             )}
           </div>
 
+          {webhookSecret !== null && (
+            <WebhookSecretField teamId={teamId} webhookSecret={webhookSecret} />
+          )}
+
           <details className="group flex flex-col gap-2 rounded-md border border-border p-3">
             <summary className="flex cursor-pointer list-none items-center justify-between text-xs font-semibold text-text hover:text-primary">
               <span>Webhook setup steps</span>
@@ -103,14 +117,15 @@ export function RepositoryCard({
                 <code className="font-mono">application/json</code>.
               </li>
               <li>
-                Paste the webhook secret into <strong>Secret</strong>. It&apos;s
-                the server&apos;s{" "}
-                <code className="font-mono">GITHUB_WEBHOOK_SECRET</code>; ask
-                whoever deployed SprintProof for it.
+                Paste the team&apos;s webhook secret into{" "}
+                <strong>Secret</strong>: <strong>Copy</strong> next to Webhook
+                secret above puts it on your clipboard.
               </li>
               <li>
                 Under{" "}
-                <strong>Which events would you like to trigger this webhook?</strong>
+                <strong>
+                  Which events would you like to trigger this webhook?
+                </strong>
                 , select <strong>Let me select individual events</strong>.
               </li>
               <li>

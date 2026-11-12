@@ -37,6 +37,7 @@ import {
 } from "@/app/api/v1/teams/[teamId]/sprints/[sprintId]/retro/items/[itemId]/vote/route";
 import { PATCH as updateActionItem } from "@/app/api/v1/teams/[teamId]/sprints/[sprintId]/retro/action-items/[actionItemId]/route";
 import { POST as postStandup } from "@/app/api/v1/teams/[teamId]/standups/route";
+import { POST as rotateWebhookSecret } from "@/app/api/v1/teams/[teamId]/webhook-secret/route";
 import { POST as createToken } from "@/app/api/v1/tokens/route";
 import { DELETE as revokeToken } from "@/app/api/v1/tokens/[tokenId]/route";
 import {
@@ -366,6 +367,14 @@ const ROUTES: Array<{
     call: ({ teamId }) =>
       postStandup(
         apiRequest("POST", `/teams/${teamId}/standups`, createStandupInput()),
+        routeContext({ teamId })
+      ),
+  },
+  {
+    route: "POST /api/v1/teams/{teamId}/webhook-secret",
+    call: ({ teamId }) =>
+      rotateWebhookSecret(
+        apiRequest("POST", `/teams/${teamId}/webhook-secret`),
         routeContext({ teamId })
       ),
   },

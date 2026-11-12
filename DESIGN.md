@@ -156,7 +156,7 @@ Never use font sizes outside this table.
 | `Tooltip` | `rounded-md bg-text text-canvas px-2 py-1 text-xs`, shown on hover and keyboard focus, linked with `aria-describedby`. |
 | `EmptyState` | Bordered box (`rounded-md border border-border p-6`), centered 24 px muted icon, one-line explanation, at most one action link. |
 | Forms | Visible label above every field; inputs 36 px high, `rounded-md border border-form-control-border bg-surface px-3 text-sm` (textareas too), border turns `missed` on error; error text below in `missed` color with an icon, linked by `aria-describedby`. "(optional)" in `text-text-muted` after optional labels. |
-| Secrets and codes | URLs, tokens and SHAs in `font-mono text-xs`; copyable values in `rounded-md border border-border bg-canvas px-2 py-1` with a "Copy" button. A newly created token sits in `rounded-md border border-primary bg-primary/10 p-3` until dismissed. |
+| Secrets and codes | URLs, tokens and SHAs in `font-mono text-xs`; copyable values in `rounded-md border border-border bg-canvas px-2 py-1` with a "Copy" button. A stored secret the lead copies again later (the team's webhook secret) shows `••••••••` plus its last 4 characters in that box, with "Copy" and a secondary "Rotate secret" that confirms first. A newly created token sits in `rounded-md border border-primary bg-primary/10 p-3` until dismissed. |
 
 ## 8. Motion
 

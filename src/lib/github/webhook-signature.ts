@@ -32,3 +32,44 @@ export function verifyWebhookSignature({
 
   return crypto.timingSafeEqual(providedBuffer, expectedBuffer);
 }
+
+// Which secret signed a delivery: the team's own, or the server-wide
+// GITHUB_WEBHOOK_SECRET.
+export type WebhookSigner = "TEAM_SECRET" | "SERVER_SECRET";
+
+// Decision 005 (#115): a delivery is checked against the secret of the team
+// whose repository it names. The server-wide secret counts only for a team
+// that can still use it (connected before #115 and no delivery signed with
+// its own secret yet) and for a repository no team has. Returns null when
+// neither secret signed the body.
+export function matchWebhookSecret({
+  rawBody,
+  signatureHeader,
+  team,
+  serverSecret,
+}: {
+  rawBody: string;
+  signatureHeader: string | null;
+  team: { webhookSecret: string; canUseServerWebhookSecret: boolean } | null;
+  serverSecret: string | null;
+}): WebhookSigner | null {
+  if (
+    team !== null &&
+    verifyWebhookSignature({
+      rawBody,
+      signatureHeader,
+      secret: team.webhookSecret,
+    })
+  ) {
+    return "TEAM_SECRET";
+  }
+  const canUseServerSecret = team === null || team.canUseServerWebhookSecret;
+  if (
+    canUseServerSecret &&
+    serverSecret !== null &&
+    verifyWebhookSignature({ rawBody, signatureHeader, secret: serverSecret })
+  ) {
+    return "SERVER_SECRET";
+  }
+  return null;
+}

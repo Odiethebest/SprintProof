@@ -91,7 +91,7 @@ Browser (GitHub OAuth via Auth.js, JWT session)
 
 GitHub (push, pull_request, pull_request_review)
   → POST /api/webhooks/github
-       ↳ verify X-Hub-Signature-256, dedupe by X-GitHub-Delivery
+       ↳ find the team by repository, verify X-Hub-Signature-256 with its secret, dedupe by X-GitHub-Delivery
   → src/lib/github/ (payload → Activity)
   → src/server/repositories/ (store Activity, idempotent)
   → src/server/realtime.ts (small Pusher event on the team channel)
@@ -206,7 +206,7 @@ Open http://localhost:3000.
 | `AUTH_GITHUB_ID` | GitHub OAuth App client ID |
 | `AUTH_GITHUB_SECRET` | GitHub OAuth App client secret |
 | `AUTH_REDIRECT_PROXY_URL` | Vercel only. Set on Production and Preview to `https://sprintproof.vercel.app/api/auth` so previews sign in through production's GitHub OAuth App; both then need the same `AUTH_SECRET`. Leave empty locally. |
-| `GITHUB_WEBHOOK_SECRET` | Verifies incoming GitHub webhook signatures |
+| `GITHUB_WEBHOOK_SECRET` | Optional, the transition fallback only. Each team's webhook is signed with its own secret from Settings; this server-wide one still verifies deliveries for teams created before #115 until GitHub signs with their own secret, and for repositories no team has (see [GitHub Integration](#github-integration)). Leave it empty on a new deployment. |
 | `PUSHER_APP_ID` / `PUSHER_SECRET` | Server-side Pusher credentials. Leave all the Pusher values empty to turn live updates off; pages then update on reload. |
 | `NEXT_PUBLIC_PUSHER_KEY` / `NEXT_PUBLIC_PUSHER_CLUSTER` | Client-side Pusher config |
 | `NEXT_PUBLIC_PUSHER_HOST` / `NEXT_PUBLIC_PUSHER_PORT` | Local only: a Pusher-compatible server such as Soketi (`localhost`, `6001`). Leave empty on Vercel so the app uses Pusher Channels. |
@@ -243,7 +243,7 @@ Course staff don't have to be on the team. To invite a team's instructor:
 
 ## GitHub Integration
 
-The team lead connects a repository from **Settings**, then adds a webhook on GitHub pointing at `/api/webhooks/github` with `GITHUB_WEBHOOK_SECRET` as the secret. The settings page walks through the steps.
+The team lead connects a repository from **Settings**, then adds a webhook on GitHub pointing at `/api/webhooks/github` with the team's own webhook secret: **Copy** next to **Webhook secret** in Settings → Repository puts it on the clipboard, and the setup steps there walk through the rest. Each team gets a random secret when it's created ([decision 005](docs/decisions/005-per-team-webhook-secret.md)). Only the lead sees it, masked to its last 4 characters; no API response or log contains it. **Rotate secret** (or `POST /api/v1/teams/{teamId}/webhook-secret` with the lead's session) replaces it, and deliveries signed with the old one get 401 until the new one is pasted into GitHub.
 
 | Webhook event | Recorded as |
 |---|---|
@@ -253,9 +253,11 @@ The team lead connects a repository from **Settings**, then adds a webhook on Gi
 
 Every delivery is checked before anything is stored:
 
-- `X-Hub-Signature-256` is verified with HMAC-SHA256 over the raw body using `timingSafeEqual`; a mismatch returns 401.
+- The payload's repository gives the team, and `X-Hub-Signature-256` is verified with that team's secret, HMAC-SHA256 over the raw body using `timingSafeEqual`. A mismatch, a delivery signed with another team's secret, or a repository no team has (unless the server-wide secret below signed it) returns 401. The payload is parsed once to find the repository, but nothing is stored or trusted before the check.
 - `X-GitHub-Delivery` is used to deduplicate, so a redelivered event is stored once.
 - Activity is attributed by GitHub login mapped to a team member. Bot accounts (logins ending in `[bot]`) are ignored.
+
+**Moving from the server-wide secret.** Before #115 every webhook was signed with the server's `GITHUB_WEBHOOK_SECRET`. Teams created before that change got their own secret in the migration and keep accepting the server-wide one until GitHub sends them a delivery signed with their own; from that delivery on, the server-wide secret is rejected for that team for good. Settings says so under **Webhook secret** while it still applies. Teams created after the change never accept it. Rotating doesn't change this: only a delivery signed with the team's secret ends it. To switch a team over, the lead copies the secret from Settings, pastes it into the GitHub webhook's **Secret** field and saves, then triggers a new delivery: push a commit, or ask GitHub for a ping with `gh api -X POST repos/OWNER/REPO/hooks/HOOK_ID/pings`. When it arrives, the note in Settings goes away. Once every team has switched, `GITHUB_WEBHOOK_SECRET` can be removed. It still signs deliveries for a repository no team has connected, which are kept without a team (pings) or answered with 404.
 
 If a delivery can't be stored, the endpoint returns 500 and keeps nothing from it. GitHub doesn't redeliver failed deliveries on its own; the lead can redeliver one from the webhook's **Recent Deliveries** tab on GitHub.
 
@@ -345,7 +347,7 @@ NEXT_PUBLIC_PUSHER_HOST=localhost
 NEXT_PUBLIC_PUSHER_PORT=6001
 ```
 
-The GitHub activity spec signs its webhook deliveries with `e2e-webhook-secret-not-a-real-secret`, a test value that `playwright.config.ts` also gives the dev server. If Playwright reuses a dev server you started yourself, set `GITHUB_WEBHOOK_SECRET` to the same value there.
+The webhook specs sign their deliveries with the team's own secret, which they copy from Settings like a lead does. `playwright.config.ts` also gives the dev server `GITHUB_WEBHOOK_SECRET=e2e-webhook-secret-not-a-real-secret`, a test value, so `e2e/webhook-secret.spec.ts` can check that a new team rejects it. If Playwright reuses a dev server you started yourself, set `GITHUB_WEBHOOK_SECRET` to the same value there.
 
 Specs that add an instructor sign in as a course staff test user from `e2e/helpers/course-staff.ts`, and `playwright.config.ts` gives the dev server those logins as `COURSE_STAFF_GITHUB_LOGINS`. If Playwright reuses a dev server you started yourself, set `COURSE_STAFF_GITHUB_LOGINS` there to the logins in that file.
 
@@ -426,7 +428,7 @@ Each member gets 3 votes per retro, at most 1 per item. The top 3 "To improve" i
 | Feature | Status | Notes |
 |---|---|---|
 | GitHub sign-in and teams | Done | Auth.js GitHub provider, create a team, invite links, lead / member / instructor roles (PRs #37, #44); invite writes serialized (PR #83); instructor links only from course staff and the team's instructors (#116) |
-| Repository connection and webhooks | Done | Signature verification, delivery dedup, idempotent `Activity` storage, webhook URL and setup steps in Settings (PRs #49, #79, #83). One app-wide webhook secret for now: per-team secret rotation and the "Unmapped activity" list aren't built (#78) |
+| Repository connection and webhooks | Done | Signature verification, delivery dedup, idempotent `Activity` storage, webhook URL and setup steps in Settings (PRs #49, #79, #83). Each team has its own webhook secret, with "Copy" and "Rotate secret" for the lead (#115). The "Unmapped activity" list isn't built (#78) |
 | Sprints and requirements | Done | Create and edit sprints with dates, standups and PR reviews per person; date, overlap and 1–20 checks (PRs #40, #47); overlapping writes serialized (PR #83) |
 | Async standups | Done | Three-question form, one per person per day in the team timezone, history by day (PRs #51, #69, #81); character counter and focus fixes (PRs #84, #85) |
 | Live contribution dashboard | Done | Counts per member, activity feed, Pusher live updates (PRs #58, #60, #80); teammates' standups announced to screen readers (PR #85); reviews say "approved", "requested changes on" or "commented on" #N (#57) |
