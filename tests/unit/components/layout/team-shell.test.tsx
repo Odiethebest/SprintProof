@@ -23,7 +23,8 @@ const SPRINT_SELECTOR = {
 function renderShellAt(
   pathname: string,
   role: TeamRole = "LEAD",
-  query = ""
+  query = "",
+  sprintSelector: typeof SPRINT_SELECTOR | null = SPRINT_SELECTOR
 ): string {
   vi.mocked(usePathname).mockReturnValue(pathname);
   vi.mocked(useSearchParams).mockReturnValue(
@@ -35,7 +36,7 @@ function renderShellAt(
       team={{ name: "SprintProof", repoFullName: "Odiethebest/SprintProof" }}
       user={{ displayName: "Ziqi (Odie) Yang", githubLogin: "Odiethebest" }}
       role={role}
-      sprintSelector={SPRINT_SELECTOR}
+      sprintSelector={sprintSelector}
     >
       <main>Page content</main>
     </TeamShell>
@@ -111,8 +112,8 @@ describe("TeamShell", () => {
       "sprint=sprint-0"
     );
 
-    // Assert
-    expect(html).toContain('href="/teams/team-1/retro?sprint=sprint-0"');
+    // Assert: straight to that sprint's retro, with no redirect on the way
+    expect(html).toContain('href="/teams/team-1/sprints/sprint-0/retro"');
   });
 
   it("links Retro on a sprint's retro to that sprint", () => {
@@ -120,19 +121,35 @@ describe("TeamShell", () => {
     const html = renderShellAt("/teams/team-1/sprints/sprint-0/retro");
 
     // Assert
-    expect(html).toContain('href="/teams/team-1/retro?sprint=sprint-0"');
+    expect(html).toContain('href="/teams/team-1/sprints/sprint-0/retro"');
   });
 
   it.each(["LEAD", "MEMBER", "INSTRUCTOR"] as const)(
-    "links a %s to the retro",
+    "links a %s to the retro of the sprint the selector shows",
     (role) => {
       // Act
       const html = renderShellAt("/teams/team-1/dashboard", role);
 
       // Assert
-      expect(html).toContain('href="/teams/team-1/retro"');
+      expect(html).toContain('href="/teams/team-1/sprints/sprint-1/retro"');
     }
   );
+
+  it("links Retro to the team's retro page before any sprint has started", () => {
+    // Act
+    const html = renderShellAt("/teams/team-1/dashboard", "LEAD", "", null);
+
+    // Assert
+    expect(html).toContain('href="/teams/team-1/retro"');
+  });
+
+  it("keeps a sprint on other pages from its retro", () => {
+    // Act
+    const html = renderShellAt("/teams/team-1/sprints/sprint-0/retro");
+
+    // Assert
+    expect(html).toContain('href="/teams/team-1/dashboard?sprint=sprint-0"');
+  });
 
   it.each([
     ["dashboard", "Dashboard"],

@@ -5,6 +5,7 @@ import {
   SPRINT_PAGES,
   findRetroSprintId,
   findTeamPage,
+  getSprintPagePath,
   getTeamNavPages,
   getTeamPagePath,
 } from "@/lib/teams/team-pages";
@@ -24,6 +25,37 @@ describe("getTeamPagePath", () => {
 
     // Assert
     expect(pagePath).toBe(path);
+  });
+});
+
+describe("getSprintPagePath", () => {
+  it.each([
+    ["dashboard", "/teams/team-1/dashboard?sprint=sprint-0"],
+    ["standups", "/teams/team-1/standups?sprint=sprint-0"],
+    ["review", "/review/team-1?sprint=sprint-0"],
+    ["retro", "/teams/team-1/sprints/sprint-0/retro"],
+  ] as const)("shows the sprint on %s at %s", (page, path) => {
+    // Act
+    const pagePath = getSprintPagePath({
+      teamId: TEAM_ID,
+      page,
+      sprintId: "sprint-0",
+    });
+
+    // Assert
+    expect(pagePath).toBe(path);
+  });
+
+  it("encodes a sprint id that isn't URL-safe", () => {
+    // Act
+    const pagePath = getSprintPagePath({
+      teamId: TEAM_ID,
+      page: "retro",
+      sprintId: "a/b",
+    });
+
+    // Assert
+    expect(pagePath).toBe("/teams/team-1/sprints/a%2Fb/retro");
   });
 });
 
