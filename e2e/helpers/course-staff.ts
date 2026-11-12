@@ -13,6 +13,7 @@ export const COURSE_STAFF = {
   retro: { login: "staff-retro-e2e", name: "Course staff" },
   webhookSecret: { login: "staff-webhook-secret-e2e", name: "Course staff" },
   peerFeedback: { login: "staff-peer-feedback-e2e", name: "Course staff" },
+  instructorFlow: { login: "staff-instructor-flow-e2e", name: "Course staff" },
 } as const satisfies Record<string, TestUser>;
 
 export const COURSE_STAFF_GITHUB_LOGINS = Object.values(COURSE_STAFF)
