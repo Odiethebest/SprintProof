@@ -202,6 +202,46 @@ describe("GET /api/v1/teams/{teamId}/sprints/{sprintId}/summary", () => {
     });
   });
 
+  // Counting rule R3: every review state counts (AGENTS.md §1). The state only
+  // changes the activity feed's wording (#57).
+  it("counts reviews in every state, and one stored without a state, toward PR reviews", async () => {
+    // Arrange: Bob's review of #12 from setUpSprint() has no state, as before #57
+    const { team, sprint, bob } = await setUpSprint();
+    for (const [prNumber, reviewState] of [
+      [13, "APPROVED"],
+      [14, "CHANGES_REQUESTED"],
+      [15, "COMMENTED"],
+    ] as const) {
+      await insertActivity({
+        teamId: team.id,
+        type: "REVIEW",
+        actorLogin: "bob",
+        prNumber,
+        prAuthorLogin: "alice",
+        reviewState,
+        occurredAt: IN_SPRINT,
+      });
+    }
+    const { token } = await insertApiToken({ userId: bob.id });
+    vi.setSystemTime(new Date("2026-11-03T20:00:00Z"));
+
+    // Act
+    const res = await getSummary({
+      teamId: team.id,
+      sprintId: sprint.id,
+      token,
+    });
+
+    // Assert
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(
+      body.members.find(
+        (member: { userId: string }) => member.userId === bob.id
+      ).reviews
+    ).toEqual({ count: 4, required: 5, remaining: 1, status: "AT_RISK" });
+  });
+
   it("marks open requirements MISSED after the sprint has ended", async () => {
     // Arrange: Nov 6 in Los Angeles
     const { team, sprint, carol } = await setUpSprint();

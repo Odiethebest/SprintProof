@@ -128,6 +128,7 @@ sprintproof/
 │   ├── architecture.md               # system design + database schema diagram
 │   ├── api/openapi.yaml              # public REST API reference
 │   ├── decisions/                    # one record per big technical choice
+│   ├── certs/                        # Supabase root CA, the value of DATABASE_CA_CERT
 │   ├── research/
 │   ├── design/                       # prototype mockups
 │   └── sprints/
@@ -152,7 +153,7 @@ sprintproof/
 │   │   ├── github/                   # webhook payload → Activity mapping
 │   │   └── export/                   # sprint summary → Markdown
 │   ├── server/                       # everything with side effects
-│   │   ├── db.ts                     # single Prisma client
+│   │   ├── db.ts                     # single Prisma client, TLS verified with DATABASE_CA_CERT
 │   │   ├── repositories/             # all database reads/writes
 │   │   ├── auth.ts                   # session helpers, requireTeamRole(), requireInviteAccess()
 │   │   ├── github-client.ts          # Octokit wrapper
@@ -200,7 +201,7 @@ Open http://localhost:3000.
 | Name | Purpose |
 |---|---|
 | `DATABASE_URL` | PostgreSQL connection string |
-| `PGSSLMODE` | Vercel only. Set to `no-verify` so the connection to Supabase is encrypted; the certificate isn't checked yet (#53). Leave empty locally. |
+| `DATABASE_CA_CERT` | Vercel only: the Supabase root CA as PEM text, the contents of [`docs/certs/supabase-prod-ca-2021.crt`](docs/certs/supabase-prod-ca-2021.crt). The app then connects over TLS and checks the server certificate and host name against it ([Database connection](#database-connection)). Paste it with its line breaks, or on one line with each line break written as `\n`. Leave empty locally: local Docker and CI connect without TLS. |
 | `AUTH_SECRET` | Secret used to sign session JWTs |
 | `AUTH_GITHUB_ID` | GitHub OAuth App client ID |
 | `AUTH_GITHUB_SECRET` | GitHub OAuth App client secret |
@@ -270,6 +271,14 @@ The OAuth scopes we request, and why, are recorded in [`docs/decisions/`](docs/d
 | Production | Every push to `main` (Vercel production deployment). CI runs at the same time and doesn't hold the deployment back; the Database workflow's smoke test then checks that production serves the new commit | Production database |
 
 See [`docs/architecture.md`](docs/architecture.md) for details.
+
+### Database connection
+
+The app reaches Supabase through the Session pooler over TLS, and verifies the pooler's certificate and host name against Supabase's root CA in `DATABASE_CA_CERT`, set on Vercel Production and Preview ([decision 002](docs/decisions/002-database-hosting.md#connecting-over-tls)). It replaces the earlier `PGSSLMODE=no-verify` stopgap, which encrypted the connection without checking the certificate; with `DATABASE_CA_CERT` set, node-postgres ignores `PGSSLMODE`. "Enforce SSL on incoming connections" is on for both Supabase projects.
+
+To set or replace the certificate: Vercel → Project → Settings → Environment Variables, `DATABASE_CA_CERT` for Production and Preview, value pasted from [`docs/certs/supabase-prod-ca-2021.crt`](docs/certs/supabase-prod-ca-2021.crt), then redeploy (a running deployment keeps its old variables). Check that `/api/health` answers ok and that GitHub sign-in works.
+
+While `DATABASE_CA_CERT` holds anything other than PEM certificates, or while `DATABASE_URL` sets `sslmode`, `ssl` or another `ssl*` parameter that node-postgres would use in place of the CA, the database client refuses to load, so every page and route that uses it, `/api/health` included, answers 500; the error in the function logs names the variable or parameter. A certificate that fails verification (for example `SELF_SIGNED_CERT_IN_CHAIN`) makes `/api/health` answer 503 `DATABASE_UNAVAILABLE`. Decision 002 says how to rotate the CA.
 
 ### Database migrations
 
@@ -420,7 +429,7 @@ Each member gets 3 votes per retro, at most 1 per item. The top 3 "To improve" i
 | Repository connection and webhooks | Done | Signature verification, delivery dedup, idempotent `Activity` storage, webhook URL and setup steps in Settings (PRs #49, #79, #83). One app-wide webhook secret for now: per-team secret rotation and the "Unmapped activity" list aren't built (#78) |
 | Sprints and requirements | Done | Create and edit sprints with dates, standups and PR reviews per person; date, overlap and 1–20 checks (PRs #40, #47); overlapping writes serialized (PR #83) |
 | Async standups | Done | Three-question form, one per person per day in the team timezone, history by day (PRs #51, #69, #81); character counter and focus fixes (PRs #84, #85) |
-| Live contribution dashboard | Done | Counts per member, activity feed, Pusher live updates (PRs #58, #60, #80); teammates' standups announced to screen readers (PR #85) |
+| Live contribution dashboard | Done | Counts per member, activity feed, Pusher live updates (PRs #58, #60, #80); teammates' standups announced to screen readers (PR #85); reviews say "approved", "requested changes on" or "commented on" #N (#57) |
 | Requirement checks | Done | Met / On track / At risk / Missed in `src/lib/checks/` (PR #30), shown on the dashboard (PR #58) |
 | Retros and action items | Planned | Voting, top 3 "To improve" items carried into the next sprint (#13) |
 | Peer feedback | Planned | Instructor-only, enforced on the server (#14) |

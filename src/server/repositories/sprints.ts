@@ -1,5 +1,6 @@
 import { databaseTextSchema } from "@/lib/validation/text";
 import { db } from "@/server/db";
+import { lockForWrite, TEAM_SPRINTS_LOCK } from "@/server/write-locks";
 import { toPage, type Page } from "@/lib/api/pagination";
 import {
   validateSprint,
@@ -131,8 +132,7 @@ export async function createSprint(
   input: CreateSprintInput
 ): Promise<SprintRecord> {
   return db.$transaction(async (tx) => {
-    const key = `sprints:${input.teamId}`;
-    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${key}))`;
+    await lockForWrite({ tx, kind: TEAM_SPRINTS_LOCK, id: input.teamId });
     const existing = await tx.sprint.findMany({
       where: { teamId: input.teamId },
       select: SPRINT_FIELDS,
@@ -169,8 +169,7 @@ export async function updateSprint(
   input: UpdateSprintInput
 ): Promise<SprintRecord | null> {
   return db.$transaction(async (tx) => {
-    const key = `sprints:${input.teamId}`;
-    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${key}))`;
+    await lockForWrite({ tx, kind: TEAM_SPRINTS_LOCK, id: input.teamId });
     const rows = await tx.sprint.findMany({
       where: { teamId: input.teamId },
       select: SPRINT_FIELDS,
