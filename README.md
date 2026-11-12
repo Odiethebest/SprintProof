@@ -5,7 +5,7 @@
 [![CI](https://github.com/Odiethebest/SprintProof/actions/workflows/ci.yml/badge.svg)](https://github.com/Odiethebest/SprintProof/actions/workflows/ci.yml)
 [![Next.js](https://img.shields.io/badge/Next.js-16-000000?logo=nextdotjs)](https://nextjs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript)](https://www.typescriptlang.org/)
-[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql)](https://www.postgresql.org/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-4169E1?logo=postgresql)](https://www.postgresql.org/)
 [![Scrum](https://img.shields.io/badge/Agile-Scrum-E67E22)](#team--collaboration)
 [![TDD](https://img.shields.io/badge/Test--Driven%20Development-C21325)](#testing)
 [![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
@@ -104,7 +104,7 @@ Layering is one-way: `app/` → `server/` → `lib/`. Core business logic (requi
 |---|---|
 | Frontend | Next.js 16 (App Router), React 19, TypeScript 5, Tailwind CSS 4 |
 | Backend | Next.js route handlers, Zod validation |
-| Database | PostgreSQL 16 with Prisma ORM |
+| Database | PostgreSQL with Prisma ORM: 17 on Supabase and in CI, 16 or later locally |
 | Auth | GitHub OAuth via Auth.js (JWT sessions) |
 | Real-time | GitHub webhooks → Pusher Channels |
 | Testing | Vitest (unit + integration), Playwright + axe (E2E) |
@@ -447,7 +447,7 @@ Each member gets 3 votes per retro, at most 1 per item. The top 3 "To improve" i
 ## Demo & Links
 
 - **Production:** https://sprintproof.vercel.app
-- **Demo video:** _coming soon_
+- **Demo video:** https://youtu.be/wMl-F6EXXLk (9 min 49 s: slides, then 3 minutes in the live app)
 - **API docs:** https://sprintproof.vercel.app/api-docs (source: [`docs/api/openapi.yaml`](docs/api/openapi.yaml))
 
 ---
