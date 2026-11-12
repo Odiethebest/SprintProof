@@ -241,8 +241,11 @@ test.describe("Retro", () => {
     await expect(slowReviews).not.toBeChecked();
     await slowReviews.check();
 
-    // Assert: it stays checked after a reload
+    // Assert: saved, so it stays checked after a reload
     await expect(slowReviews).toBeChecked();
+    await expect(member.locator('[aria-live="polite"]')).toHaveText(
+      "Marked done."
+    );
     await member.reload();
     await expect(
       carried.getByRole("checkbox", { name: SLOW_REVIEWS })
