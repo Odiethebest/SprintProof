@@ -36,7 +36,7 @@ Project courses ask for real Scrum evidence: standups every sprint, PR reviews f
 
 Core workflow:
 
-1. **Sign in and connect.** Sign in with GitHub, create a team or join with an invite link. The team lead connects the repository and adds the webhook.
+1. **Sign in and connect.** Sign in with GitHub, create a team or join with an invite link. The team lead invites members, connects the repository and adds the webhook; [course staff send the instructor link](#instructor-invite-links).
 2. **Plan the sprint.** The lead sets sprint dates and per-person requirements (standups, PR reviews).
 3. **Async standups.** A three-question check-in (yesterday, today, blockers), filed under the current sprint automatically.
 4. **Live GitHub activity.** Commits, PRs and reviews arrive through [GitHub webhooks](#github-integration) and the dashboard updates within seconds.
@@ -128,6 +128,7 @@ sprintproof/
 │   ├── architecture.md               # system design + database schema diagram
 │   ├── api/openapi.yaml              # public REST API reference
 │   ├── decisions/                    # one record per big technical choice
+│   ├── certs/                        # Supabase root CA, the value of DATABASE_CA_CERT
 │   ├── research/
 │   ├── design/                       # prototype mockups
 │   └── sprints/
@@ -152,9 +153,9 @@ sprintproof/
 │   │   ├── github/                   # webhook payload → Activity mapping
 │   │   └── export/                   # sprint summary → Markdown
 │   ├── server/                       # everything with side effects
-│   │   ├── db.ts                     # single Prisma client
+│   │   ├── db.ts                     # single Prisma client, TLS verified with DATABASE_CA_CERT
 │   │   ├── repositories/             # all database reads/writes
-│   │   ├── auth.ts                   # session helpers, requireTeamRole()
+│   │   ├── auth.ts                   # session helpers, requireTeamRole(), requireInviteAccess()
 │   │   ├── github-client.ts          # Octokit wrapper
 │   │   └── realtime.ts               # Pusher trigger wrapper
 │   └── types/
@@ -200,7 +201,7 @@ Open http://localhost:3000.
 | Name | Purpose |
 |---|---|
 | `DATABASE_URL` | PostgreSQL connection string |
-| `PGSSLMODE` | Vercel only. Set to `no-verify` so the connection to Supabase is encrypted; the certificate isn't checked yet (#53). Leave empty locally. |
+| `DATABASE_CA_CERT` | Vercel only: the Supabase root CA as PEM text, the contents of [`docs/certs/supabase-prod-ca-2021.crt`](docs/certs/supabase-prod-ca-2021.crt). The app then connects over TLS and checks the server certificate and host name against it ([Database connection](#database-connection)). Paste it with its line breaks, or on one line with each line break written as `\n`. Leave empty locally: local Docker and CI connect without TLS. |
 | `AUTH_SECRET` | Secret used to sign session JWTs |
 | `AUTH_GITHUB_ID` | GitHub OAuth App client ID |
 | `AUTH_GITHUB_SECRET` | GitHub OAuth App client secret |
@@ -209,11 +210,23 @@ Open http://localhost:3000.
 | `PUSHER_APP_ID` / `PUSHER_SECRET` | Server-side Pusher credentials. Leave all the Pusher values empty to turn live updates off; pages then update on reload. |
 | `NEXT_PUBLIC_PUSHER_KEY` / `NEXT_PUBLIC_PUSHER_CLUSTER` | Client-side Pusher config |
 | `NEXT_PUBLIC_PUSHER_HOST` / `NEXT_PUBLIC_PUSHER_PORT` | Local only: a Pusher-compatible server such as Soketi (`localhost`, `6001`). Leave empty on Vercel so the app uses Pusher Channels. |
+| `COURSE_STAFF_GITHUB_LOGINS` | Course staff: GitHub logins, comma-separated (case and spaces don't matter), who can create and revoke instructor invite links on any team ([decision 006](docs/decisions/006-instructor-invites-from-course-staff.md)). Empty or unset means nobody; then only instructors already on a team can invite instructors. Remove a login when that person leaves the course, because GitHub logins can be renamed and taken by someone else. |
 | `E2E_TEST_AUTH` | Enables the test-only sign-in provider for Playwright. Never set in production. |
 | `SUPABASE_PROD_DB_PASSWORD` / `SUPABASE_PREVIEW_DB_PASSWORD` | Local only, for applying migrations by hand ([decision 002](docs/decisions/002-database-hosting.md)): the database passwords of sprintproof-prod and sprintproof-preview, filled into the matching `SUPABASE_*_DB_URL` in place of `[YOUR-PASSWORD]`. The app doesn't read them; don't set them on Vercel. |
 | `SUPABASE_PROD_DB_URL` / `SUPABASE_PREVIEW_DB_URL` | Local only, used with the passwords above: each project's Session pooler URI (Connect → Session pooler, port 5432), copied as it is with the `[YOUR-PASSWORD]` placeholder. The app doesn't read them; don't set them on Vercel. |
 
 Never commit real values. [`.env.example`](.env.example) lists names only.
+
+### Instructor invite links
+
+A team lead invites members but can't invite instructors: otherwise a lead could join their own team as an instructor with a second GitHub account and read peer feedback ([decision 006](docs/decisions/006-instructor-invites-from-course-staff.md)). Instructor links come from course staff, the logins in `COURSE_STAFF_GITHUB_LOGINS`, and from instructors already on the team, who find the link in **Settings → Members and invites**.
+
+Course staff don't have to be on the team. To invite a team's instructor:
+
+1. Add your GitHub login to `COURSE_STAFF_GITHUB_LOGINS` (on Vercel, under the project's environment variables, then redeploy).
+2. Ask the team lead for the team id: it's in the address of any team page, `/teams/<teamId>/dashboard`.
+3. Sign in to SprintProof, open `/api-docs`, and call `POST /api/v1/teams/{teamId}/invites` with `{ "role": "INSTRUCTOR" }` ("Try it out"). The page runs on the same site, so it sends your session; an API token isn't accepted here.
+4. Send `/invite/<token>` from the response to the instructor, or open it yourself to join as the instructor. The link expires after 7 days. To revoke it, call `DELETE /api/v1/teams/{teamId}/invites/{inviteId}` with the `id` from the same response.
 
 ### Scripts
 
@@ -258,6 +271,14 @@ The OAuth scopes we request, and why, are recorded in [`docs/decisions/`](docs/d
 | Production | Every push to `main` (Vercel production deployment). CI runs at the same time and doesn't hold the deployment back; the Database workflow's smoke test then checks that production serves the new commit | Production database |
 
 See [`docs/architecture.md`](docs/architecture.md) for details.
+
+### Database connection
+
+The app reaches Supabase through the Session pooler over TLS, and verifies the pooler's certificate and host name against Supabase's root CA in `DATABASE_CA_CERT`, set on Vercel Production and Preview ([decision 002](docs/decisions/002-database-hosting.md#connecting-over-tls)). It replaces the earlier `PGSSLMODE=no-verify` stopgap, which encrypted the connection without checking the certificate; with `DATABASE_CA_CERT` set, node-postgres ignores `PGSSLMODE`. "Enforce SSL on incoming connections" is on for both Supabase projects.
+
+To set or replace the certificate: Vercel → Project → Settings → Environment Variables, `DATABASE_CA_CERT` for Production and Preview, value pasted from [`docs/certs/supabase-prod-ca-2021.crt`](docs/certs/supabase-prod-ca-2021.crt), then redeploy (a running deployment keeps its old variables). Check that `/api/health` answers ok and that GitHub sign-in works.
+
+While `DATABASE_CA_CERT` holds anything other than PEM certificates, or while `DATABASE_URL` sets `sslmode`, `ssl` or another `ssl*` parameter that node-postgres would use in place of the CA, the database client refuses to load, so every page and route that uses it, `/api/health` included, answers 500; the error in the function logs names the variable or parameter. A certificate that fails verification (for example `SELF_SIGNED_CERT_IN_CHAIN`) makes `/api/health` answer 503 `DATABASE_UNAVAILABLE`. Decision 002 says how to rotate the CA.
 
 ### Database migrations
 
@@ -325,6 +346,8 @@ NEXT_PUBLIC_PUSHER_PORT=6001
 ```
 
 The GitHub activity spec signs its webhook deliveries with `e2e-webhook-secret-not-a-real-secret`, a test value that `playwright.config.ts` also gives the dev server. If Playwright reuses a dev server you started yourself, set `GITHUB_WEBHOOK_SECRET` to the same value there.
+
+Specs that add an instructor sign in as a course staff test user from `e2e/helpers/course-staff.ts`, and `playwright.config.ts` gives the dev server those logins as `COURSE_STAFF_GITHUB_LOGINS`. If Playwright reuses a dev server you started yourself, set `COURSE_STAFF_GITHUB_LOGINS` there to the logins in that file.
 
 We follow red-green-refactor, and the git history shows it: every feature starts with a commit containing only failing tests, followed by the implementation commit.
 
@@ -402,11 +425,11 @@ Each member gets 3 votes per retro, at most 1 per item. The top 3 "To improve" i
 
 | Feature | Status | Notes |
 |---|---|---|
-| GitHub sign-in and teams | Done | Auth.js GitHub provider, create a team, invite links, lead / member / instructor roles (PRs #37, #44); invite writes serialized (PR #83) |
+| GitHub sign-in and teams | Done | Auth.js GitHub provider, create a team, invite links, lead / member / instructor roles (PRs #37, #44); invite writes serialized (PR #83); instructor links only from course staff and the team's instructors (#116) |
 | Repository connection and webhooks | Done | Signature verification, delivery dedup, idempotent `Activity` storage, webhook URL and setup steps in Settings (PRs #49, #79, #83). One app-wide webhook secret for now: per-team secret rotation and the "Unmapped activity" list aren't built (#78) |
 | Sprints and requirements | Done | Create and edit sprints with dates, standups and PR reviews per person; date, overlap and 1–20 checks (PRs #40, #47); overlapping writes serialized (PR #83) |
 | Async standups | Done | Three-question form, one per person per day in the team timezone, history by day (PRs #51, #69, #81); character counter and focus fixes (PRs #84, #85) |
-| Live contribution dashboard | Done | Counts per member, activity feed, Pusher live updates (PRs #58, #60, #80); teammates' standups announced to screen readers (PR #85) |
+| Live contribution dashboard | Done | Counts per member, activity feed, Pusher live updates (PRs #58, #60, #80); teammates' standups announced to screen readers (PR #85); reviews say "approved", "requested changes on" or "commented on" #N (#57) |
 | Requirement checks | Done | Met / On track / At risk / Missed in `src/lib/checks/` (PR #30), shown on the dashboard (PR #58) |
 | Retros and action items | Planned | Voting, top 3 "To improve" items carried into the next sprint (#13) |
 | Peer feedback | Planned | Instructor-only, enforced on the server (#14) |

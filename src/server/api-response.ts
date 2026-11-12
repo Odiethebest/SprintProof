@@ -1,6 +1,6 @@
 import { unstable_rethrow } from "next/navigation";
 import type { z } from "zod";
-import type { ApiTeamAccess } from "@/lib/auth/team-access";
+import type { ApiTeamAccess, TeamRole } from "@/lib/auth/team-access";
 import { paginationQuerySchema } from "@/lib/api/pagination";
 import { describeDatabaseError } from "@/server/prisma-errors";
 
@@ -67,6 +67,29 @@ export function unauthenticatedResponse(): Response {
     isAllowed: false,
     status: 401,
     code: "UNAUTHENTICATED",
+  });
+}
+
+// Who manages which invite links (decision 006, #116). LEAD is unreachable:
+// the request schema and the database only hold member and instructor links.
+const INVITE_ROLE_MESSAGES: Record<TeamRole, string> = {
+  LEAD: "An invite link can't make someone the team lead.",
+  MEMBER: "Only the team lead can create and revoke member invite links.",
+  INSTRUCTOR:
+    "Only course staff and the team's instructors can create and revoke instructor invite links.",
+};
+
+// 403 for someone who can manage some invite links on the team, but not
+// links for this role.
+export function inviteRoleForbiddenResponse({
+  role,
+}: {
+  role: TeamRole;
+}): Response {
+  return errorResponse({
+    status: 403,
+    code: "FORBIDDEN",
+    message: INVITE_ROLE_MESSAGES[role],
   });
 }
 

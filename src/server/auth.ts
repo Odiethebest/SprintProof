@@ -6,9 +6,15 @@ import {
   type TeamAccess,
   type TeamRole,
 } from "@/lib/auth/team-access";
+import {
+  getManageableInviteRoles,
+  type InviteRole,
+} from "@/lib/invites/invite-link";
 import { getSessionUserId } from "@/server/auth-session";
+import { isCourseStaff } from "@/server/course-staff";
 import { recordApiTokenUse } from "@/server/repositories/api-tokens";
 import { findMembershipRole } from "@/server/repositories/memberships";
+import { findTeam } from "@/server/repositories/teams";
 
 async function checkMembership(
   userId: string | null,
@@ -27,6 +33,40 @@ export async function requireTeamRole(
   roles: readonly TeamRole[]
 ): Promise<TeamAccess> {
   return checkMembership(await getSessionUserId(), teamId, roles);
+}
+
+export type InviteAccess =
+  | { isAllowed: true; userId: string; inviteRoles: InviteRole[] }
+  | Extract<TeamAccess, { isAllowed: false }>;
+
+// The invite links the signed-in user may create and revoke on a team
+// (decision 006, #116). Course staff manage instructor links even when they
+// aren't on the team; anyone who can manage no link gets 403, like a wrong role
+// in requireTeamRole(). Session only, so an API token can't create links.
+export async function requireInviteAccess(
+  teamId: string
+): Promise<InviteAccess> {
+  const userId = await getSessionUserId();
+  if (userId === null) {
+    return { isAllowed: false, status: 401, code: "UNAUTHENTICATED" };
+  }
+  const [membership, isStaff] = await Promise.all([
+    findMembershipRole({ userId, teamId }),
+    isCourseStaff({ userId }),
+  ]);
+  const inviteRoles = getManageableInviteRoles({
+    teamRole: membership?.role ?? null,
+    isCourseStaff: isStaff,
+  });
+  if (inviteRoles.length === 0) {
+    return { isAllowed: false, status: 403, code: "FORBIDDEN" };
+  }
+  // Course staff off the team: a team that doesn't exist is 403, the same
+  // answer everyone gets for it on every other route.
+  if (membership === null && (await findTeam({ teamId })) === null) {
+    return { isAllowed: false, status: 403, code: "FORBIDDEN" };
+  }
+  return { isAllowed: true, userId, inviteRoles };
 }
 
 // Who is calling, or one of the two 401s: no token and no session

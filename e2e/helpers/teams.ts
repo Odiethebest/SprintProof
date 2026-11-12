@@ -59,23 +59,51 @@ export async function addSprint(
   return sprint.id;
 }
 
-// The lead creates an invite link and the other user joins with its token.
-export async function joinTeam(input: {
-  lead: Page;
-  joiner: Page;
-  teamId: string;
-  role: "MEMBER" | "INSTRUCTOR";
-}): Promise<void> {
-  const invite = await input.lead.request.post(
+// Creates an invite link through the API, as the signed-in user of `page`.
+export async function createInviteToken(
+  page: Page,
+  input: { teamId: string; role: "MEMBER" | "INSTRUCTOR" }
+): Promise<string> {
+  const invite = await page.request.post(
     `/api/v1/teams/${input.teamId}/invites`,
     { data: { role: input.role } }
   );
   expect(invite.status()).toBe(201);
   const { token } = (await invite.json()) as { token: string };
-  const joined = await input.joiner.request.post("/api/v1/memberships", {
+  return token;
+}
+
+async function joinWithToken(joiner: Page, token: string): Promise<void> {
+  const joined = await joiner.request.post("/api/v1/memberships", {
     data: { inviteToken: token },
   });
   expect(joined.status()).toBe(201);
+}
+
+// The lead creates a member link and the other user joins with its token.
+// Instructor links don't come from the lead: use joinAsInstructor().
+export async function joinTeam(input: {
+  lead: Page;
+  joiner: Page;
+  teamId: string;
+  role: "MEMBER";
+}): Promise<void> {
+  const token = await createInviteToken(input.lead, input);
+  await joinWithToken(input.joiner, token);
+}
+
+// Course staff (e2e/helpers/course-staff.ts) create an instructor link and the
+// other user joins with its token (decision 006, #116).
+export async function joinAsInstructor(input: {
+  staff: Page;
+  joiner: Page;
+  teamId: string;
+}): Promise<void> {
+  const token = await createInviteToken(input.staff, {
+    teamId: input.teamId,
+    role: "INSTRUCTOR",
+  });
+  await joinWithToken(input.joiner, token);
 }
 
 export async function expectNoBlockingViolations(page: Page): Promise<void> {

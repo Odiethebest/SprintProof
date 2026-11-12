@@ -1,4 +1,7 @@
+import { databaseTextSchema } from "@/lib/validation/text";
 import { db } from "@/server/db";
+import { isUniqueViolation } from "@/server/prisma-errors";
+import { lockForWrite, REPO_CLAIM_LOCK } from "@/server/write-locks";
 import { toPage, type Page } from "@/lib/api/pagination";
 import type { TeamRole } from "@/lib/auth/team-access";
 import type { CreateTeamInput } from "@/lib/teams/create-team";
@@ -18,28 +21,41 @@ export async function createTeamWithLead({
   input: CreateTeamInput;
   leadUserId: string;
 }) {
-  return db.$transaction(async (tx) => {
-    // GitHub repository names ignore case; serialize all claims for that name.
-    const key = `repo:${input.repoFullName.toLowerCase()}`;
-    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${key}))`;
-    const existing = await tx.team.findFirst({
-      where: {
-        repoFullName: { equals: input.repoFullName, mode: "insensitive" },
-      },
-      select: { id: true },
+  try {
+    return await db.$transaction(async (tx) => {
+      // GitHub repository names ignore case; serialize all claims for that name.
+      await lockForWrite({
+        tx,
+        kind: REPO_CLAIM_LOCK,
+        id: input.repoFullName.toLowerCase(),
+      });
+      const existing = await tx.team.findFirst({
+        where: {
+          repoFullName: { equals: input.repoFullName, mode: "insensitive" },
+        },
+        select: { id: true },
+      });
+      if (existing !== null) return null;
+      return tx.team.create({
+        data: {
+          ...input,
+          memberships: { create: { userId: leadUserId, role: "LEAD" } },
+        },
+        select: TEAM_FIELDS,
+      });
     });
-    if (existing !== null) return null;
-    return tx.team.create({
-      data: {
-        ...input,
-        memberships: { create: { userId: leadUserId, role: "LEAD" } },
-      },
-      select: TEAM_FIELDS,
-    });
-  });
+  } catch (error) {
+    // A unique index on the repo name caught a claim that got past the check
+    // without taking the lock. Nothing else a new team writes can clash: its
+    // id and its lead's membership are new, and repo_id is still empty.
+    if (isUniqueViolation(error)) return null;
+    throw error;
+  }
 }
 
 export async function findTeam({ teamId }: { teamId: string }) {
+  // An id PostgreSQL can't store (a NUL character) is an unknown team (#74).
+  if (!databaseTextSchema.safeParse(teamId).success) return null;
   return db.team.findUnique({ where: { id: teamId }, select: TEAM_FIELDS });
 }
 

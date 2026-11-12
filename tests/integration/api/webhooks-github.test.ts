@@ -462,7 +462,74 @@ describe("POST /api/webhooks/github", () => {
         prNumber: 42,
         prAuthorLogin: "alice",
         title: "Add webhook receiver",
+        reviewState: "APPROVED",
       });
+    });
+
+    it.each([
+      ["changes_requested", "CHANGES_REQUESTED"],
+      ["commented", "COMMENTED"],
+    ])(
+      "stores a review submitted as %s with the state %s",
+      async (state, reviewState) => {
+        // Arrange
+        const team = await insertTeam({
+          repoFullName: "Odiethebest/SprintProof",
+          repoId: 987654321n,
+        });
+        const payload = {
+          ...prReviewPayload,
+          review: { ...prReviewPayload.review, state },
+        };
+
+        // Act
+        const response = await sendSigned({
+          event: "pull_request_review",
+          payload,
+          deliveryId: `review-${state}-delivery`,
+        });
+
+        // Assert
+        expect(response.status).toBe(200);
+        const activities = await db.activity.findMany({
+          where: { teamId: team.id },
+          select: { type: true, prNumber: true, reviewState: true },
+        });
+        expect(activities).toEqual([
+          { type: "REVIEW", prNumber: 42, reviewState },
+        ]);
+      }
+    );
+
+    // Rejecting it would drop a review that counts under R3: a redelivery
+    // carries the same state. It's stored with no state instead.
+    it("stores a review submitted with a state GitHub doesn't document, with no state", async () => {
+      // Arrange
+      const team = await insertTeam({
+        repoFullName: "Odiethebest/SprintProof",
+        repoId: 987654321n,
+      });
+      const payload = {
+        ...prReviewPayload,
+        review: { ...prReviewPayload.review, state: "escalated" },
+      };
+
+      // Act
+      const response = await sendSigned({
+        event: "pull_request_review",
+        payload,
+        deliveryId: "review-unknown-state-delivery",
+      });
+
+      // Assert
+      expect(response.status).toBe(200);
+      const activities = await db.activity.findMany({
+        where: { teamId: team.id },
+        select: { type: true, prNumber: true, reviewState: true },
+      });
+      expect(activities).toEqual([
+        { type: "REVIEW", prNumber: 42, reviewState: null },
+      ]);
     });
 
     it("stores a review on a PR whose title contains NUL with the NUL removed", async () => {

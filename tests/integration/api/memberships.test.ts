@@ -143,6 +143,37 @@ describe("POST /api/v1/memberships", () => {
     expect(await db.membership.count()).toBe(0);
   });
 
+  it.each([
+    ["expired", { expiresAt: new Date(Date.now() - 1000) }, "INVITE_EXPIRED"],
+    [
+      "was revoked",
+      { revokedAt: new Date(Date.now() - 1000) },
+      "INVITE_REVOKED",
+    ],
+  ] as const)(
+    "sends someone whose instructor link %s to course staff",
+    async (_label, overrides, code) => {
+      // Arrange: the lead can't create instructor links (decision 006, #116).
+      const team = await insertTeam();
+      const invite = await insertInvite({
+        teamId: team.id,
+        role: "INSTRUCTOR",
+        ...overrides,
+      });
+      await signInAsNewUser();
+
+      // Act
+      const res = await joinWithInvite(invite.token);
+
+      // Assert
+      expect(res.status).toBe(410);
+      const body = await res.json();
+      expect(body.error.code).toBe(code);
+      expect(body.error.message).toMatch(/Ask course staff for a new one\.$/);
+      expect(await db.membership.count()).toBe(0);
+    }
+  );
+
   it("returns 410 for a revoked link and adds no one", async () => {
     // Arrange
     const team = await insertTeam();

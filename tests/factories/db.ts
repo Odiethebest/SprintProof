@@ -4,7 +4,7 @@ import crypto from "node:crypto";
 import { db } from "@/server/db";
 import type { TeamRole } from "@/lib/auth/team-access";
 import type { InviteRole } from "@/lib/invites/invite-link";
-import type { ActivityType } from "@/generated/prisma/client";
+import type { ActivityType, ReviewState } from "@/generated/prisma/client";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -32,6 +32,7 @@ export async function insertUser(overrides: UserRecordOverrides = {}) {
 
 export async function insertTeam(
   overrides: {
+    id?: string;
     name?: string;
     repoFullName?: string;
     timezone?: string;
@@ -96,6 +97,7 @@ export async function insertActivity(input: {
   prAuthorLogin?: string | null;
   sha?: string | null;
   title?: string | null;
+  reviewState?: ReviewState | null;
   occurredAt?: Date;
 }) {
   return db.activity.create({

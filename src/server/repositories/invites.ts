@@ -1,6 +1,7 @@
 import { databaseTextSchema } from "@/lib/validation/text";
 import { randomBytes } from "node:crypto";
 import { db } from "@/server/db";
+import { lockForWrite, TEAM_INVITES_LOCK } from "@/server/write-locks";
 import { getInviteExpiry, type InviteRole } from "@/lib/invites/invite-link";
 
 // 32 random bytes: 43 base64url characters, safe in a URL path.
@@ -25,8 +26,7 @@ export async function createInvite({
 }) {
   const token = randomBytes(TOKEN_BYTES).toString("base64url");
   return db.$transaction(async (tx) => {
-    const key = `invites:${teamId}`;
-    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${key}))`;
+    await lockForWrite({ tx, kind: TEAM_INVITES_LOCK, id: teamId });
     await tx.invite.updateMany({
       where: { teamId, role, revokedAt: null, expiresAt: { gt: now } },
       data: { revokedAt: now },
@@ -41,6 +41,22 @@ export async function createInvite({
       },
       select: INVITE_FIELDS,
     });
+  });
+}
+
+// The role of one of the team's links, or null when the team has no invite
+// with this id. Scoped to the team, so nobody reaches another team's link.
+export async function findTeamInvite({
+  teamId,
+  inviteId,
+}: {
+  teamId: string;
+  inviteId: string;
+}) {
+  if (!databaseTextSchema.safeParse(inviteId).success) return null;
+  return db.invite.findFirst({
+    where: { id: inviteId, teamId },
+    select: { role: true },
   });
 }
 
