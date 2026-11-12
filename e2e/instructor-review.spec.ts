@@ -30,10 +30,11 @@ const MEMBER: TestUser = {
   name: "Yunhong Huang",
 };
 
-// Retros are recorded (#13); peer feedback isn't yet (#14).
 const RETRO_NOT_OPENED = "The lead hasn't opened the Sprint 1 retro yet.";
-const PEER_FEEDBACK_NOT_RECORDED =
-  "Peer feedback isn't recorded in SprintProof yet.";
+// These teams have only a lead, so no one gives partner feedback (#14).
+// e2e/peer-feedback.spec.ts covers feedback between two members.
+const NO_FEEDBACK_PAIRS =
+  "The team has one member, so there's no partner feedback.";
 
 // A team with a running Sprint 1 and one standup from its lead.
 async function createTeamWithStandup(lead: Page): Promise<string> {
@@ -120,7 +121,7 @@ test.describe("Instructor review", () => {
     await expect(retro.getByText(RETRO_NOT_OPENED)).toBeVisible();
     const peerFeedback = main.getByRole("region", { name: "Peer feedback" });
     await expect(
-      peerFeedback.getByText(PEER_FEEDBACK_NOT_RECORDED, { exact: true })
+      peerFeedback.getByText(NO_FEEDBACK_PAIRS, { exact: true })
     ).toBeVisible();
 
     // Assert: no edit controls, only the export
@@ -139,7 +140,7 @@ test.describe("Instructor review", () => {
     });
     await expect(dialog).toBeVisible();
     await expect(dialog).toContainText(
-      "Instructor export. Peer feedback isn't recorded in SprintProof yet."
+      "Instructor export. Includes peer feedback."
     );
     const preview = dialog.getByRole("region", { name: "Preview" });
     await expect(preview).toContainText("# Sprint 1 summary");
@@ -150,7 +151,9 @@ test.describe("Instructor review", () => {
       "**Today:** Build the Markdown export."
     );
     await expect(preview).toContainText(`## Retro\n${RETRO_NOT_OPENED}`);
-    await expect(preview).toContainText(PEER_FEEDBACK_NOT_RECORDED);
+    await expect(preview).toContainText(
+      `## Peer feedback\n${NO_FEEDBACK_PAIRS}`
+    );
     await expectNoBlockingViolations(instructor);
     const markdown = await preview.locator("pre").textContent();
 

@@ -3,6 +3,7 @@ import {
   buildSprintSummaryMarkdown,
   getExportAudience,
 } from "@/lib/export/sprint-summary-markdown";
+import type { PeerFeedbackPair } from "@/lib/peer-feedback/peer-feedback-pairs";
 import {
   createMemberSummary,
   createSprintSummary,
@@ -103,6 +104,7 @@ describe("buildSprintSummaryMarkdown", () => {
       summary,
       standups,
       audience: "TEAM",
+      peerFeedback: [],
       retro: null,
     });
 
@@ -164,6 +166,7 @@ describe("buildSprintSummaryMarkdown", () => {
       summary,
       standups: [],
       audience: "TEAM",
+      peerFeedback: [],
       retro: null,
     });
 
@@ -190,6 +193,7 @@ describe("buildSprintSummaryMarkdown", () => {
       summary,
       standups,
       audience: "TEAM",
+      peerFeedback: [],
       retro: null,
     });
 
@@ -212,6 +216,7 @@ describe("buildSprintSummaryMarkdown", () => {
       summary,
       standups: [],
       audience: "TEAM",
+      peerFeedback: [],
       retro: null,
     });
 
@@ -234,6 +239,7 @@ describe("buildSprintSummaryMarkdown", () => {
       summary,
       standups: [],
       audience: "TEAM",
+      peerFeedback: [],
       retro: null,
     });
 
@@ -265,6 +271,7 @@ describe("buildSprintSummaryMarkdown", () => {
       summary,
       standups,
       audience: "TEAM",
+      peerFeedback: [],
       retro: null,
     });
 
@@ -289,6 +296,7 @@ describe("buildSprintSummaryMarkdown", () => {
       summary,
       standups: [],
       audience: "TEAM",
+      peerFeedback: [],
       retro: null,
     });
 
@@ -309,6 +317,7 @@ describe("buildSprintSummaryMarkdown", () => {
       summary,
       standups: [],
       audience: "TEAM",
+      peerFeedback: [],
       retro: null,
     });
 
@@ -338,6 +347,7 @@ describe("buildSprintSummaryMarkdown", () => {
       summary,
       standups: [],
       audience: "TEAM",
+      peerFeedback: [],
       retro: null,
     });
 
@@ -362,6 +372,7 @@ describe("buildSprintSummaryMarkdown", () => {
       summary,
       standups: [],
       audience: "TEAM",
+      peerFeedback: [],
       retro: null,
     });
 
@@ -390,6 +401,7 @@ describe("buildSprintSummaryMarkdown", () => {
       summary,
       standups: [],
       audience: "TEAM",
+      peerFeedback: [],
       retro: null,
     });
 
@@ -409,6 +421,7 @@ describe("buildSprintSummaryMarkdown", () => {
       summary: createSprintSummary(),
       standups: [],
       audience: "TEAM",
+      peerFeedback: [],
       retro: {
         closedAt: null,
         items: [
@@ -467,6 +480,7 @@ describe("buildSprintSummaryMarkdown", () => {
       summary: createSprintSummary(),
       standups: [],
       audience: "TEAM",
+      peerFeedback: [],
       retro: {
         closedAt: new Date("2026-11-05T06:30:00Z"), // Nov 4, 10:30 PM in LA
         items: [
@@ -503,6 +517,7 @@ describe("buildSprintSummaryMarkdown", () => {
       summary: createSprintSummary(),
       standups: [],
       audience: "TEAM",
+      peerFeedback: [],
       retro: {
         closedAt: new Date("2026-11-04T20:00:00Z"),
         items: [],
@@ -525,6 +540,7 @@ describe("buildSprintSummaryMarkdown", () => {
       summary: createSprintSummary(),
       standups: [],
       audience: "TEAM",
+      peerFeedback: [],
       retro: {
         closedAt: null,
         items: [],
@@ -545,6 +561,7 @@ describe("buildSprintSummaryMarkdown", () => {
       summary: createSprintSummary(),
       standups: [],
       audience: "TEAM",
+      peerFeedback: [],
       retro: {
         closedAt: null,
         items: [],
@@ -564,6 +581,7 @@ describe("buildSprintSummaryMarkdown", () => {
       summary: createSprintSummary(),
       standups: [],
       audience: "TEAM",
+      peerFeedback: [],
       retro: {
         closedAt: new Date("2026-11-04T20:00:00Z"),
         items: [
@@ -587,21 +605,130 @@ describe("buildSprintSummaryMarkdown", () => {
     );
   });
 
-  it("tells instructors that peer feedback isn't recorded yet", () => {
-    // Act
-    const markdown = buildSprintSummaryMarkdown({
-      team,
-      summary: createSprintSummary(),
-      standups: [],
-      audience: "INSTRUCTOR",
-      retro: null,
+  describe("peer feedback", () => {
+    const FEEDBACK_ABOUT_ZIQI =
+      "Ziqi explains decisions well in PR descriptions.";
+    // Saved Nov 1, 6:30 AM UTC: still Oct 31 in Los Angeles.
+    const pairs: PeerFeedbackPair[] = [
+      { author: ZIQI, recipient: YUNHONG, feedback: null },
+      {
+        author: YUNHONG,
+        recipient: ZIQI,
+        feedback: {
+          text: FEEDBACK_ABOUT_ZIQI,
+          updatedAt: new Date("2026-11-01T06:30:00Z"),
+        },
+      },
+    ];
+
+    it("writes each author's feedback about each teammate in an instructor's export", () => {
+      // Act
+      const markdown = buildSprintSummaryMarkdown({
+        team,
+        summary: createSprintSummary(),
+        standups: [],
+        audience: "INSTRUCTOR",
+        peerFeedback: pairs,
+        retro: null,
+      });
+
+      // Assert: dated in the team's timezone, ISO like every export date
+      expect(section(markdown, "## Peer feedback")).toEqual([
+        "### Ziqi (Odie) Yang about Yunhong Huang",
+        "Not submitted yet.",
+        "",
+        "### Yunhong Huang about Ziqi (Odie) Yang",
+        `**Feedback:** ${FEEDBACK_ABOUT_ZIQI}`,
+        "**Updated:** 2026-10-31",
+        "",
+      ]);
     });
 
-    // Assert
-    expect(section(markdown, "## Peer feedback")).toEqual([
-      "Peer feedback isn't recorded in SprintProof yet.",
-      "",
-    ]);
+    it("leaves peer feedback out of a team export, even when it's passed in", () => {
+      // Act
+      const markdown = buildSprintSummaryMarkdown({
+        team,
+        summary: createSprintSummary(),
+        standups: [],
+        audience: "TEAM",
+        peerFeedback: pairs,
+        retro: null,
+      });
+
+      // Assert
+      expect(markdown).not.toContain(FEEDBACK_ABOUT_ZIQI);
+      expect(markdown).not.toContain(" about ");
+      expect(markdown).not.toContain("Not submitted yet.");
+      expect(section(markdown, "## Peer feedback")).toEqual([
+        "Team exports leave out peer feedback.",
+        "",
+      ]);
+    });
+
+    it("keeps feedback on one line, so its text can't start a heading or a list", () => {
+      // Act
+      const markdown = buildSprintSummaryMarkdown({
+        team,
+        summary: createSprintSummary(),
+        standups: [],
+        audience: "INSTRUCTOR",
+        peerFeedback: [
+          {
+            author: YUNHONG,
+            recipient: ZIQI,
+            feedback: {
+              text: "# Great reviews\n\n- fast\n- kind",
+              updatedAt: new Date("2026-11-03T20:00:00Z"),
+            },
+          },
+        ],
+        retro: null,
+      });
+
+      // Assert
+      expect(section(markdown, "## Peer feedback")).toContain(
+        "**Feedback:** # Great reviews - fast - kind"
+      );
+    });
+
+    it("names a member without a name by their GitHub login, on one line", () => {
+      // Act
+      const markdown = buildSprintSummaryMarkdown({
+        team,
+        summary: createSprintSummary(),
+        standups: [],
+        audience: "INSTRUCTOR",
+        peerFeedback: [
+          {
+            author: { ...ZIQI, name: null },
+            recipient: { ...YUNHONG, name: "Yunhong\nHuang" },
+            feedback: null,
+          },
+        ],
+        retro: null,
+      });
+
+      // Assert
+      expect(markdown).toContain("### Odiethebest about Yunhong Huang");
+    });
+
+    it("tells instructors when the team has no one to pair for feedback", () => {
+      // Act
+      const markdown = buildSprintSummaryMarkdown({
+        team,
+        summary: createSprintSummary(),
+        standups: [],
+        audience: "INSTRUCTOR",
+        peerFeedback: [],
+        retro: null,
+      });
+
+      // Assert
+      expect(section(markdown, "## Peer feedback")).toEqual([
+        "The team has one member, so there's no partner feedback.",
+        "",
+      ]);
+    });
   });
 
   it("no longer says retro items aren't recorded", () => {
@@ -611,6 +738,7 @@ describe("buildSprintSummaryMarkdown", () => {
       summary: createSprintSummary(),
       standups: [],
       audience: "INSTRUCTOR",
+      peerFeedback: [],
       retro: null,
     });
 

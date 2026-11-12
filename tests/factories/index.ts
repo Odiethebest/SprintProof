@@ -6,3 +6,4 @@ export * from "./github-profile";
 export * from "./invite";
 export * from "./sprint-summary";
 export * from "./retro";
+export * from "./peer-feedback";
