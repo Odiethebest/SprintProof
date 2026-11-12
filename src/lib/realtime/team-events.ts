@@ -4,6 +4,7 @@ export const TEAM_EVENTS = [
   "standup.created",
   "standup.updated",
   "activity.created",
+  "retro.updated",
 ] as const;
 
 export type TeamEvent = (typeof TEAM_EVENTS)[number];

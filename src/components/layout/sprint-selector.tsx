@@ -1,12 +1,18 @@
 "use client";
 
 import { startTransition, useId, useOptimistic } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 
 export interface SprintOptionView {
   id: string;
   // "Sprint 1 · Oct 29 – Nov 4 · Current"
   label: string;
+}
+
+// An option with the page that shows its sprint: `?sprint=` on most pages, the
+// sprint's own retro on a retro (#13).
+export interface SprintLinkView extends SprintOptionView {
+  href: string;
 }
 
 // Cache Components keeps each URL's page in its own hidden <Activity>
@@ -17,16 +23,15 @@ export interface SprintOptionView {
 let pendingFocusSprintId: string | null = null;
 
 // The top bar's sprint selector (AGENTS.md §2 Screens). The choice lives in the
-// URL (`?sprint=`), so the server renders the page for that sprint.
+// URL, so the server renders the page for that sprint.
 export function SprintSelector({
   options,
   selectedId,
 }: {
-  options: SprintOptionView[];
+  options: SprintLinkView[];
   selectedId: string;
 }) {
   const router = useRouter();
-  const pathname = usePathname();
   const id = useId();
   // Controlled, so a page that Back or Forward shows again has the server's
   // selection, not the choice the user made before leaving it. The optimistic
@@ -51,10 +56,14 @@ export function SprintSelector({
         value={value}
         onChange={(event) => {
           const sprintId = event.target.value;
+          const option = options.find(({ id }) => id === sprintId);
+          if (option === undefined) {
+            return;
+          }
           pendingFocusSprintId = sprintId;
           startTransition(() => {
             setOptimisticValue(sprintId);
-            router.push(`${pathname}?sprint=${encodeURIComponent(sprintId)}`);
+            router.push(option.href);
           });
         }}
         className="h-9 w-full max-w-full rounded-md border border-form-control-border bg-surface px-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface"

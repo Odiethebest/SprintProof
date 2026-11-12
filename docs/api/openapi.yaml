@@ -28,8 +28,10 @@ info:
     - 400: `VALIDATION_ERROR`, `INVALID_CURSOR`
     - 401: `UNAUTHENTICATED`, `INVALID_TOKEN`
     - 403: `FORBIDDEN`
-    - 404: `NOT_FOUND`, `SPRINT_NOT_FOUND`, `INVITE_NOT_FOUND`, `TOKEN_NOT_FOUND`
-    - 409: `REPO_ALREADY_CONNECTED`, `NO_CURRENT_SPRINT`, `STANDUP_DAY_CHANGED`
+    - 404: `NOT_FOUND`, `SPRINT_NOT_FOUND`, `INVITE_NOT_FOUND`, `TOKEN_NOT_FOUND`,
+      `RETRO_NOT_FOUND`, `RETRO_ITEM_NOT_FOUND`, `ACTION_ITEM_NOT_FOUND`
+    - 409: `REPO_ALREADY_CONNECTED`, `NO_CURRENT_SPRINT`, `STANDUP_DAY_CHANGED`,
+      `RETRO_EXISTS`, `RETRO_CLOSED`, `NO_VOTES_LEFT`, `NO_NEXT_SPRINT`
     - 410: `INVITE_REVOKED`, `INVITE_EXPIRED`
     - 500: `INTERNAL_ERROR`, when something fails on the server, such as the
       database. The response says nothing about the failure; try again in a moment.
@@ -58,6 +60,11 @@ tags:
     description: Session only, lead only. Add and edit sprints and their requirements.
   - name: Standups
     description: Session only. Post today's standup.
+  - name: Retros
+    description: |
+      Session only. A sprint's retro: the lead opens and closes it; leads and
+      members add items, vote (3 votes each, 1 per item) and check off the
+      action items carried in from the previous retro. Instructors only read it.
   - name: API tokens
     description: Session only. Create and revoke personal API tokens.
 # Validation (#74): user text rejects NUL with 400 VALIDATION_ERROR.
@@ -486,6 +493,300 @@ paths:
           $ref: "#/components/responses/SprintNotFound"
         "500":
           $ref: "#/components/responses/InternalError"
+  /teams/{teamId}/sprints/{sprintId}/retro:
+    parameters:
+      - $ref: "#/components/parameters/TeamId"
+      - $ref: "#/components/parameters/SprintId"
+    get:
+      tags: [Retros]
+      summary: Get a sprint's retro
+      description: |
+        Items in vote order (ties: the earliest created first), with your votes
+        and how many you have left. Once the retro is closed, `actionItems` lists
+        the next sprint's action items it made. Anyone on the team can read it.
+      operationId: getRetro
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: The sprint's retro.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Retro"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: The team has no sprint with this id (`SPRINT_NOT_FOUND`), or the lead hasn't opened its retro yet (`RETRO_NOT_FOUND`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error:
+                  code: RETRO_NOT_FOUND
+                  message: The lead hasn't opened this sprint's retro yet.
+        "500":
+          $ref: "#/components/responses/InternalError"
+    post:
+      tags: [Retros]
+      summary: Open a sprint's retro
+      description: Lead only. Each sprint has one retro; members can add items and vote once it's open.
+      operationId: openRetro
+      security:
+        - sessionCookie: []
+      responses:
+        "201":
+          description: The new, empty retro.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Retro"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/SprintNotFound"
+        "409":
+          description: The sprint already has a retro, open or closed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error:
+                  code: RETRO_EXISTS
+                  message: This sprint already has a retro.
+        "500":
+          $ref: "#/components/responses/InternalError"
+    patch:
+      tags: [Retros]
+      summary: Close a sprint's retro
+      description: |
+        Lead only. The top 3 "To improve" items by votes (ties: the earliest
+        created) become action items for the sprint that starts next. After
+        that, the retro's items and votes can't change. A closed retro can't be
+        reopened.
+      operationId: closeRetro
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  type: string
+                  enum: [CLOSED]
+      responses:
+        "200":
+          description: The closed retro, with the action items it made.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Retro"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: The team has no sprint with this id (`SPRINT_NOT_FOUND`), or the lead hasn't opened its retro yet (`RETRO_NOT_FOUND`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error:
+                  code: RETRO_NOT_FOUND
+                  message: The lead hasn't opened this sprint's retro yet.
+        "409":
+          description: The retro is already closed (`RETRO_CLOSED`), or the team has no sprint after this one to carry the action items into (`NO_NEXT_SPRINT`). Nothing changes in either case.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error:
+                  code: NO_NEXT_SPRINT
+                  message: Add the next sprint in Settings first. Its action items come from this retro.
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /teams/{teamId}/sprints/{sprintId}/retro/items:
+    parameters:
+      - $ref: "#/components/parameters/TeamId"
+      - $ref: "#/components/parameters/SprintId"
+    post:
+      tags: [Retros]
+      summary: Add a retro item
+      description: Leads and members only, while the retro is open. You're its author.
+      operationId: addRetroItem
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RetroItemInput"
+      responses:
+        "201":
+          description: The new item, with no votes yet.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RetroItem"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/RetroNotFound"
+        "409":
+          $ref: "#/components/responses/RetroClosed"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /teams/{teamId}/sprints/{sprintId}/retro/items/{itemId}/vote:
+    parameters:
+      - $ref: "#/components/parameters/TeamId"
+      - $ref: "#/components/parameters/SprintId"
+      - name: itemId
+        in: path
+        required: true
+        schema:
+          type: string
+    put:
+      tags: [Retros]
+      summary: Vote for a retro item
+      description: |
+        Leads and members only, while the retro is open. You have 3 votes per
+        retro and at most 1 per item: voting for the same item again changes
+        nothing, and a 4th vote is refused.
+      operationId: voteForRetroItem
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: Your vote is on the item.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RetroVoteState"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/RetroItemNotFound"
+        "409":
+          description: The retro is closed (`RETRO_CLOSED`), or you've used your 3 votes in it (`NO_VOTES_LEFT`). Nothing is saved.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error:
+                  code: NO_VOTES_LEFT
+                  message: You've used your 3 votes in this retro. Take one back to vote for this item.
+        "500":
+          $ref: "#/components/responses/InternalError"
+    delete:
+      tags: [Retros]
+      summary: Take your vote back
+      description: Leads and members only, while the retro is open. Taking back a vote you didn't cast changes nothing.
+      operationId: takeBackRetroVote
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: Your vote is off the item.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RetroVoteState"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/RetroItemNotFound"
+        "409":
+          $ref: "#/components/responses/RetroClosed"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /teams/{teamId}/sprints/{sprintId}/retro/action-items/{actionItemId}:
+    parameters:
+      - $ref: "#/components/parameters/TeamId"
+      - $ref: "#/components/parameters/SprintId"
+      - name: actionItemId
+        in: path
+        required: true
+        description: An action item carried into this sprint, from the previous retro's `actionItems`.
+        schema:
+          type: string
+    patch:
+      tags: [Retros]
+      summary: Check an action item off
+      description: |
+        Leads and members only. Marks an action item carried into this sprint
+        done or not done, until this sprint's own retro closes.
+      operationId: updateActionItem
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [isDone]
+              properties:
+                isDone:
+                  type: boolean
+      responses:
+        "200":
+          description: The action item.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActionItem"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: The team has no sprint with this id (`SPRINT_NOT_FOUND`), or no action item with this id was carried into it (`ACTION_ITEM_NOT_FOUND`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error:
+                  code: ACTION_ITEM_NOT_FOUND
+                  message: Action item not found.
+        "409":
+          description: This sprint's retro is closed, so its action items can't change.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error:
+                  code: RETRO_CLOSED
+                  message: This sprint's retro is closed, so its action items can't change.
+        "500":
+          $ref: "#/components/responses/InternalError"
   /teams/{teamId}/standups:
     parameters:
       - $ref: "#/components/parameters/TeamId"
@@ -752,6 +1053,39 @@ components:
             error:
               code: INTERNAL_ERROR
               message: Something went wrong on our side. Try again in a moment.
+    RetroNotFound:
+      description: The team has no sprint with this id (`SPRINT_NOT_FOUND`), or the lead hasn't opened its retro yet (`RETRO_NOT_FOUND`).
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error:
+              code: RETRO_NOT_FOUND
+              message: The lead hasn't opened this sprint's retro yet.
+    RetroItemNotFound:
+      description: |
+        The team has no sprint with this id (`SPRINT_NOT_FOUND`), the lead hasn't
+        opened its retro (`RETRO_NOT_FOUND`), or the retro has no item with this
+        id (`RETRO_ITEM_NOT_FOUND`).
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error:
+              code: RETRO_ITEM_NOT_FOUND
+              message: Retro item not found.
+    RetroClosed:
+      description: The retro is closed, so its items and votes can't change. Nothing is saved.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error:
+              code: RETRO_CLOSED
+              message: This retro is closed, so its items and votes can't change.
     SprintNotFound:
       description: The team has no sprint with this id.
       content:
@@ -1163,6 +1497,114 @@ components:
             $ref: "#/components/schemas/StandupWithAuthor"
         nextCursor:
           type: [string, "null"]
+    RetroItemInput:
+      type: object
+      required: [column, text]
+      properties:
+        column:
+          type: string
+          enum: [WENT_WELL, TO_IMPROVE]
+        text:
+          type: string
+          minLength: 1
+          maxLength: 500
+          description: Spaces around the text are trimmed.
+    RetroItem:
+      type: object
+      required: [id, column, text, author, voteCount, hasVoted, createdAt]
+      properties:
+        id:
+          type: string
+        column:
+          type: string
+          enum: [WENT_WELL, TO_IMPROVE]
+        text:
+          type: string
+        author:
+          type: object
+          required: [userId, name, githubLogin]
+          properties:
+            userId:
+              type: string
+            name:
+              type: [string, "null"]
+            githubLogin:
+              type: [string, "null"]
+        voteCount:
+          type: integer
+          minimum: 0
+        hasVoted:
+          type: boolean
+          description: Whether you voted for it.
+        createdAt:
+          type: string
+          format: date-time
+    ActionItem:
+      type: object
+      required: [id, sprintId, retroItemId, text, voteCount, isDone]
+      properties:
+        id:
+          type: string
+        sprintId:
+          type: string
+          description: The sprint it was carried into, the one after the retro's sprint.
+        retroItemId:
+          type: string
+          description: The "To improve" item it came from.
+        text:
+          type: string
+        voteCount:
+          type: integer
+          minimum: 0
+          description: The votes its item had when the retro closed.
+        isDone:
+          type: boolean
+    Retro:
+      type: object
+      required:
+        [id, sprintId, closedAt, createdAt, votesLeft, items, actionItems]
+      properties:
+        id:
+          type: string
+        sprintId:
+          type: string
+        closedAt:
+          type: [string, "null"]
+          format: date-time
+          description: null while the retro is open.
+        createdAt:
+          type: string
+          format: date-time
+        votesLeft:
+          type: [integer, "null"]
+          minimum: 0
+          maximum: 3
+          description: Your votes left in this retro; null for an instructor, who doesn't vote.
+        items:
+          type: array
+          description: Both columns, most votes first; ties go to the earliest created.
+          items:
+            $ref: "#/components/schemas/RetroItem"
+        actionItems:
+          type: array
+          description: The action items closing made, in the same order; empty while open.
+          items:
+            $ref: "#/components/schemas/ActionItem"
+    RetroVoteState:
+      type: object
+      required: [itemId, voteCount, hasVoted, votesLeft]
+      properties:
+        itemId:
+          type: string
+        voteCount:
+          type: integer
+          minimum: 0
+        hasVoted:
+          type: boolean
+        votesLeft:
+          type: integer
+          minimum: 0
+          maximum: 3
     NewApiToken:
       type: object
       required: [id, name, token, last4, createdAt, lastUsedAt]

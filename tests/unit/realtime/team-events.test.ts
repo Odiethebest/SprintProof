@@ -16,6 +16,7 @@ describe("TEAM_EVENTS", () => {
       "standup.created",
       "standup.updated",
       "activity.created",
+      "retro.updated",
     ]);
   });
 });

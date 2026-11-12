@@ -103,6 +103,7 @@ describe("buildSprintSummaryMarkdown", () => {
       summary,
       standups,
       audience: "TEAM",
+      retro: null,
     });
 
     // Assert
@@ -141,8 +142,11 @@ describe("buildSprintSummaryMarkdown", () => {
         "**Today:** Sprint planning with requirements (#8).",
         "**Blockers:** Waiting on reviews for #107 and #108.",
         "",
-        "## Retro and peer feedback",
-        "Retro items, action items and peer feedback aren't recorded in SprintProof yet. Team exports leave out peer feedback.",
+        "## Retro",
+        "The lead hasn't opened the Sprint 1 retro yet.",
+        "",
+        "## Peer feedback",
+        "Team exports leave out peer feedback.",
         "",
       ].join("\n")
     );
@@ -160,6 +164,7 @@ describe("buildSprintSummaryMarkdown", () => {
       summary,
       standups: [],
       audience: "TEAM",
+      retro: null,
     });
 
     // Assert
@@ -185,6 +190,7 @@ describe("buildSprintSummaryMarkdown", () => {
       summary,
       standups,
       audience: "TEAM",
+      retro: null,
     });
 
     // Assert
@@ -206,6 +212,7 @@ describe("buildSprintSummaryMarkdown", () => {
       summary,
       standups: [],
       audience: "TEAM",
+      retro: null,
     });
 
     // Assert
@@ -227,6 +234,7 @@ describe("buildSprintSummaryMarkdown", () => {
       summary,
       standups: [],
       audience: "TEAM",
+      retro: null,
     });
 
     // Assert
@@ -257,6 +265,7 @@ describe("buildSprintSummaryMarkdown", () => {
       summary,
       standups,
       audience: "TEAM",
+      retro: null,
     });
 
     // Assert
@@ -280,6 +289,7 @@ describe("buildSprintSummaryMarkdown", () => {
       summary,
       standups: [],
       audience: "TEAM",
+      retro: null,
     });
 
     // Assert: `\\` shows one backslash, `\|` one pipe, all in the first cell
@@ -299,6 +309,7 @@ describe("buildSprintSummaryMarkdown", () => {
       summary,
       standups: [],
       audience: "TEAM",
+      retro: null,
     });
 
     // Assert
@@ -327,6 +338,7 @@ describe("buildSprintSummaryMarkdown", () => {
       summary,
       standups: [],
       audience: "TEAM",
+      retro: null,
     });
 
     // Assert
@@ -350,6 +362,7 @@ describe("buildSprintSummaryMarkdown", () => {
       summary,
       standups: [],
       audience: "TEAM",
+      retro: null,
     });
 
     // Assert
@@ -377,6 +390,7 @@ describe("buildSprintSummaryMarkdown", () => {
       summary,
       standups: [],
       audience: "TEAM",
+      retro: null,
     });
 
     // Assert
@@ -388,20 +402,220 @@ describe("buildSprintSummaryMarkdown", () => {
     );
   });
 
-  it("tells instructors that retro items, action items and peer feedback aren't recorded yet", () => {
+  it("writes an open retro's columns with vote counts, in vote order", () => {
+    // Act
+    const markdown = buildSprintSummaryMarkdown({
+      team,
+      summary: createSprintSummary(),
+      standups: [],
+      audience: "TEAM",
+      retro: {
+        closedAt: null,
+        items: [
+          {
+            column: "TO_IMPROVE",
+            text: "Some PRs still wait more than a day for review",
+            voteCount: 1,
+          },
+          {
+            column: "WENT_WELL",
+            text: "CI catches broken builds before review",
+            voteCount: 1,
+          },
+          {
+            column: "TO_IMPROVE",
+            text: "Agree on Prisma migration naming",
+            voteCount: 0,
+          },
+          {
+            column: "WENT_WELL",
+            text: "Pairing on the webhook design saved a day",
+            voteCount: 0,
+          },
+        ],
+        nextSprintName: "Sprint 2",
+        actionItems: [],
+      },
+    });
+
+    // Assert
+    expect(section(markdown, "## Retro")).toEqual([
+      "**Status:** Open · 3 votes each, 1 per item",
+      "",
+      "### Went well",
+      "| Item | Votes |",
+      "| --- | --- |",
+      "| CI catches broken builds before review | 1 |",
+      "| Pairing on the webhook design saved a day | 0 |",
+      "",
+      "### To improve",
+      "| Item | Votes |",
+      "| --- | --- |",
+      "| Some PRs still wait more than a day for review | 1 |",
+      "| Agree on Prisma migration naming | 0 |",
+      "",
+      "### Action items for Sprint 2",
+      "Set when the lead closes the retro.",
+      "",
+    ]);
+  });
+
+  it("lists a closed retro's action items as a checklist, with the ones done checked", () => {
+    // Act
+    const markdown = buildSprintSummaryMarkdown({
+      team,
+      summary: createSprintSummary(),
+      standups: [],
+      audience: "TEAM",
+      retro: {
+        closedAt: new Date("2026-11-05T06:30:00Z"), // Nov 4, 10:30 PM in LA
+        items: [
+          {
+            column: "TO_IMPROVE",
+            text: "Split the dashboard work into smaller PRs",
+            voteCount: 2,
+          },
+        ],
+        nextSprintName: "Sprint 2",
+        actionItems: [
+          { text: "Split the dashboard work into smaller PRs", isDone: true },
+          { text: "Review each other's PRs within 24 hours", isDone: false },
+        ],
+      },
+    });
+
+    // Assert
+    const retro = section(markdown, "## Retro");
+    expect(retro[0]).toBe(
+      "**Status:** Closed 2026-11-04 · 3 votes each, 1 per item"
+    );
+    expect(section(markdown, "### Action items for Sprint 2")).toEqual([
+      "- [x] Split the dashboard work into smaller PRs",
+      "- [ ] Review each other's PRs within 24 hours",
+      "",
+    ]);
+  });
+
+  it("says when a closed retro made no action items", () => {
+    // Act
+    const markdown = buildSprintSummaryMarkdown({
+      team,
+      summary: createSprintSummary(),
+      standups: [],
+      audience: "TEAM",
+      retro: {
+        closedAt: new Date("2026-11-04T20:00:00Z"),
+        items: [],
+        nextSprintName: "Sprint 2",
+        actionItems: [],
+      },
+    });
+
+    // Assert
+    expect(section(markdown, "### Action items for Sprint 2")).toEqual([
+      "None.",
+      "",
+    ]);
+  });
+
+  it("says when a column has no items", () => {
+    // Act
+    const markdown = buildSprintSummaryMarkdown({
+      team,
+      summary: createSprintSummary(),
+      standups: [],
+      audience: "TEAM",
+      retro: {
+        closedAt: null,
+        items: [],
+        nextSprintName: "Sprint 2",
+        actionItems: [],
+      },
+    });
+
+    // Assert
+    expect(section(markdown, "### Went well")).toEqual(["No items.", ""]);
+    expect(section(markdown, "### To improve")).toEqual(["No items.", ""]);
+  });
+
+  it("names the next sprint generically when the team hasn't added it yet", () => {
+    // Act
+    const markdown = buildSprintSummaryMarkdown({
+      team,
+      summary: createSprintSummary(),
+      standups: [],
+      audience: "TEAM",
+      retro: {
+        closedAt: null,
+        items: [],
+        nextSprintName: null,
+        actionItems: [],
+      },
+    });
+
+    // Assert
+    expect(markdown).toContain("### Action items for the next sprint");
+  });
+
+  it("keeps an item's text in its table cell and on one line", () => {
+    // Act
+    const markdown = buildSprintSummaryMarkdown({
+      team,
+      summary: createSprintSummary(),
+      standups: [],
+      audience: "TEAM",
+      retro: {
+        closedAt: new Date("2026-11-04T20:00:00Z"),
+        items: [
+          {
+            column: "TO_IMPROVE",
+            text: "Keep PRs | small\nand focused",
+            voteCount: 1,
+          },
+        ],
+        nextSprintName: "Sprint 2",
+        actionItems: [{ text: "Keep PRs | small\nand focused", isDone: false }],
+      },
+    });
+
+    // Assert
+    expect(section(markdown, "### To improve")[2]).toBe(
+      "| Keep PRs \\| small and focused | 1 |"
+    );
+    expect(section(markdown, "### Action items for Sprint 2")[0]).toBe(
+      "- [ ] Keep PRs | small and focused"
+    );
+  });
+
+  it("tells instructors that peer feedback isn't recorded yet", () => {
     // Act
     const markdown = buildSprintSummaryMarkdown({
       team,
       summary: createSprintSummary(),
       standups: [],
       audience: "INSTRUCTOR",
+      retro: null,
     });
 
     // Assert
-    expect(section(markdown, "## Retro and peer feedback")).toEqual([
-      "Retro items, action items and peer feedback aren't recorded in SprintProof yet.",
+    expect(section(markdown, "## Peer feedback")).toEqual([
+      "Peer feedback isn't recorded in SprintProof yet.",
       "",
     ]);
+  });
+
+  it("no longer says retro items aren't recorded", () => {
+    // Act
+    const markdown = buildSprintSummaryMarkdown({
+      team,
+      summary: createSprintSummary(),
+      standups: [],
+      audience: "INSTRUCTOR",
+      retro: null,
+    });
+
+    // Assert
+    expect(markdown).not.toContain("Retro items, action items");
   });
 });
 
