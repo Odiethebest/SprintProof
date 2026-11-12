@@ -406,7 +406,7 @@ Each member gets 3 votes per retro, at most 1 per item. The top 3 "To improve" i
 | Repository connection and webhooks | Done | Signature verification, delivery dedup, idempotent `Activity` storage, webhook URL and setup steps in Settings (PRs #49, #79, #83). One app-wide webhook secret for now: per-team secret rotation and the "Unmapped activity" list aren't built (#78) |
 | Sprints and requirements | Done | Create and edit sprints with dates, standups and PR reviews per person; date, overlap and 1–20 checks (PRs #40, #47); overlapping writes serialized (PR #83) |
 | Async standups | Done | Three-question form, one per person per day in the team timezone, history by day (PRs #51, #69, #81); character counter and focus fixes (PRs #84, #85) |
-| Live contribution dashboard | Done | Counts per member, activity feed, Pusher live updates (PRs #58, #60, #80); teammates' standups announced to screen readers (PR #85) |
+| Live contribution dashboard | Done | Counts per member, activity feed, Pusher live updates (PRs #58, #60, #80); teammates' standups announced to screen readers (PR #85); reviews say "approved", "requested changes on" or "commented on" #N (#57) |
 | Requirement checks | Done | Met / On track / At risk / Missed in `src/lib/checks/` (PR #30), shown on the dashboard (PR #58) |
 | Retros and action items | Planned | Voting, top 3 "To improve" items carried into the next sprint (#13) |
 | Peer feedback | Planned | Instructor-only, enforced on the server (#14) |
