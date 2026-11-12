@@ -1,6 +1,6 @@
 # Contribution log
 
-> **Draft, finalized after the Sprint 2 retro.** Built only from git and GitHub history as of 2026-11-11: issues, merged pull requests and their reviews, decision records, standup files and commits on `main`. It lists what each person did; it doesn't score or compare anyone.
+> Built only from git and GitHub history up to `main` at `0717e6f` (2026-11-12, after the Sprint 2 retro): issues, merged pull requests and their reviews, decision records, standup files and commits on `main`. It lists what each person did; it doesn't score or compare anyone. Both partners confirm it in the review of the PR that updates it (#134).
 
 | Member | GitHub | Role |
 | --- | --- | --- |
@@ -11,19 +11,18 @@
 
 ### Issues
 
-- **Assigned and closed:** #1 PRD, #2 mockups and design tokens, #6 sign in with GitHub, #7 teams and invite links, #9 daily standups, #12 live dashboard, #15 review page and Markdown export, #16 public API v1, #18 Sprint 1 Scrum artifacts, #56 standups follow their days, #62 button contrast, #71 webhook delivery races, #72 Pusher timeouts and error page, #73 standup calendar boundaries, #74 input validation, #75 transaction races, #76 form feedback, #77 keyboard accessibility, #90 NUL in webhook text and commit insert order, #91 unsent standup text across a day change, #92 days left for an upcoming sprint, #93 team sign-in callback and navigation, #97 teams API and the 500 error shape, #98 automatic migrations, health check and coverage, #99 sprint windows without the host time zone, #100 404 page.
-- **Assigned, open:** #41 Sprint 2 Scrum artifacts.
-- **Opened:** the Sprint 1 and 2 backlog (#1–#18, #41, #43, #53, #57), the Nov 9 bug audit issues (#62, #71–#78), the Nov 10 follow-ups from Yunhong's reviews (#90–#94), and the Nov 11 issues #97–#100.
+- **Assigned and closed:** #1 PRD, #2 mockups and design tokens, #6 sign in with GitHub, #7 teams and invite links, #9 daily standups, #12 live dashboard, #13 retros with voting and action items, #14 private peer feedback for instructors, #15 review page and Markdown export, #16 public API v1, #18 Sprint 1 Scrum artifacts, #41 Sprint 2 Scrum artifacts, #43 E2E user flows, #53 verified database certificate, #56 standups follow their days, #57 review state in the activity feed, #62 button contrast, #71 webhook delivery races, #72 Pusher timeouts and error page, #73 standup calendar boundaries, #74 input validation, #75 transaction races, #76 form feedback, #77 keyboard accessibility, #78 rule decisions from the Nov 9 audit, #90 NUL in webhook text and commit insert order, #91 unsent standup text across a day change, #92 days left for an upcoming sprint, #93 team sign-in callback and navigation, #94 separate lock kinds and repo names unique ignoring case, #97 teams API and the 500 error shape, #98 automatic migrations, health check and coverage, #99 sprint windows without the host time zone, #100 404 page, #112 favicon, #114 count each commit once across rebases, #115 a webhook secret per team, #116 instructor invites from course staff, #117 a repository connection counts after a verified ping, #126 the dashboard on phone screens.
+- **Assigned, open:** none. The two open backlog issues, #130 and #131, aren't assigned yet.
+- **Opened:** the Sprint 1 and 2 backlog (#1–#18, #41, #43, #53, #57), the Nov 9 bug audit issues (#62, #71–#78), the Nov 10 follow-ups from Yunhong's reviews (#90–#94), the Nov 11 issues #97–#100, #112 and #114–#117 (the follow-ups decided in #78), and on Nov 12 #126, #130, #131 and #134.
 
 ### Pull requests authored (merged)
 
-- **Features:** #37 GitHub sign-in (#6), #44 teams and invite links (#7), #51 daily standups (#9), #58 sprint dashboard (#12), #60 live dashboard updates through Pusher (#12), #64 personal API tokens (#16), #65 and #66 read-only API and OpenAPI docs (#16; #65 merged into the #64 branch, #66 into `main`), #106 listing and reading teams through the API, and 500 `INTERNAL_ERROR` for unexpected errors (#97), #108 read-only review page and Markdown export (#15).
-- **Fixes:** #24 token-only placeholder page (#3), #34 CI runs on `main` no longer cancelled (#17), #63 button hover contrast (#62), #69 standups keep their days (#56), #79 webhook delivery races (#71), #80 Pusher timeouts and team error page (#72), #81 standup day and stale forms (#73), #82 inputs that returned 500 (#74), #83 advisory locks for sprint, invite and repo writes (#75), #84 settings and standup form feedback (#76), #85 keyboard focus and announcements (#77), #101 no days left before a sprint starts (#92), #102 NUL in webhook text and commits in SHA order (#90), #103 team sign-in callback and current page in the navigation (#93), #107 unsent standup text kept across a day change (#91), #109 404 page (#100), #110 sprint windows without the host time zone, with three `refactor` commits that leave one implementation of each counting rule (#99).
-- **Platform and CI:** #104 migrations applied after every merge, `/api/health`, the production smoke test and coverage thresholds (#98).
-- **Tests:** #105 E2E for GitHub activity reaching a teammate's live dashboard, flow 3 of #43.
-- **Docs:** #20 peer feedback rule covers exports (#1), #22 prototype screenshots and AGENTS.md §2 (#2), #26 production link (#4), #29 rules file experiment results (#10), #35 decision 001 OAuth scopes (#6), #45 AGENTS.md and README synced with the teams code (#7), #52 hosted env setup and the #11 migration (#17), #70 local Supabase password variables (#17), #87 Supabase pooler URIs in `.env.example` (#17).
-- **Scrum records:** #19 Sprint 1 planning, #38 and #39 Sprint 1 retro (#18), #42 Sprint 2 planning (#41), standups #25, #31, #32, #48, #54, #67.
-- **Open:** #95 Sprint 2 retro draft (#41).
+- **Features:** #37 GitHub sign-in (#6), #44 teams and invite links (#7), #51 daily standups (#9), #58 sprint dashboard (#12), #60 live dashboard updates through Pusher (#12), #64 personal API tokens (#16), #65 and #66 read-only API and OpenAPI docs (#16; #65 merged into the #64 branch, #66 into `main`), #106 listing and reading teams through the API, and 500 `INTERNAL_ERROR` for unexpected errors (#97), #108 read-only review page and Markdown export (#15), #120 review state in the activity feed (#57), #122 instructor invite links only from course staff and instructors (#116), #123 retros with voting and action items (#13), #124 count each commit once across rebases and skip GitHub's own commits on the default branch (#114), #125 a webhook secret per team (#115), #127 private peer feedback for instructors (#14), #128 a repository connection counts only after a verified ping (#117).
+- **Fixes:** #24 token-only placeholder page (#3), #34 CI runs on `main` no longer cancelled (#17), #63 button hover contrast (#62), #69 standups keep their days (#56), #79 webhook delivery races (#71), #80 Pusher timeouts and team error page (#72), #81 standup day and stale forms (#73), #82 inputs that returned 500 (#74), #83 advisory locks for sprint, invite and repo writes (#75), #84 settings and standup form feedback (#76), #85 keyboard focus and announcements (#77), #101 no days left before a sprint starts (#92), #102 NUL in webhook text and commits in SHA order (#90), #103 team sign-in callback and current page in the navigation (#93), #107 unsent standup text kept across a day change (#91), #109 404 page (#100), #110 sprint windows without the host time zone, with three `refactor` commits that leave one implementation of each counting rule (#99), #113 favicon (#112), #132 the dashboard inside a phone screen (#126).
+- **Platform and CI:** #104 migrations applied after every merge, `/api/health`, the production smoke test and coverage thresholds (#98), #119 database certificate verified against `DATABASE_CA_CERT` (#53), #121 separate advisory lock kinds and repo names unique ignoring case (#94).
+- **Tests:** #105 E2E for GitHub activity reaching a teammate's live dashboard, flow 3 of #43; #129 all five user flows end to end with axe checks (#43).
+- **Docs:** #20 peer feedback rule covers exports (#1), #22 prototype screenshots and AGENTS.md §2 (#2), #26 production link (#4), #29 rules file experiment results (#10), #35 decision 001 OAuth scopes (#6), #45 AGENTS.md and README synced with the teams code (#7), #52 hosted env setup and the #11 migration (#17), #70 local Supabase password variables (#17), #87 Supabase pooler URIs in `.env.example` (#17), #111 README merge and deploy notes and this log to Nov 11 (#41), #118 decision records 004–007 (#78).
+- **Scrum records:** #19 Sprint 1 planning, #38 and #39 Sprint 1 retro (#18), #42 Sprint 2 planning (#41), standups #25, #31, #32, #48, #54, #67, #95 the Sprint 2 retro with Yunhong's votes and feedback (#41), #133 rewording Ziqi's partner feedback (#41).
 
 ### Commits in Yunhong's pull requests
 
@@ -40,6 +39,7 @@ Approving or change-requesting reviews on Yunhong's merged PRs: #21, #23, #27, #
 - [001 GitHub OAuth scopes](decisions/001-github-oauth-scopes.md)
 - [003 Standups belong to days](decisions/003-standups-belong-to-days.md)
 - The decision record template ([000](decisions/000-template.md))
+- The four rule decisions from the Nov 9 audit (#78, PR #118): [004 count each commit once](decisions/004-count-each-commit-once.md), [005 a webhook secret per team](decisions/005-per-team-webhook-secret.md), [006 instructor invites from course staff](decisions/006-instructor-invites-from-course-staff.md), [007 a repository claim needs a verified ping](decisions/007-repo-claim-needs-verified-ping.md).
 - Edits to [002](decisions/002-database-hosting.md) in #52, #70, #87 and #104.
 
 ### Operations outside git history
@@ -49,6 +49,7 @@ Approving or change-requesting reviews on Yunhong's merged PRs: #21, #23, #27, #
 - Nov 11: `DATABASE_URL` secrets in the GitHub environments `preview` and `production`, limited to protected branches, so `database.yml` (#98) migrates both databases after every merge.
 - Nov 11: the repository webhook pointing at production, with a new webhook secret; Pusher Channels for live updates in production (Vercel env vars, then a redeploy); "E2E tests" and "Dependency audit" added to the required checks on `main`.
 - Nov 11: replaced the empty placeholder team on production with the team SprintProof (both partners LEAD), Sprint 1 and 2, the 12 standups from `docs/sprints/`, and the repository's GitHub history since Oct 28 mapped to activity with the webhook rules.
+- Nov 12: imported the Sprint 1 retro from [`sprint-1/retro.md`](sprints/sprint-1/retro.md) into the production team after #123 merged, and added a Sprint 3 (Nov 12–18) to production so the demo video could show a live standup update.
 
 ### Standups
 
@@ -57,7 +58,7 @@ Approving or change-requesting reviews on Yunhong's merged PRs: #21, #23, #27, #
 
 ### Commits
 
-153 non-merge commits on `main` (40 `test`, 19 `feat`, 25 `fix`, 3 `refactor`, the rest `docs` and `chore`), including the initial repository setup.
+212 non-merge commits on `main` (62 `test`, 26 `feat`, 31 `fix`, 4 `refactor`, 72 `docs`, 17 `chore`), including the initial repository setup: 18 on Oct 28, 16 in Sprint 1, 160 in Sprint 2 and 18 on Nov 12.
 
 ## Yunhong Huang
 
@@ -77,6 +78,7 @@ Approving or change-requesting reviews on Yunhong's merged PRs: #21, #23, #27, #
 ### Commits in Ziqi's pull requests
 
 - #39 (#18): 1 commit, Yunhong's partner feedback in the Sprint 1 retro.
+- #95 (#41): 1 commit, Yunhong's votes, AI tools and partner feedback in the Sprint 2 retro.
 
 ### Reviews given
 
@@ -100,23 +102,23 @@ Approving or change-requesting reviews on Ziqi's merged PRs: #19, #20, #22, #24,
 
 ### Commits
 
-34 non-merge commits on `main` (7 `test`, 6 `feat`, 2 `fix`, the rest `docs`, `chore` and `style`).
+35 non-merge commits on `main` (7 `test`, 6 `feat`, 2 `fix`, 13 `docs`, 6 `chore`, 1 `style`): 5 on Oct 28, 13 in Sprint 1, 16 in Sprint 2 and 1 on Nov 12.
 
 ## Shared work
 
 - **Rules file experiment (#10):** Ziqi ran the WITHOUT round and wrote the reference tests; Yunhong ran the WITH rounds (v1 and v2) and wrote the AGENTS.md v2 rules (#28, Changelog 2026-10-29); Ziqi recorded the results (#29) ([`research/rules-before-after.md`](research/rules-before-after.md)).
-- **AGENTS.md:** both partners wrote v1 (Changelog 2026-10-28). Later Changelog rows are by Ziqi for the AI-commit rule (no issue), #1, #2, #5, #6, #7, #9, #11, #12, #15, #16, #56, #73, #74, #90, #91, #93, #97, #98 and #99, and by Yunhong for #1 (bots), #3, #8, #10, #17 and the per-person standup files.
-- **Sprint retros:** the Sprint 1 retro ([`sprint-1/retro.md`](sprints/sprint-1/retro.md)) has both partners' items and feedback (#38, #39). The Sprint 2 retro is drafted in open PR #95 (#41) and isn't merged yet.
+- **AGENTS.md:** both partners wrote v1 (Changelog 2026-10-28). Later Changelog rows are by Ziqi (32 rows) for the AI-commit rule (no issue), #1, #2, #5, #6, #7, #9, #11, #12, #13, #14, #15, #16, #53, #56, #57, #73, #74, #90, #91, #93, #94, #97, #98, #99, #114, #115, #116 and #117, and by Yunhong (10 rows) for #1 (bots), #3, #8, #10, #17 and the per-person standup files.
+- **Sprint retros:** the Sprint 1 retro ([`sprint-1/retro.md`](sprints/sprint-1/retro.md)) has both partners' items and feedback (#38, #39). The Sprint 2 retro ([`sprint-2/retro.md`](sprints/sprint-2/retro.md)) has both partners' votes, the three action items with owners, and partner feedback in both directions (#95, #133).
 
 ## Process notes
 
-- Ziqi merged all 65 merged PRs, both partners'.
-- 20 of them had no approving review from the partner when they merged: #58, #60, #63, #79, #80, #81, #82, #83 and #101–#110 had no approval yet, and #61 and #85 had their approval dismissed by a later push. They went in through the repository owner's admin override of the required review.
+- Ziqi merged all 81 merged PRs, both partners'.
+- 36 of them had no approving review from the partner when they merged, 28 in Sprint 2 and 8 on Nov 12: #58, #60, #63, #79, #82, #83, #95, #101–#111, #113, #118–#125, #127–#129, #132 and #133 had no partner review at all, #80 and #81 were approved minutes after merging, and #61 and #85 had their approval dismissed by a later push. They went in through the repository owner's admin override of the required review. Both of us voted this the first "To improve" item of the Sprint 2 retro, and its action item is that every PR gets a partner approval with a substantive comment before it merges.
+- No partner review was submitted after Nov 10, so the review counts above are final for both sprints.
 - Counts come from `git log --no-merges` on `main` and from the pull requests' reviews on GitHub. Commit counts include docs and standup commits, so they say how history is split, not how much work each commit was.
 
-## To finalize after the Sprint 2 retro
+## Status
 
-- [ ] Add the Sprint 2 retro results and partner feedback.
-- [x] Add PRs merged after 2026-11-10 (#96, #101–#110).
-- [ ] Add #95 once it merges.
-- [ ] Both partners read this file and confirm it, then drop the "Draft" note.
+- [x] Sprint 2 retro results and partner feedback added.
+- [x] PRs merged after 2026-11-10 added (#95, #111–#133).
+- [ ] Both partners read this file and confirm it, in the review of #134.
