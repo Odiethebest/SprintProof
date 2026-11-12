@@ -46,9 +46,9 @@ export const joinTeamSchema = z.object({
 
 // Who can create and revoke each kind of link (decision 006, #116): the lead
 // manages member links; course staff and the team's instructors manage
-// instructor links, and course staff don't have to be on the team. A lead
-// can't, so they can't join their own team as an instructor with a second
-// account and read peer feedback (PRD R7).
+// instructor links, and course staff don't have to be on the team. Keeping
+// instructor links from the lead stops them joining their own team as an
+// instructor with a second account and reading peer feedback (PRD R7).
 export function getManageableInviteRoles({
   teamRole,
   isCourseStaff,
