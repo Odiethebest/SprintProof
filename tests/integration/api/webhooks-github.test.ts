@@ -968,6 +968,30 @@ describe("POST /api/webhooks/github", () => {
       ).toBeNull();
     });
 
+    // The repository is read before the signature is checked, so a forged
+    // body must not be able to break the team lookup (#74: PostgreSQL text
+    // can't hold NUL).
+    it("returns 401 and stores nothing for an unsigned delivery whose repository name contains NUL", async () => {
+      // Arrange
+      await insertTeamWithSecret({ repoFullName: "Odiethebest/SprintProof" });
+      const payload = {
+        ...pingPayload,
+        repository: { id: 123, full_name: "Odiethebest/Sprint\u0000Proof" },
+      };
+
+      // Act
+      const response = await sendSigned({
+        event: "ping",
+        payload,
+        deliveryId: "nul-repo-name-ping",
+        secret: "not-the-team-secret",
+      });
+
+      // Assert
+      expect(response.status).toBe(401);
+      await expectNothingStored();
+    });
+
     it("keeps the fallback after a delivery with a wrong signature", async () => {
       // Arrange
       const team = await insertTeamWithSecret({
