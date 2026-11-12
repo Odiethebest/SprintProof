@@ -102,9 +102,10 @@ As someone who never knows if we're on track, I want a dashboard that updates th
 
 **US-8. Run a retro that leads somewhere** · Issue #13
 As someone who wants retros to change something, I want to vote on what to improve and have the top items become next sprint's action items, so retros don't just get forgotten.
-- Two columns: "Went well" and "To improve".
-- Each member has 3 votes per retro, max 1 per item.
-- When the lead closes the retro, the top 3 "To improve" items become action items on the next sprint.
+- The lead opens a retro for a sprint; members add items to two columns, "Went well" and "To improve".
+- Each member has 3 votes per retro, max 1 per item. Voting again on an item takes the vote back, and the page shows how many votes are left.
+- When the lead closes the retro, the top 3 "To improve" items become action items on the sprint that starts next, which has to exist first. After that, the retro's items and votes don't change.
+- The next sprint's retro lists those action items with a done checkbox.
 
 **US-9. Give honest partner feedback** · Issue #14
 As someone in a team of two, I want to leave partner feedback that only the instructor sees, so I can be honest without making things awkward.
@@ -141,7 +142,7 @@ These rules are the source of truth for `src/lib/` and are mirrored in `AGENTS.m
 - **R1. Timezone.** Timestamps are stored in UTC. Sprint boundaries are computed in the team's timezone. A sprint runs from 00:00 on its start date through 23:59:59.999 on its end date, inclusive. The end is computed as the start of the next day minus 1 ms, so it stays right in timezones where a DST change skips midnight.
 - **R2. Standups.** At most one standup counts per person per calendar day in the team's timezone. A standup counts on its stored day, never by when it was saved. A form opened on an earlier day doesn't file under today: the API rejects it (409 `STANDUP_DAY_CHANGED`) and the form offers today's form. A standup counts in the sprint whose dates contain its day, so it moves with its day when sprint dates change; one on a day outside every sprint is kept but not counted.
 - **R3. Reviews.** A review counts when a member submits a review (approved, changes requested, or commented) on a PR authored by someone else. Count distinct PRs per reviewer. Reviews on your own PR never count.
-- **R4. Commits.** Count commits from `push` events on any branch, so commits on a feature branch are recorded before a merge or squash can hide them (decision 001). Deduplicate by SHA. Attribute by the commit author's GitHub login mapped to a team member, never the committer or the pusher; skip commits whose author isn't linked to a GitHub account. Commits from fork PRs and commits pushed before the webhook was connected aren't counted. Bots (logins ending in `[bot]`) are ignored for every activity type, not only commits.
+- **R4. Commits.** Count commits from `push` events on any branch, so commits on a feature branch are recorded before a merge or squash can hide them (decision 001). Deduplicate by SHA, and count a commit once per author, author date and full message, so the copy a rebase, an amend or a force-push makes under a new SHA doesn't count again. Commits GitHub itself makes on the repository's default branch (committer `web-flow`: merge commits and the copies "Rebase and merge" and "Squash and merge" make) don't count, because the PR's own commits already counted from its branch; one GitHub makes on another branch, such as "Update branch" on a PR, counts (decision 004). Attribute by the commit author's GitHub login mapped to a team member, never the committer or the pusher; skip commits whose author isn't linked to a GitHub account. Commits from fork PRs and commits pushed before the webhook was connected aren't counted. Bots (logins ending in `[bot]`) are ignored for every activity type, not only commits.
 - **R5. Requirement status.**
   - `MET`: count ≥ required
   - `ON_TRACK`: not met, sprint running, more than 2 days left

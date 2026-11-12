@@ -9,6 +9,12 @@ import prUnmergedPayload from "../../fixtures/github/pull-request-closed-unmerge
 import prReviewPayload from "../../fixtures/github/pull-request-review.json";
 import prReviewBotPayload from "../../fixtures/github/pull-request-review-bot.json";
 import { insertMembership, insertTeam, insertUser } from "../../factories/db";
+import {
+  createGithubCommit,
+  createPushCommit,
+  createPushPayload,
+  createRebasedCopy,
+} from "../../factories/github-push";
 import { releaseActivityInsertsTogether } from "../helpers/activity-inserts";
 import { signWebhookPayload, webhookRequest } from "../helpers/requests";
 import { clearDatabase } from "../setup/test-setup";
@@ -1013,6 +1019,196 @@ describe("POST /api/webhooks/github", () => {
         await db.team.findUniqueOrThrow({ where: { id: team.id } })
       ).toMatchObject({ canUseServerWebhookSecret: true });
     });
+  });
+
+  // Counting rule (#114, decision 004): a commit counts once per author, author
+  // date and full message, and commits GitHub makes on the default branch
+  // (committer `web-flow`) don't count. Dedup by SHA and the bot rule stay.
+  describe("counting each commit once", () => {
+    const featureBranch = "refs/heads/feature/12-dashboard";
+
+    async function storedShas(teamId: string) {
+      const rows = await db.activity.findMany({
+        where: { teamId, type: "COMMIT" },
+        orderBy: { occurredAt: "asc" },
+        select: { sha: true },
+      });
+      return rows.map((row) => row.sha);
+    }
+
+    it("stores a rebased copy of a stored commit nothing more, though its SHA is new", async () => {
+      // Arrange: Alice pushes a commit, then rebases the branch and force-pushes
+      const team = await insertTeamWithSecret({
+        repoFullName: "Odiethebest/SprintProof",
+        repoId: 987654321n,
+      });
+      const original = createPushCommit();
+      const copy = createRebasedCopy(original, {
+        id: "0f9e8d7c6b5a4938271605f4e3d2c1b0a9876543",
+        committedAt: "2026-11-03T09:15:00Z",
+      });
+      await sendSigned({
+        event: "push",
+        payload: createPushPayload({ ref: featureBranch, commits: [original] }),
+        deliveryId: "branch-push",
+      });
+
+      // Act
+      const response = await sendSigned({
+        event: "push",
+        payload: createPushPayload({ ref: featureBranch, commits: [copy] }),
+        deliveryId: "force-push-after-rebase",
+      });
+
+      // Assert
+      expect(response.status).toBe(200);
+      expect(await storedShas(team.id)).toEqual([original.id]);
+    });
+
+    it("stores a PR's commits once from its branch, and never GitHub's merge commit, even when a later push brings it into another branch", async () => {
+      // Arrange
+      const team = await insertTeamWithSecret({
+        repoFullName: "Odiethebest/SprintProof",
+        repoId: 987654321n,
+      });
+      const first = createPushCommit();
+      const second = createPushCommit({
+        id: "2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c",
+        message: "test(dashboard): cover the empty sprint",
+        timestamp: "2026-11-02T18:05:00Z",
+        author: { ...first.author, date: "2026-11-02T18:05:00Z" },
+      });
+      const merge = createGithubCommit();
+      const alreadyPushed = { distinct: false };
+
+      // Act: the branch push, the merge button, then Bob merges main into his branch
+      const responses = [
+        await sendSigned({
+          event: "push",
+          payload: createPushPayload({
+            ref: featureBranch,
+            commits: [first, second],
+          }),
+          deliveryId: "feature-branch-push",
+        }),
+        await sendSigned({
+          event: "push",
+          payload: createPushPayload({
+            ref: "refs/heads/main",
+            commits: [
+              { ...first, ...alreadyPushed },
+              { ...second, ...alreadyPushed },
+              merge,
+            ],
+          }),
+          deliveryId: "merge-button-push",
+        }),
+        await sendSigned({
+          event: "push",
+          payload: createPushPayload({
+            ref: "refs/heads/feature/13-retro",
+            commits: [{ ...merge, ...alreadyPushed }],
+          }),
+          deliveryId: "sync-main-into-branch",
+        }),
+      ];
+
+      // Assert
+      expect(responses.map((response) => response.status)).toEqual([
+        200, 200, 200,
+      ]);
+      expect(await storedShas(team.id)).toEqual([first.id, second.id]);
+    });
+
+    // "Update branch" on a PR, or GitHub's web editor on a feature branch.
+    it("stores a commit GitHub made on a feature branch once, after it reaches the default branch too", async () => {
+      // Arrange
+      const team = await insertTeamWithSecret({
+        repoFullName: "Odiethebest/SprintProof",
+        repoId: 987654321n,
+      });
+      const updateBranch = createGithubCommit({
+        message: "Merge branch 'main' into feature/12-dashboard",
+      });
+
+      // Act
+      await sendSigned({
+        event: "push",
+        payload: createPushPayload({
+          ref: featureBranch,
+          commits: [updateBranch],
+        }),
+        deliveryId: "update-branch-push",
+      });
+      await sendSigned({
+        event: "push",
+        payload: createPushPayload({
+          ref: "refs/heads/main",
+          commits: [{ ...updateBranch, distinct: false }],
+        }),
+        deliveryId: "merge-push",
+      });
+
+      // Assert
+      const stored = await db.activity.findMany({
+        where: { teamId: team.id },
+        select: { sha: true, actorLogin: true },
+      });
+      expect(stored).toEqual([{ sha: updateBranch.id, actorLogin: "alice" }]);
+    });
+
+    // Two refs pushed at once can carry a commit and its rebased copy. Inserted
+    // in SHA order, each delivery could wait on a copy the other inserted first,
+    // and PostgreSQL would abort one as a deadlock (as in #90).
+    it("returns 200 for both of two concurrent deliveries carrying copies of the same commits, storing each commit once", async () => {
+      // Arrange: copies whose SHAs sort the other way round from the originals'
+      const team = await insertTeamWithSecret({
+        repoFullName: "Odiethebest/SprintProof",
+        repoId: 987654321n,
+      });
+      const originals = Array.from({ length: 300 }, (_, index) =>
+        createPushCommit({
+          id: index.toString(16).padStart(40, "0"),
+          message: `Commit ${index}`,
+        })
+      );
+      const copies = originals.map((commit, index) =>
+        createRebasedCopy(commit, {
+          id: (999 - index).toString(16).padStart(40, "f"),
+          committedAt: "2026-11-03T09:15:00Z",
+        })
+      );
+
+      // Act
+      const responses = await releaseActivityInsertsTogether({
+        count: 2,
+        run: () =>
+          Promise.all([
+            sendSigned({
+              event: "push",
+              payload: createPushPayload({
+                ref: featureBranch,
+                commits: originals,
+              }),
+              deliveryId: "originals",
+            }),
+            sendSigned({
+              event: "push",
+              payload: createPushPayload({
+                ref: "refs/heads/feature/12-dashboard-rebased",
+                commits: copies,
+              }),
+              deliveryId: "copies",
+            }),
+          ]),
+      });
+
+      // Assert
+      expect(responses.map((response) => response.status)).toEqual([200, 200]);
+      expect(
+        await db.activity.count({ where: { teamId: team.id, type: "COMMIT" } })
+      ).toBe(originals.length);
+    }, 15000);
   });
 
   describe("unknown repository", () => {

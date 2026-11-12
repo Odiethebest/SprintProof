@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { TeamRole } from "@/lib/auth/team-access";
 import {
   SPRINT_PAGES,
+  getSprintPagePath,
   getTeamNavPages,
   getTeamPagePath,
   type TeamPage,
@@ -10,6 +11,7 @@ import {
 const LABELS: Record<TeamPage, string> = {
   dashboard: "Dashboard",
   standups: "Standups",
+  retro: "Retro",
   review: "Review",
   settings: "Settings",
 };
@@ -29,6 +31,22 @@ export interface TeamNavProps {
   current: TeamPage | null;
   // The sprint picked in the selector, kept when moving between sprint pages.
   requestedSprintId: string | null;
+  // The sprint whose retro Retro opens: the picked one, else the one the
+  // selector shows. null before any sprint has started.
+  retroSprintId: string | null;
+}
+
+function getNavHref({
+  teamId,
+  page,
+  requestedSprintId,
+  retroSprintId,
+}: Omit<TeamNavProps, "role" | "current"> & { page: TeamPage }): string {
+  // Each retro has its own path, so Retro links to one directly (#13).
+  const sprintId = page === "retro" ? retroSprintId : requestedSprintId;
+  return SPRINT_PAGES.includes(page) && sprintId !== null
+    ? getSprintPagePath({ teamId, page, sprintId })
+    : getTeamPagePath({ teamId, page });
 }
 
 // Links between a team's pages (DESIGN.md §6 Top bar).
@@ -37,20 +55,22 @@ export function TeamNav({
   role,
   current,
   requestedSprintId,
+  retroSprintId,
 }: TeamNavProps) {
   return (
     <nav aria-label="Team">
       <ul className="flex flex-wrap gap-1">
         {getTeamNavPages({ role }).map((page) => {
-          const query =
-            SPRINT_PAGES.includes(page) && requestedSprintId !== null
-              ? `?sprint=${encodeURIComponent(requestedSprintId)}`
-              : "";
           const isCurrent = page === current;
           return (
             <li key={page}>
               <Link
-                href={`${getTeamPagePath({ teamId, page })}${query}`}
+                href={getNavHref({
+                  teamId,
+                  page,
+                  requestedSprintId,
+                  retroSprintId,
+                })}
                 aria-current={isCurrent ? "page" : undefined}
                 className={
                   isCurrent ? LINK_CLASSES.current : LINK_CLASSES.other

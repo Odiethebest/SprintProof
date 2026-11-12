@@ -19,6 +19,7 @@ export function ConfirmDialog({
   title,
   children,
   confirmLabel,
+  confirmVariant,
   isBusy,
   error,
   onConfirm,
@@ -29,6 +30,8 @@ export function ConfirmDialog({
   title: string;
   children: ReactNode;
   confirmLabel: string;
+  // "destructive" only for deleting or revoking (DESIGN.md §7 Button).
+  confirmVariant: "primary" | "destructive";
   isBusy: boolean;
   error: string | null;
   onConfirm: () => void;
@@ -113,7 +116,7 @@ export function ConfirmDialog({
             type="button"
             onClick={onConfirm}
             disabled={isBusy}
-            className={BUTTON_CLASSES.destructive}
+            className={BUTTON_CLASSES[confirmVariant]}
           >
             {confirmLabel}
           </button>

@@ -28,6 +28,11 @@ enum ReviewState {
   COMMENTED
 }
 
+enum RetroColumn {
+  WENT_WELL
+  TO_IMPROVE
+}
+
 model User {
   id          String       @id @default(cuid())
   githubId    String       @unique @map("github_id")
@@ -40,6 +45,8 @@ model User {
   memberships Membership[]
   standups    Standup[]
   apiTokens   ApiToken[]
+  retroItems  RetroItem[]
+  retroVotes  RetroVote[]
 
   @@map("users")
 }
@@ -109,19 +116,85 @@ model Invite {
 }
 
 model Sprint {
-  id                String   @id @default(cuid())
-  teamId            String   @map("team_id")
+  id                String       @id @default(cuid())
+  teamId            String       @map("team_id")
   name              String
-  startDate         DateTime @map("start_date") @db.Date
-  endDate           DateTime @map("end_date") @db.Date
-  standupsPerPerson Int      @default(3) @map("standups_per_person")
-  reviewsPerPerson  Int      @default(5) @map("reviews_per_person")
-  createdAt         DateTime @default(now()) @map("created_at")
-  updatedAt         DateTime @updatedAt @map("updated_at")
-  team              Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  startDate         DateTime     @map("start_date") @db.Date
+  endDate           DateTime     @map("end_date") @db.Date
+  standupsPerPerson Int          @default(3) @map("standups_per_person")
+  reviewsPerPerson  Int          @default(5) @map("reviews_per_person")
+  createdAt         DateTime     @default(now()) @map("created_at")
+  updatedAt         DateTime     @updatedAt @map("updated_at")
+  team              Team         @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  retro             Retro?
+  // Carried in from the previous sprint's retro (#13).
+  actionItems       ActionItem[]
 
   @@index([teamId])
   @@map("sprints")
+}
+
+// One retro per sprint (#13). The lead opens it; closing it sets closedAt and
+// turns the top 3 "To improve" items into the next sprint's action items
+// (rule R6). After that its items and votes don't change.
+model Retro {
+  id        String      @id @default(cuid())
+  sprintId  String      @unique @map("sprint_id")
+  closedAt  DateTime?   @map("closed_at")
+  createdAt DateTime    @default(now()) @map("created_at")
+  updatedAt DateTime    @updatedAt @map("updated_at")
+  sprint    Sprint      @relation(fields: [sprintId], references: [id], onDelete: Cascade)
+  items     RetroItem[]
+
+  @@map("retros")
+}
+
+model RetroItem {
+  id         String      @id @default(cuid())
+  retroId    String      @map("retro_id")
+  authorId   String      @map("author_id")
+  column     RetroColumn
+  text       String
+  createdAt  DateTime    @default(now()) @map("created_at")
+  updatedAt  DateTime    @updatedAt @map("updated_at")
+  retro      Retro       @relation(fields: [retroId], references: [id], onDelete: Cascade)
+  author     User        @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  votes      RetroVote[]
+  actionItem ActionItem?
+
+  @@index([retroId])
+  @@index([authorId])
+  @@map("retro_items")
+}
+
+// Max 1 vote per member per item; the 3 per retro are checked when voting (rule R6).
+model RetroVote {
+  id        String    @id @default(cuid())
+  itemId    String    @map("item_id")
+  userId    String    @map("user_id")
+  createdAt DateTime  @default(now()) @map("created_at")
+  item      RetroItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([itemId, userId])
+  @@index([userId])
+  @@map("retro_votes")
+}
+
+// A "To improve" item carried into the next sprint when its retro closed. Its
+// text and votes stay on the retro item, which no longer changes.
+model ActionItem {
+  id          String    @id @default(cuid())
+  sprintId    String    @map("sprint_id")
+  retroItemId String    @unique @map("retro_item_id")
+  isDone      Boolean   @default(false) @map("is_done")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  sprint      Sprint    @relation(fields: [sprintId], references: [id], onDelete: Cascade)
+  retroItem   RetroItem @relation(fields: [retroItemId], references: [id], onDelete: Cascade)
+
+  @@index([sprintId])
+  @@map("action_items")
 }
 
 // A standup belongs to its team and day. It's listed under the sprint whose
@@ -157,12 +230,18 @@ model Activity {
   // Only REVIEW rows have a state. Reviews stored before #57, and reviews with
   // a state GitHub doesn't document, have none and still count.
   reviewState   ReviewState? @map("review_state")
+  // Only COMMIT rows have a key: a hash of the author, author date and full
+  // message, so a rebased or amended copy under a new SHA is stored once (#114).
+  // Commits stored before #114, or whose payload left out the author's date,
+  // have none and are deduplicated by SHA only.
+  commitKey     String?      @map("commit_key")
   occurredAt    DateTime     @map("occurred_at")
   createdAt     DateTime     @default(now()) @map("created_at")
   updatedAt     DateTime     @updatedAt @map("updated_at")
   team          Team         @relation(fields: [teamId], references: [id], onDelete: Cascade)
 
   @@unique([teamId, type, sha])
+  @@unique([teamId, commitKey])
   @@index([teamId])
   @@index([actorLogin])
   @@map("activities")

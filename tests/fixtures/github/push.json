@@ -5,7 +5,8 @@
   "repository": {
     "id": 987654321,
     "name": "SprintProof",
-    "full_name": "Odiethebest/SprintProof"
+    "full_name": "Odiethebest/SprintProof",
+    "default_branch": "main"
   },
   "pusher": {
     "name": "alice"
@@ -21,11 +22,13 @@
       "author": {
         "name": "Alice Smith",
         "email": "alice@example.com",
+        "date": "2026-11-05T15:30:00Z",
         "username": "alice"
       },
       "committer": {
         "name": "Alice Smith",
         "email": "alice@example.com",
+        "date": "2026-11-05T15:30:00Z",
         "username": "alice"
       },
       "distinct": true
@@ -37,11 +40,13 @@
       "author": {
         "name": "dependabot[bot]",
         "email": "dependabot@users.noreply.github.com",
+        "date": "2026-11-05T15:31:00Z",
         "username": "dependabot[bot]"
       },
       "committer": {
         "name": "dependabot[bot]",
         "email": "dependabot@users.noreply.github.com",
+        "date": "2026-11-05T15:31:00Z",
         "username": "dependabot[bot]"
       },
       "distinct": true
@@ -53,11 +58,13 @@
       "author": {
         "name": "Outsider",
         "email": "outsider@example.com",
+        "date": "2026-11-05T15:32:00Z",
         "username": "outsider"
       },
       "committer": {
         "name": "Outsider",
         "email": "outsider@example.com",
+        "date": "2026-11-05T15:32:00Z",
         "username": "outsider"
       },
       "distinct": true

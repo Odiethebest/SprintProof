@@ -2,6 +2,7 @@ import { tz } from "@date-fns/tz";
 import { format } from "date-fns";
 import type { TeamRole } from "@/lib/auth/team-access";
 import type { RequirementStatus } from "@/lib/checks";
+import { MAX_VOTES_PER_RETRO, type RetroColumn } from "@/lib/retro/retro-votes";
 import type { MemberSummary, SprintSummary } from "@/lib/stats/sprint-summary";
 
 // Peer feedback may only go into an instructor's export (AGENTS.md §1, PRD R7).
@@ -16,11 +17,24 @@ export interface ExportStandup {
   blockers: string | null;
 }
 
+// The sprint's retro (#13), or null before the lead opens it.
+export interface ExportRetro {
+  // null while the retro is open.
+  closedAt: Date | null;
+  // In vote order, as tallyRetroItems() sorts them.
+  items: Array<{ column: RetroColumn; text: string; voteCount: number }>;
+  // The sprint the action items are for; null when the team hasn't added it.
+  nextSprintName: string | null;
+  // Made when the retro closes, in order; empty while it's open.
+  actionItems: Array<{ text: string; isDone: boolean }>;
+}
+
 export interface BuildSprintSummaryMarkdownOptions {
   team: { name: string; repoFullName: string; timezone: string };
   summary: SprintSummary;
   standups: ExportStandup[];
   audience: ExportAudience;
+  retro: ExportRetro | null;
 }
 
 const STATUS_LABELS: Record<RequirementStatus, string> = {
@@ -30,9 +44,16 @@ const STATUS_LABELS: Record<RequirementStatus, string> = {
   MISSED: "Missed",
 };
 
-// Retros (#13) and peer feedback (#14) aren't built yet; the export says so.
-const NOT_RECORDED =
-  "Retro items, action items and peer feedback aren't recorded in SprintProof yet.";
+// Peer feedback (#14) isn't built yet; an instructor's export says so.
+const PEER_FEEDBACK_NOTES: Record<ExportAudience, string> = {
+  TEAM: "Team exports leave out peer feedback.",
+  INSTRUCTOR: "Peer feedback isn't recorded in SprintProof yet.",
+};
+
+const RETRO_COLUMN_TITLES: Record<RetroColumn, string> = {
+  WENT_WELL: "Went well",
+  TO_IMPROVE: "To improve",
+};
 
 export function getExportAudience({
   role,
@@ -151,14 +172,87 @@ function buildMemberStandups({
   ];
 }
 
+// One retro column as a table, like "To improve" in docs/sprints/*/retro.md.
+function buildRetroColumn({
+  retro,
+  column,
+}: {
+  retro: ExportRetro;
+  column: RetroColumn;
+}): string[] {
+  const items = retro.items.filter((item) => item.column === column);
+  const rows =
+    items.length === 0
+      ? ["No items."]
+      : [
+          "| Item | Votes |",
+          "| --- | --- |",
+          ...items.map(
+            (item) => `| ${toTableCell(item.text)} | ${item.voteCount} |`
+          ),
+        ];
+  return [`### ${RETRO_COLUMN_TITLES[column]}`, ...rows, ""];
+}
+
+function buildActionItems({ retro }: { retro: ExportRetro }): string[] {
+  const heading =
+    retro.nextSprintName === null
+      ? "### Action items for the next sprint"
+      : `### Action items for ${toInline(retro.nextSprintName)}`;
+  if (retro.closedAt === null) {
+    return [heading, "Set when the lead closes the retro.", ""];
+  }
+  const items =
+    retro.actionItems.length === 0
+      ? ["None."]
+      : retro.actionItems.map(
+          (item) => `- [${item.isDone ? "x" : " "}] ${toInline(item.text)}`
+        );
+  return [heading, ...items, ""];
+}
+
+// The retro as docs/sprints/*/retro.md records it: both columns with their
+// votes, then the action items for the next sprint (#13).
+function buildRetro({
+  retro,
+  sprintName,
+  timeZone,
+}: {
+  retro: ExportRetro | null;
+  sprintName: string;
+  timeZone: string;
+}): string[] {
+  if (retro === null) {
+    return [
+      "## Retro",
+      `The lead hasn't opened the ${sprintName} retro yet.`,
+      "",
+    ];
+  }
+  // Exports use ISO dates (DESIGN.md §9), in the team's timezone.
+  const status =
+    retro.closedAt === null
+      ? "Open"
+      : `Closed ${format(retro.closedAt, "yyyy-MM-dd", { in: tz(timeZone) })}`;
+  return [
+    "## Retro",
+    `**Status:** ${status} · ${MAX_VOTES_PER_RETRO} votes each, 1 per item`,
+    "",
+    ...buildRetroColumn({ retro, column: "WENT_WELL" }),
+    ...buildRetroColumn({ retro, column: "TO_IMPROVE" }),
+    ...buildActionItems({ retro }),
+  ];
+}
+
 // A sprint's summary as Markdown, in the style of the files in docs/sprints/:
-// the sprint, each member's counts and status, and standups by person. Only
-// the members the summary counts are listed, so instructors aren't.
+// the sprint, each member's counts and status, standups by person, and the
+// retro. Only the members the summary counts are listed, so instructors aren't.
 export function buildSprintSummaryMarkdown({
   team,
   summary,
   standups,
   audience,
+  retro,
 }: BuildSprintSummaryMarkdownOptions): string {
   const sprintName = toInline(summary.sprint.name);
   return [
@@ -171,10 +265,9 @@ export function buildSprintSummaryMarkdown({
     ...summary.members.flatMap((member) =>
       buildMemberStandups({ member, standups, sprintName })
     ),
-    "## Retro and peer feedback",
-    audience === "TEAM"
-      ? `${NOT_RECORDED} Team exports leave out peer feedback.`
-      : NOT_RECORDED,
+    ...buildRetro({ retro, sprintName, timeZone: team.timezone }),
+    "## Peer feedback",
+    PEER_FEEDBACK_NOTES[audience],
     "",
   ].join("\n");
 }

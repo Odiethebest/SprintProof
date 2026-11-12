@@ -206,3 +206,42 @@ export async function insertApiToken(input: {
   });
   return { token, record };
 }
+
+// A sprint's retro (#13). Open unless closedAt is set.
+export async function insertRetro(input: {
+  sprintId: string;
+  closedAt?: Date | null;
+}) {
+  return db.retro.create({
+    data: { sprintId: input.sprintId, closedAt: input.closedAt ?? null },
+  });
+}
+
+export async function insertRetroItem(input: {
+  retroId: string;
+  authorId: string;
+  column?: "WENT_WELL" | "TO_IMPROVE";
+  text?: string;
+  createdAt?: Date;
+}) {
+  const n = recordSeq++;
+  return db.retroItem.create({
+    data: { column: "TO_IMPROVE", text: `Retro item ${n}`, ...input },
+  });
+}
+
+export async function insertRetroVote(input: {
+  itemId: string;
+  userId: string;
+}) {
+  return db.retroVote.create({ data: input });
+}
+
+// An action item carried into `sprintId` from a closed retro's item.
+export async function insertActionItem(input: {
+  sprintId: string;
+  retroItemId: string;
+  isDone?: boolean;
+}) {
+  return db.actionItem.create({ data: { isDone: false, ...input } });
+}

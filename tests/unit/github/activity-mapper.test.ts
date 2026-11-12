@@ -10,6 +10,15 @@ import {
   extractWebhookRepository,
   mapWebhookToActivities,
 } from "@/lib/github/webhook-events";
+import {
+  createGithubCommit,
+  createPushCommit,
+  createPushPayload,
+  createRebasedCopy,
+} from "../../factories";
+
+// A commit's key is a SHA-256 in hex; commit-key.test.ts pins how it's made.
+const COMMIT_KEY = expect.stringMatching(/^[0-9a-f]{64}$/);
 
 function activitiesFor(input: { event: string; payload: unknown }) {
   const result = mapWebhookToActivities(input);
@@ -61,7 +70,9 @@ describe("extractWebhookRepository", () => {
     expect(extractWebhookRepository({ payload: null })).toBeNull();
     expect(
       extractWebhookRepository({
-        payload: { repository: { id: "not-a-number", full_name: "owner/repo" } },
+        payload: {
+          repository: { id: "not-a-number", full_name: "owner/repo" },
+        },
       })
     ).toBeNull();
     expect(
@@ -91,6 +102,7 @@ describe("mapWebhookToActivities", () => {
         sha: "1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b",
         title: "feat: add feature",
         reviewState: null,
+        commitKey: COMMIT_KEY,
         occurredAt: new Date("2026-11-05T15:30:00Z"),
       });
 
@@ -102,6 +114,7 @@ describe("mapWebhookToActivities", () => {
         sha: "3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d",
         title: "fix: bugfix by outsider",
         reviewState: null,
+        commitKey: COMMIT_KEY,
         occurredAt: new Date("2026-11-05T15:32:00Z"),
       });
     });
@@ -140,7 +153,11 @@ describe("mapWebhookToActivities", () => {
             id: "commit-by-alice",
             message: "commit with a linked author",
             timestamp: "2026-11-05T12:01:00Z",
-            author: { name: "Alice", email: "a@example.com", username: "alice" },
+            author: {
+              name: "Alice",
+              email: "a@example.com",
+              username: "alice",
+            },
             committer: { name: "No Username", email: "none@example.com" },
           },
         ],
@@ -158,7 +175,10 @@ describe("mapWebhookToActivities", () => {
     it("reads a commit timestamp with a UTC offset", () => {
       const [activity] = activitiesFor({
         event: "push",
-        payload: pushWith({ ...pushCommit, timestamp: "2026-11-05T07:30:00-08:00" }),
+        payload: pushWith({
+          ...pushCommit,
+          timestamp: "2026-11-05T07:30:00-08:00",
+        }),
       });
       expect(activity.occurredAt).toEqual(new Date("2026-11-05T15:30:00Z"));
     });
@@ -175,15 +195,216 @@ describe("mapWebhookToActivities", () => {
     it.each([
       ["has no commits list", withoutKey(pushPayload, "commits")],
       ["has a commit without an id", pushWith(withoutKey(pushCommit, "id"))],
-      ["has a commit without a timestamp", pushWith(withoutKey(pushCommit, "timestamp"))],
-      ["has a commit whose timestamp isn't a date", pushWith({ ...pushCommit, timestamp: "yesterday" })],
-      ["has a commit without an author", pushWith(withoutKey(pushCommit, "author"))],
+      [
+        "has a commit without a timestamp",
+        pushWith(withoutKey(pushCommit, "timestamp")),
+      ],
+      [
+        "has a commit whose timestamp isn't a date",
+        pushWith({ ...pushCommit, timestamp: "yesterday" }),
+      ],
+      [
+        "has a commit without an author",
+        pushWith(withoutKey(pushCommit, "author")),
+      ],
       ["isn't an object", "not-an-object"],
       ["is null", null],
     ])("rejects a push that %s", (_label, payload) => {
       expect(rejectionFor({ event: "push", payload })).toBe(
         "This push payload isn't in the format GitHub sends."
       );
+    });
+  });
+
+  // Counting rule (#114, decision 004): a commit counts once per author, author
+  // date and full message, so a copy under a new SHA gets the same commit key.
+  describe("push: one key per commit, whatever its SHA", () => {
+    const original = createPushCommit();
+
+    function commitKeyOf(commit: object) {
+      const [activity] = activitiesFor({
+        event: "push",
+        payload: createPushPayload({
+          ref: "refs/heads/feature/12-dashboard",
+          commits: [commit],
+        }),
+      });
+      return activity.commitKey;
+    }
+
+    it("gives a rebased, amended or force-pushed copy the key of the original", () => {
+      // Arrange: same author, author date and message; new SHA and committer date
+      const copy = createRebasedCopy(original, {
+        id: "0f9e8d7c6b5a4938271605f4e3d2c1b0a9876543",
+        committedAt: "2026-11-03T09:15:00Z",
+      });
+
+      // Act
+      const originalKey = commitKeyOf(original);
+      const copyKey = commitKeyOf(copy);
+
+      // Assert
+      expect(originalKey).toEqual(COMMIT_KEY);
+      expect(copyKey).toBe(originalKey);
+    });
+
+    it("keeps the committer date as when the commit happened", () => {
+      const copy = createRebasedCopy(original, {
+        id: "0f9e8d7c6b5a4938271605f4e3d2c1b0a9876543",
+        committedAt: "2026-11-03T09:15:00Z",
+      });
+
+      const [activity] = activitiesFor({
+        event: "push",
+        payload: createPushPayload({
+          ref: "refs/heads/feature/12-dashboard",
+          commits: [copy],
+        }),
+      });
+
+      expect(activity.occurredAt).toEqual(new Date("2026-11-03T09:15:00Z"));
+    });
+
+    it.each([
+      [
+        "author date",
+        { author: { ...original.author, date: "2026-11-02T18:00:01Z" } },
+      ],
+      [
+        "message body, with the same first line",
+        { message: "feat: add the dashboard page\n\nShows the activity feed." },
+      ],
+      [
+        "author's email",
+        {
+          author: {
+            ...original.author,
+            email: "alice@users.noreply.github.com",
+          },
+        },
+      ],
+    ])(
+      "gives a different key to a commit with another %s",
+      (_label, change) => {
+        expect(
+          commitKeyOf({ ...original, id: "another-sha", ...change })
+        ).not.toBe(commitKeyOf(original));
+      }
+    );
+
+    it.each([
+      ["date", "date"],
+      ["name", "name"],
+      ["email", "email"],
+    ] as const)(
+      "maps the commit without a key, deduplicated by SHA only, when the author has no %s",
+      (_label, field) => {
+        expect(
+          commitKeyOf({
+            ...original,
+            author: withoutKey(original.author, field),
+          })
+        ).toBeNull();
+      }
+    );
+  });
+
+  // Counting rule (#114, decision 004): commits GitHub makes on the default
+  // branch (committer `web-flow`: merge commits, rebase-merge and squash
+  // copies) don't count. Their content was counted from the branch pushes.
+  describe("push: GitHub's own commits", () => {
+    const featureCommit = createPushCommit();
+    const mergeCommit = createGithubCommit();
+
+    function shasFor(payload: unknown) {
+      return activitiesFor({ event: "push", payload }).map((a) => a.sha);
+    }
+
+    it("skips GitHub's merge commit in a push to the default branch and maps the PR's commits pushed with it", () => {
+      const payload = createPushPayload({
+        ref: "refs/heads/main",
+        commits: [{ ...featureCommit, distinct: false }, mergeCommit],
+      });
+
+      expect(shasFor(payload)).toEqual([featureCommit.id]);
+    });
+
+    // Real deliveries: after `git merge main`, a push to a feature branch lists
+    // main's merge commits again, with distinct: false.
+    it("skips a commit GitHub made on the default branch when a later push to another branch brings it in", () => {
+      const payload = createPushPayload({
+        ref: "refs/heads/feature/13-retro",
+        commits: [{ ...mergeCommit, distinct: false }],
+      });
+
+      expect(shasFor(payload)).toEqual([]);
+    });
+
+    it("reads the default branch from the payload", () => {
+      const payload = createPushPayload({
+        ref: "refs/heads/trunk",
+        defaultBranch: "trunk",
+        commits: [mergeCommit],
+      });
+
+      expect(shasFor(payload)).toEqual([]);
+    });
+
+    // "Update branch" on a PR, or GitHub's web editor on a feature branch.
+    it("maps a commit GitHub made on another branch, credited to its author", () => {
+      const updateBranch = createGithubCommit({
+        message: "Merge branch 'main' into feature/12-dashboard",
+      });
+      const payload = createPushPayload({
+        ref: "refs/heads/feature/12-dashboard",
+        commits: [updateBranch],
+      });
+
+      const activities = activitiesFor({ event: "push", payload });
+
+      expect(activities.map((a) => [a.sha, a.actorLogin])).toEqual([
+        [updateBranch.id, "alice"],
+      ]);
+    });
+
+    it("maps a commit pushed to main when main isn't the default branch", () => {
+      const payload = createPushPayload({
+        ref: "refs/heads/main",
+        defaultBranch: "trunk",
+        commits: [mergeCommit],
+      });
+
+      expect(shasFor(payload)).toEqual([mergeCommit.id]);
+    });
+
+    it("maps commits a developer pushed straight to the default branch", () => {
+      const payload = createPushPayload({
+        ref: "refs/heads/main",
+        commits: [featureCommit],
+      });
+
+      expect(shasFor(payload)).toEqual([featureCommit.id]);
+    });
+
+    // Commits on any branch count (decision 001): a commit that an earlier
+    // push carried is still mapped, and storage deduplicates it by SHA.
+    it("maps a developer's commit that an earlier push already carried", () => {
+      const payload = createPushPayload({
+        ref: "refs/heads/feature/13-retro",
+        commits: [{ ...featureCommit, distinct: false }],
+      });
+
+      expect(shasFor(payload)).toEqual([featureCommit.id]);
+    });
+
+    // GitHub always sends these; without them the push maps as it did before #114.
+    it("maps a commit by GitHub as before when the push has no ref, default branch or distinct flag", () => {
+      const payload = {
+        repository: { id: 987654321, full_name: "Odiethebest/SprintProof" },
+        commits: [withoutKey(mergeCommit, "distinct")],
+      };
+
+      expect(shasFor(payload)).toEqual([mergeCommit.id]);
     });
   });
 
@@ -203,6 +424,7 @@ describe("mapWebhookToActivities", () => {
         sha: null,
         title: "Add webhook receiver",
         reviewState: null,
+        commitKey: null,
         occurredAt: new Date("2026-11-05T16:00:00Z"),
       });
     });
@@ -222,6 +444,7 @@ describe("mapWebhookToActivities", () => {
         sha: null,
         title: "Add webhook receiver",
         reviewState: null,
+        commitKey: null,
         occurredAt: new Date("2026-11-05T17:00:00Z"),
       });
     });
@@ -330,6 +553,7 @@ describe("mapWebhookToActivities", () => {
         sha: null,
         title: "Add webhook receiver",
         reviewState: "APPROVED",
+        commitKey: null,
         occurredAt: new Date("2026-11-05T16:45:00Z"),
       });
     });
@@ -386,6 +610,7 @@ describe("mapWebhookToActivities", () => {
             sha: null,
             title: "Add webhook receiver",
             reviewState: null,
+            commitKey: null,
             occurredAt: new Date("2026-11-05T16:45:00Z"),
           },
         ]);
@@ -412,11 +637,17 @@ describe("mapWebhookToActivities", () => {
     it.each([
       [
         "has no submitted_at",
-        { ...prReviewPayload, review: withoutKey(prReviewPayload.review, "submitted_at") },
+        {
+          ...prReviewPayload,
+          review: withoutKey(prReviewPayload.review, "submitted_at"),
+        },
       ],
       [
         "has no reviewer",
-        { ...prReviewPayload, review: withoutKey(prReviewPayload.review, "user") },
+        {
+          ...prReviewPayload,
+          review: withoutKey(prReviewPayload.review, "user"),
+        },
       ],
       [
         "has no pull request number",
@@ -453,6 +684,7 @@ describe("mapWebhookToActivities", () => {
         sha: "1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b",
         title: "feat: add feature",
         reviewState: null,
+        commitKey: COMMIT_KEY,
         occurredAt: new Date("2026-11-05T15:30:00Z"),
       });
     });
