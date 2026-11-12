@@ -65,10 +65,10 @@ async function settlesWithin<T>(tracked: Tracked<T>, ms: number) {
   return tracked.hasSettled;
 }
 
-// Inserts a team for `repoFullName` in a transaction that takes no advisory
-// lock and stays open while `run` runs, so a check in `run` can't see the
-// row yet. Commits once `run` waits on that row or has finished, and returns
-// what `run` returned.
+// Inserts a verified team for `repoFullName` (decision 007, #117) in a
+// transaction that takes no advisory lock and stays open while `run` runs, so
+// a check in `run` can't see the row yet. Commits once `run` waits on that
+// row or has finished, and returns what `run` returned.
 export async function claimRepoPastTheLock<T>({
   repoFullName,
   run,
@@ -85,6 +85,7 @@ export async function claimRepoPastTheLock<T>({
           name: "Claimed past the lock",
           repoFullName,
           webhookSecret: "claimed-past-the-lock-webhook-secret",
+          repoVerifiedAt: new Date(),
         },
       });
       const pid = await backendPid(tx);

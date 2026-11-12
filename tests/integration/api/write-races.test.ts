@@ -4,6 +4,7 @@ import { getSessionUserId } from "@/server/auth-session";
 import { POST as createSprint } from "@/app/api/v1/teams/[teamId]/sprints/route";
 import { PATCH as editSprint } from "@/app/api/v1/teams/[teamId]/sprints/[sprintId]/route";
 import { POST as createTeam } from "@/app/api/v1/teams/route";
+import { POST as receiveWebhook } from "@/app/api/webhooks/github/route";
 import { createInvite } from "@/server/repositories/invites";
 import { findTeamByRepo } from "@/server/repositories/teams";
 import {
@@ -20,7 +21,12 @@ import {
   claimRepoPastTheLock,
   runWhileInviteWriteHoldsItsLock,
 } from "../helpers/lock-races";
-import { apiRequest, routeContext } from "../helpers/requests";
+import {
+  apiRequest,
+  routeContext,
+  signWebhookPayload,
+  webhookRequest,
+} from "../helpers/requests";
 import { clearDatabase } from "../setup/test-setup";
 vi.mock("@/server/auth-session", () => ({ getSessionUserId: vi.fn() }));
 beforeEach(clearDatabase);
@@ -153,7 +159,9 @@ it("doesn't make a sprint write wait for an invite write whose old lock key hash
   expect(hasFinishedWhileHeld).toBe(true);
   expect(result.status).toBe(201);
 });
-it("serializes case-insensitive repository claims", async () => {
+// Decision 007 (#117): a claim is pending until GitHub's ping verifies it, and
+// pending claims don't block each other.
+it("lets concurrent claims of one repository in different letter case both through while it's pending", async () => {
   const user = await insertUser();
   vi.mocked(getSessionUserId).mockResolvedValue(user.id);
   const responses = await Promise.all(
@@ -161,33 +169,47 @@ it("serializes case-insensitive repository claims", async () => {
       createTeam(apiRequest("POST", "/", createTeamInput({ repoFullName })))
     )
   );
-  expect(responses.map((result) => result.status).sort()).toEqual([201, 409]);
-  expect(await db.team.count()).toBe(1);
+  expect(responses.map((result) => result.status).sort()).toEqual([201, 201]);
+  expect(await db.team.count({ where: { repoVerifiedAt: null } })).toBe(2);
 });
-it("keeps repository names unique across letter case in the database itself", async () => {
+it("keeps at most one verified team per repository across letter case in the database itself", async () => {
   await insertTeam({ repoFullName: "Org/Repo" });
   await expect(insertTeam({ repoFullName: "org/repo" })).rejects.toMatchObject({
     code: "P2002",
   });
 });
-it("returns 409 when a claim in another letter case gets past the lock", async () => {
-  const user = await insertUser();
-  vi.mocked(getSessionUserId).mockResolvedValue(user.id);
+it("returns 409 when a verification in another letter case gets past the lock", async () => {
+  const pending = await insertTeam({
+    repoFullName: "Org/Repo",
+    repoVerifiedAt: null,
+  });
+  const body = JSON.stringify({
+    zen: "Keep it logically awesome.",
+    hook_id: 1,
+    repository: { id: 123, name: "Repo", full_name: "Org/Repo" },
+  });
   const response = await claimRepoPastTheLock({
     repoFullName: "org/repo",
     run: () =>
-      createTeam(
-        apiRequest("POST", "/", createTeamInput({ repoFullName: "Org/Repo" }))
+      receiveWebhook(
+        webhookRequest({
+          event: "ping",
+          body,
+          signature: signWebhookPayload(body, pending.webhookSecret),
+          deliveryId: "ping-past-the-lock",
+        })
       ),
   });
   expect(response.status).toBe(409);
   expect(await response.json()).toEqual({
     error: { code: "REPO_ALREADY_CONNECTED", message: expect.any(String) },
   });
-  expect(await db.team.findMany({ select: { repoFullName: true } })).toEqual([
-    { repoFullName: "org/repo" },
-  ]);
-  expect(await db.membership.count()).toBe(0);
+  expect(
+    await db.team.findUniqueOrThrow({
+      where: { id: pending.id },
+      select: { repoVerifiedAt: true, repoId: true },
+    })
+  ).toEqual({ repoVerifiedAt: null, repoId: null });
 });
 it("rejects a reused name belonging to another non-null repo id", async () => {
   const team = await insertTeam({ repoFullName: "Org/Repo", repoId: 123n });
