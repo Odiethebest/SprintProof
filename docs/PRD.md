@@ -54,9 +54,10 @@ As someone tired of new accounts, I want to sign in with GitHub, so my activity 
 - First sign-in creates a user with GitHub id, login, name and avatar.
 - Signed-out visitors to any team page are redirected to sign-in.
 
-**US-2. Create a team and invite people** · Issue #7
+**US-2. Create a team and invite people** · Issues #7, #117
 As a team lead, I want to create a team linked to our GitHub repo and invite my partner, and have our TA join as an instructor, so everyone lands in the right place with the right role.
 - Creator becomes `LEAD`; team stores repo (`owner/name`) and timezone (default `America/Los_Angeles`).
+- The team's repository is pending until GitHub's ping verifies it (US-6). Pending claims don't block anyone: two teams can have the same repository pending. Once a team is verified for a repository, creating a team for it, in any letter case, returns 409 `REPO_ALREADY_CONNECTED` (decision 007).
 - Separate member and instructor invite links; links expire after 7 days and can be revoked.
 - The lead creates and revokes member links. Instructor links come only from course staff (the GitHub logins in `COURSE_STAFF_GITHUB_LOGINS`, who don't have to be on the team) or from the team's instructors, who also revoke them. The lead's Settings says that instructor links come from course staff (decision 006, #116).
 - Opening a valid link adds the right role; opening it twice never duplicates membership.
@@ -84,10 +85,11 @@ As someone who hates deadline surprises, I want the app to tell me which require
 - For each member and requirement: count, required number, and status (`MET`, `ON_TRACK`, `AT_RISK`, `MISSED`) following the rules in section 6.
 - Copy is neutral and specific ("3 more PR reviews"), never judgmental.
 
-**US-6. Track GitHub activity automatically** · Issues #11, #115
+**US-6. Track GitHub activity automatically** · Issues #11, #115, #117
 As a team member, I want our commits, PRs and reviews recorded automatically, so nobody types activity in by hand.
 - Webhook endpoint accepts `push`, `pull_request` and `pull_request_review` events.
 - Each team has its own webhook secret, generated when the team is created. A delivery is verified with the secret of the team whose repository it names; one with an invalid signature, or signed with another team's secret, is rejected (decision 005).
+- A team's repository counts as connected only after GitHub delivers a `ping` signed with that team's own secret; that ping verifies the team and stores the repository id. Until then Settings shows "Waiting for GitHub's ping", and after it "Connected". When several teams have one repository pending, the ping verifies the team whose secret signed it. Activity is stored only for the verified team; deliveries for a repository no team is verified for are handled as for one no team has (decision 007).
 - The lead sees the secret in Settings, masked to its last 4 characters, with "Copy" and "Rotate secret" (after a confirmation). Other roles never see it, and no API response or log contains it.
 - Teams created before #115 keep accepting the server-wide secret until GitHub sends a delivery signed with their own, so connected repositories keep working through the change.
 - Redelivered events are stored once.

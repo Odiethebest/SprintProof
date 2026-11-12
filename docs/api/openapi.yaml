@@ -117,7 +117,11 @@ paths:
     post:
       tags: [Teams]
       summary: Create a team
-      description: The signed-in user becomes the team's lead.
+      description: >-
+        The signed-in user becomes the team's lead. The team's repository is
+        pending until GitHub delivers a ping signed with the team's webhook
+        secret, and only then counts as connected. Other teams can have the
+        same repository pending (decision 007).
       operationId: createTeam
       security:
         - sessionCookie: []
@@ -139,7 +143,9 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthenticated"
         "409":
-          description: Another team already connected this repo.
+          description: >-
+            Another team already connected this repo: GitHub's ping verified
+            it for that team. The name is compared ignoring letter case.
           content:
             application/json:
               schema:

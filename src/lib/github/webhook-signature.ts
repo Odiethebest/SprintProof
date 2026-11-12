@@ -38,10 +38,11 @@ export function verifyWebhookSignature({
 export type WebhookSigner = "TEAM_SECRET" | "SERVER_SECRET";
 
 // Decision 005 (#115): a delivery is checked against the secret of the team
-// whose repository it names. The server-wide secret counts only for a team
-// that can still use it (connected before #115 and no delivery signed with
-// its own secret yet) and for a repository no team has. Returns null when
-// neither secret signed the body.
+// whose repository it names: the team verified for it (decision 007, #117).
+// The server-wide secret counts only for a team that can still use it
+// (connected before #115 and no delivery signed with its own secret yet) and
+// for a repository no team is verified for. Returns null when neither secret
+// signed the body.
 export function matchWebhookSecret({
   rawBody,
   signatureHeader,
@@ -72,4 +73,28 @@ export function matchWebhookSecret({
     return "SERVER_SECRET";
   }
   return null;
+}
+
+// Decision 007 (#117): every team that claimed a repository has it pending
+// until GitHub's ping, signed with that team's own secret, verifies it.
+// Returns the id of the team whose secret signed the body, or null. Every
+// secret is checked, each with timingSafeEqual, so how long this takes doesn't
+// depend on which team, if any, signed it.
+export function findSigningTeamId({
+  rawBody,
+  signatureHeader,
+  teams,
+}: {
+  rawBody: string;
+  signatureHeader: string | null;
+  teams: { id: string; webhookSecret: string }[];
+}): string | null {
+  const signedBy = teams.filter((team) =>
+    verifyWebhookSignature({
+      rawBody,
+      signatureHeader,
+      secret: team.webhookSecret,
+    })
+  );
+  return signedBy[0]?.id ?? null;
 }

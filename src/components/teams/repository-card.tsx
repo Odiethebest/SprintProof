@@ -1,9 +1,8 @@
-import { Check } from "lucide-react";
+import { Check, Clock } from "lucide-react";
 import {
   WebhookSecretField,
   type WebhookSecretView,
 } from "@/components/teams/webhook-secret-field";
-import { Pill } from "@/components/ui/pill";
 
 export interface WebhookDeliveryView {
   event: string;
@@ -13,12 +12,15 @@ export interface WebhookDeliveryView {
 
 // The webhook URL, secret and setup steps are passed in for the lead only;
 // for anyone else they aren't rendered at all (AGENTS.md §2 Settings).
+// isRepoVerified: GitHub's ping, signed with the team's secret, verified the
+// repository (decision 007, #117). Until then it's pending and nothing counts.
 export function RepositoryCard({
   teamId,
   repoFullName,
   webhookUrl,
   webhookSecret,
   isLead,
+  isRepoVerified,
   lastDelivery,
 }: {
   teamId: string;
@@ -26,6 +28,7 @@ export function RepositoryCard({
   webhookUrl: string | null;
   webhookSecret: WebhookSecretView | null;
   isLead: boolean;
+  isRepoVerified: boolean;
   lastDelivery: WebhookDeliveryView | null;
 }) {
   return (
@@ -43,14 +46,39 @@ export function RepositoryCard({
         </p>
       </div>
 
-      <div className="flex items-center justify-between gap-3 rounded-md border border-border p-3">
-        <div className="flex min-w-0 flex-col gap-0.5">
-          <span className="text-xs text-text-muted">Connected repository</span>
-          <span className="truncate font-mono text-sm font-medium">
-            {repoFullName}
-          </span>
+      <div className="flex flex-col gap-2 rounded-md border border-border p-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex min-w-0 flex-col gap-0.5">
+            <span className="text-xs text-text-muted">GitHub repository</span>
+            <span className="truncate font-mono text-sm font-medium">
+              {repoFullName}
+            </span>
+          </div>
+          {/* Icon and text, never color alone (AGENTS.md §4). */}
+          {isRepoVerified ? (
+            <span
+              data-testid="repository-connection"
+              className="inline-flex shrink-0 items-center gap-1 text-sm text-met"
+            >
+              <Check size={16} aria-hidden="true" />
+              Connected
+            </span>
+          ) : (
+            <span
+              data-testid="repository-connection"
+              className="inline-flex shrink-0 items-center gap-1 text-sm text-text-muted"
+            >
+              <Clock size={16} aria-hidden="true" />
+              Waiting for GitHub&apos;s ping
+            </span>
+          )}
         </div>
-        <Pill>Connected</Pill>
+        {!isRepoVerified && (
+          <p className="text-xs text-text-muted">
+            GitHub sends a ping when the webhook is added with this team&apos;s
+            secret. Activity counts from then on.
+          </p>
+        )}
       </div>
 
       {isLead && webhookUrl && (
@@ -91,7 +119,17 @@ export function RepositoryCard({
           </div>
 
           {webhookSecret !== null && (
-            <WebhookSecretField teamId={teamId} webhookSecret={webhookSecret} />
+            <WebhookSecretField
+              teamId={teamId}
+              webhookSecret={{
+                ...webhookSecret,
+                // A pending team's deliveries don't count whichever secret
+                // signed them (decision 007), so the note about the
+                // server-wide secret applies only once it's connected.
+                canUseServerWebhookSecret:
+                  webhookSecret.canUseServerWebhookSecret && isRepoVerified,
+              }}
+            />
           )}
 
           <details className="group flex flex-col gap-2 rounded-md border border-border p-3">
@@ -135,6 +173,12 @@ export function RepositoryCard({
               <li>
                 Ensure <strong>Active</strong> is checked, then click{" "}
                 <strong>Add webhook</strong>.
+              </li>
+              <li>
+                GitHub sends a ping right away, and the status next to the
+                repository above changes when it arrives. If it doesn&apos;t,
+                open the webhook&apos;s <strong>Recent Deliveries</strong> on
+                GitHub and redeliver the ping.
               </li>
             </ol>
           </details>
