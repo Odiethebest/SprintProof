@@ -45,24 +45,32 @@ model User {
 }
 
 model Team {
-  id           String            @id @default(cuid())
-  name         String
+  id                        String            @id @default(cuid())
+  name                      String
   // GitHub's `full_name` ("owner/name"); webhooks find the team by it (#11).
   // Also unique ignoring case: the index teams_repo_full_name_lower_key on
   // lower(repo_full_name) is raw SQL in its migration, since Prisma can't
   // express it (#94).
-  repoFullName String            @unique @map("repo_full_name")
+  repoFullName              String            @unique @map("repo_full_name")
   // GitHub's numeric repository ID; set on first webhook delivery (#11).
-  repoId       BigInt?           @unique @map("repo_id")
-  timezone     String            @default("America/Los_Angeles")
-  createdAt    DateTime          @default(now()) @map("created_at")
-  updatedAt    DateTime          @updatedAt @map("updated_at")
-  memberships  Membership[]
-  sprints      Sprint[]
-  activities   Activity[]
-  invites      Invite[]
-  deliveries   WebhookDelivery[]
-  standups     Standup[]
+  repoId                    BigInt?           @unique @map("repo_id")
+  // Signs this team's GitHub webhook deliveries (decision 005, #115). Kept as
+  // is, not hashed: verifying an HMAC needs the key, and the lead copies it
+  // from Settings into GitHub. Never returned by the API or logged.
+  webhookSecret             String            @map("webhook_secret")
+  // true only for teams connected before #115, whose GitHub webhook may still
+  // sign with the server-wide GITHUB_WEBHOOK_SECRET. The first delivery signed
+  // with webhookSecret turns it off for good (decision 005).
+  canUseServerWebhookSecret Boolean           @default(false) @map("can_use_server_webhook_secret")
+  timezone                  String            @default("America/Los_Angeles")
+  createdAt                 DateTime          @default(now()) @map("created_at")
+  updatedAt                 DateTime          @updatedAt @map("updated_at")
+  memberships               Membership[]
+  sprints                   Sprint[]
+  activities                Activity[]
+  invites                   Invite[]
+  deliveries                WebhookDelivery[]
+  standups                  Standup[]
 
   @@map("teams")
 }

@@ -1,6 +1,7 @@
 import { databaseTextSchema } from "@/lib/validation/text";
 import { db } from "@/server/db";
 import { isUniqueViolation } from "@/server/prisma-errors";
+import { generateWebhookSecret } from "@/server/webhook-secrets";
 import { lockForWrite, REPO_CLAIM_LOCK } from "@/server/write-locks";
 import { toPage, type Page } from "@/lib/api/pagination";
 import type { TeamRole } from "@/lib/auth/team-access";
@@ -39,6 +40,7 @@ export async function createTeamWithLead({
       return tx.team.create({
         data: {
           ...input,
+          webhookSecret: generateWebhookSecret(),
           memberships: { create: { userId: leadUserId, role: "LEAD" } },
         },
         select: TEAM_FIELDS,
@@ -59,6 +61,19 @@ export async function findTeam({ teamId }: { teamId: string }) {
   return db.team.findUnique({ where: { id: teamId }, select: TEAM_FIELDS });
 }
 
+// What the webhook route needs to verify a delivery for the team. The secret
+// never leaves the server (decision 005, #115).
+const WEBHOOK_TEAM_FIELDS = {
+  id: true,
+  repoFullName: true,
+  repoId: true,
+  webhookSecret: true,
+  canUseServerWebhookSecret: true,
+} as const;
+
+// Only reads: the webhook route verifies the delivery's signature with the
+// team's secret before it stores anything, the repo id included
+// (recordTeamRepoId).
 export async function findTeamByRepo({
   repoId,
   repoFullName,
@@ -69,38 +84,86 @@ export async function findTeamByRepo({
   if (repoId !== undefined && repoId !== null) {
     const byRepoId = await db.team.findUnique({
       where: { repoId },
-      select: { id: true, repoFullName: true, repoId: true },
+      select: WEBHOOK_TEAM_FIELDS,
     });
     if (byRepoId !== null) {
       return byRepoId;
     }
   }
 
+  // The name comes from a body nobody has verified yet. One PostgreSQL can't
+  // store (a NUL character) names no team (#74).
+  if (!databaseTextSchema.safeParse(repoFullName).success) {
+    return null;
+  }
   const byFullName = await db.team.findFirst({
     where: {
       repoFullName: { equals: repoFullName, mode: "insensitive" },
     },
-    select: { id: true, repoFullName: true, repoId: true },
+    select: WEBHOOK_TEAM_FIELDS,
   });
 
-  if (byFullName !== null) {
-    if (
-      repoId !== undefined &&
-      repoId !== null &&
-      byFullName.repoId !== null &&
-      byFullName.repoId !== repoId
-    )
-      return null;
-    if (repoId !== undefined && repoId !== null && byFullName.repoId === null) {
-      await db.team.update({
-        where: { id: byFullName.id },
-        data: { repoId },
-      });
-    }
-    return byFullName;
+  if (
+    byFullName !== null &&
+    repoId !== undefined &&
+    repoId !== null &&
+    byFullName.repoId !== null &&
+    byFullName.repoId !== repoId
+  ) {
+    return null;
   }
+  return byFullName;
+}
 
-  return null;
+// GitHub's repository id finds the team after a rename (#11). Stored from the
+// first verified delivery; a team that already has one keeps it.
+export async function recordTeamRepoId({
+  teamId,
+  repoId,
+}: {
+  teamId: string;
+  repoId: bigint;
+}): Promise<void> {
+  await db.team.updateMany({
+    where: { id: teamId, repoId: null },
+    data: { repoId },
+  });
+}
+
+// Decision 005 (#115): GitHub signed a delivery with the team's own secret,
+// so the server-wide GITHUB_WEBHOOK_SECRET stops working for this team.
+export async function stopServerWebhookSecret({
+  teamId,
+}: {
+  teamId: string;
+}): Promise<void> {
+  await db.team.updateMany({
+    where: { id: teamId, canUseServerWebhookSecret: true },
+    data: { canUseServerWebhookSecret: false },
+  });
+}
+
+// For the lead's Settings only. Callers check the role first.
+export async function findTeamWebhookSecret({ teamId }: { teamId: string }) {
+  return db.team.findUnique({
+    where: { id: teamId },
+    select: { webhookSecret: true, canUseServerWebhookSecret: true },
+  });
+}
+
+// Replaces the team's secret with a new random one. Deliveries signed with
+// the old one fail from now on. Whether the server-wide secret still works
+// doesn't change: only a delivery signed with the team's secret ends that.
+export async function rotateTeamWebhookSecret({
+  teamId,
+}: {
+  teamId: string;
+}): Promise<{ webhookSecret: string }> {
+  return db.team.update({
+    where: { id: teamId },
+    data: { webhookSecret: generateWebhookSecret() },
+    select: { webhookSecret: true },
+  });
 }
 
 export async function listTeamsForUser({ userId }: { userId: string }) {
