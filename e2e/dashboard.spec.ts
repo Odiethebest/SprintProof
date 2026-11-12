@@ -35,6 +35,18 @@ const INSTRUCTOR: TestUser = {
   login: "ta-dashboard-e2e",
   name: "Course TA",
 };
+const PHONE_LEAD: TestUser = {
+  login: "ziqi-dashboard-phone-e2e",
+  name: "Ziqi (Odie) Yang",
+};
+
+// PRD §8 and DESIGN.md §6: usable from 360 px wide phones (#126).
+const PHONE_WIDTHS = [360, 390];
+const DESKTOP_WIDTH = 1280;
+// Wider than any phone. Feed rows keep their text on one truncated line,
+// so this line is what stretched the dashboard past the screen.
+const LONG_STANDUP_LINE =
+  "Moved the sprint summary export to the review page, checked every counting rule against the reference tests, and wrote down what is left for the retro meeting.";
 
 test.describe("Team dashboard", () => {
   test("shows an empty state until the team has a sprint", async ({ page }) => {
@@ -256,5 +268,82 @@ test.describe("Team dashboard", () => {
     await expect(cards).toHaveCount(1);
     await expect(cards.first()).toHaveAccessibleName("Ziqi (Odie) Yang");
     await expectNoBlockingViolations(instructor);
+  });
+
+  test("fits a phone screen in one column, with long feed text truncated inside its row", async ({
+    page,
+  }) => {
+    // Arrange: the feed holds a standup line wider than any phone
+    await signInAsTestUser(page, PHONE_LEAD);
+    const teamId = await createTeam(page, "Phone dashboard team");
+    await addSprint(page, {
+      teamId,
+      name: "Sprint 1",
+      startOffset: -3,
+      endOffset: 3,
+    });
+    const posted = await page.request.post(`/api/v1/teams/${teamId}/standups`, {
+      data: {
+        yesterday: "Took the report screenshots.",
+        today: LONG_STANDUP_LINE,
+      },
+    });
+    expect(posted.status()).toBe(201);
+
+    for (const width of PHONE_WIDTHS) {
+      // Act
+      await page.setViewportSize({ width, height: 844 });
+      await page.goto(`/teams/${teamId}/dashboard`);
+      const feed = page.getByRole("region", { name: "Activity" });
+      const summary = feed.getByText(LONG_STANDUP_LINE);
+      await expect(summary).toBeVisible();
+
+      // Assert: no sideways scroll
+      const pageWidth = await page.evaluate(
+        () => document.documentElement.scrollWidth
+      );
+      expect(pageWidth, `page width at ${width} px`).toBeLessThanOrEqual(width);
+
+      // Assert: the card and the feed are inside the screen, the feed under the card
+      const card = await page
+        .getByRole("article", { name: "Ziqi (Odie) Yang (you)" })
+        .boundingBox();
+      const feedBox = await feed.boundingBox();
+      expect(card!.x + card!.width, `card at ${width} px`).toBeLessThanOrEqual(
+        width
+      );
+      expect(
+        feedBox!.x + feedBox!.width,
+        `feed at ${width} px`
+      ).toBeLessThanOrEqual(width);
+      expect(feedBox!.y).toBeGreaterThanOrEqual(card!.y + card!.height);
+
+      // Assert: the long line ends in an ellipsis inside its row
+      const isCut = await summary.evaluate(
+        (line) => line.scrollWidth > line.clientWidth
+      );
+      expect(isCut, `long line cut at ${width} px`).toBe(true);
+      const line = await summary.boundingBox();
+      expect(line!.x + line!.width).toBeLessThanOrEqual(
+        feedBox!.x + feedBox!.width
+      );
+    }
+    await expectNoBlockingViolations(page);
+
+    // Act: desktop width
+    await page.setViewportSize({ width: DESKTOP_WIDTH, height: 900 });
+    await page.goto(`/teams/${teamId}/dashboard`);
+
+    // Assert: the feed sits to the right of the cards, as before
+    const desktopCard = await page
+      .getByRole("article", { name: "Ziqi (Odie) Yang (you)" })
+      .boundingBox();
+    const desktopFeed = await page
+      .getByRole("region", { name: "Activity" })
+      .boundingBox();
+    expect(desktopFeed!.x).toBeGreaterThanOrEqual(
+      desktopCard!.x + desktopCard!.width
+    );
+    expect(desktopFeed!.y).toBeLessThan(desktopCard!.y + desktopCard!.height);
   });
 });

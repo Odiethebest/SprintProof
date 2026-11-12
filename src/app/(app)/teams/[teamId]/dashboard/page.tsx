@@ -315,9 +315,11 @@ async function SprintDashboard({
           })}
         />
       )}
-      {/* DESIGN.md §6 Dashboard: cards span 2 columns in their own grid, the feed 1. */}
-      <div className="grid items-start gap-4 lg:grid-cols-3">
-        <div className="grid gap-4 md:grid-cols-2 lg:col-span-2">
+      {/* DESIGN.md §6 Dashboard: cards span 2 columns in their own grid, the feed 1.
+          grid-cols-1 caps the single column below lg at the screen width; an
+          implicit column grows to the feed's longest truncated line (#126). */}
+      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:col-span-2">
           {cards.map((card) => (
             <MemberCard
               key={card.userId}
