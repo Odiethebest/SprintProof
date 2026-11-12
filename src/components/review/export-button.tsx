@@ -8,8 +8,7 @@ import { BUTTON_CLASSES } from "@/components/ui/button-styles";
 // What the file holds (AGENTS.md §2 ExportButton).
 const AUDIENCE_NOTES: Record<ExportAudience, string> = {
   TEAM: "Team export. Peer feedback is left out.",
-  INSTRUCTOR:
-    "Instructor export. Peer feedback isn't recorded in SprintProof yet.",
+  INSTRUCTOR: "Instructor export. Includes peer feedback.",
 };
 
 // "Export Markdown" opens a native dialog with a preview, "Copy Markdown" and

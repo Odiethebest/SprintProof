@@ -403,7 +403,7 @@ Status is always shown with an icon and a text label, never by color alone.
 
 ### Retros and peer feedback
 
-Each member gets 3 votes per retro, at most 1 per item. The top 3 "To improve" items by vote count (ties broken by earliest created) become action items for the next sprint. Peer feedback is visible only to users with the instructor role; this is enforced on the server and covered by integration tests, not just hidden in the UI.
+Each member gets 3 votes per retro, at most 1 per item. The top 3 "To improve" items by vote count (ties broken by earliest created) become action items for the next sprint. Peer feedback is visible only to users with the instructor role; this is enforced on the server and covered by integration tests, not just hidden in the UI. Each lead and member writes one entry per teammate per sprint while the retro is open, and sees only what they wrote, to edit it until the retro closes. Leads, members and other teams' instructors get 404 from the feedback API, and a lead's review page and export leave feedback out.
 
 ---
 
@@ -434,8 +434,8 @@ Each member gets 3 votes per retro, at most 1 per item. The top 3 "To improve" i
 | Live contribution dashboard | Done | Counts per member, activity feed, Pusher live updates (PRs #58, #60, #80); teammates' standups announced to screen readers (PR #85); reviews say "approved", "requested changes on" or "commented on" #N (#57) |
 | Requirement checks | Done | Met / On track / At risk / Missed in `src/lib/checks/` (PR #30), shown on the dashboard (PR #58) |
 | Retros and action items | Done | Retro page per sprint: the lead opens and closes it, members add items and vote (3 each, 1 per item), and the top 3 "To improve" items are carried into the next sprint, where they get done checkboxes (#13) |
-| Peer feedback | Planned | Instructor-only, enforced on the server (#14) |
-| Instructor view and Markdown export | Partly done | Read-only review page at `/review/[teamId]` for leads and instructors: requirements per member with status, standups by day, and a `sprint-N-summary.md` export (preview, copy, download) in the `docs/sprints/` style (PR #108). The retro, with vote counts and the next sprint's action items, is on the page and in the export (#13). Instructor-only peer feedback waits on #14; until then the page and the export say it isn't recorded yet |
+| Peer feedback | Done | "Partner feedback" in the retro: one entry per teammate per sprint, editable until the retro closes. Instructor-only, enforced in the repository and the API, which answers 404 to leads and members (#14) |
+| Instructor view and Markdown export | Done | Read-only review page at `/review/[teamId]` for leads and instructors: requirements per member with status, standups by day, and a `sprint-N-summary.md` export (preview, copy, download) in the `docs/sprints/` style (PR #108). The retro, with vote counts and the next sprint's action items, is on the page and in the export (#13). Instructors also see each member's peer feedback on the page and in their export; a lead's page and export leave it out (#14) |
 | Public REST API | Done | Personal tokens stored as SHA-256 hashes; read-only Bearer access to sprints, sprint summaries and standups; cursor pagination; Swagger UI at `/api-docs` (PRs #64, #65, #66); inputs that used to return 500 are rejected (PR #82); team listing (`GET /teams`, and `GET /teams/{teamId}` with its members) and 500 `INTERNAL_ERROR` in the same error shape for unexpected errors (#97) |
 
 ---

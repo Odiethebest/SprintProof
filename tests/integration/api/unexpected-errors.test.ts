@@ -36,6 +36,8 @@ import {
   PUT as voteRetroItem,
 } from "@/app/api/v1/teams/[teamId]/sprints/[sprintId]/retro/items/[itemId]/vote/route";
 import { PATCH as updateActionItem } from "@/app/api/v1/teams/[teamId]/sprints/[sprintId]/retro/action-items/[actionItemId]/route";
+import { GET as listPeerFeedback } from "@/app/api/v1/teams/[teamId]/sprints/[sprintId]/peer-feedback/route";
+import { PUT as savePeerFeedback } from "@/app/api/v1/teams/[teamId]/sprints/[sprintId]/peer-feedback/[recipientId]/route";
 import { POST as postStandup } from "@/app/api/v1/teams/[teamId]/standups/route";
 import { POST as rotateWebhookSecret } from "@/app/api/v1/teams/[teamId]/webhook-secret/route";
 import { POST as createToken } from "@/app/api/v1/tokens/route";
@@ -44,6 +46,7 @@ import {
   insertApiToken,
   insertInvite,
   insertMembership,
+  insertRetro,
   insertSprint,
   insertTeam,
   insertUser,
@@ -87,6 +90,12 @@ const TABLES = {
       db.$executeRaw`ALTER TABLE standups RENAME TO standups_unavailable`,
     restore: () =>
       db.$executeRaw`ALTER TABLE IF EXISTS standups_unavailable RENAME TO standups`,
+  },
+  peer_feedback: {
+    hide: () =>
+      db.$executeRaw`ALTER TABLE peer_feedback RENAME TO peer_feedback_unavailable`,
+    restore: () =>
+      db.$executeRaw`ALTER TABLE IF EXISTS peer_feedback_unavailable RENAME TO peer_feedback`,
   },
 };
 
@@ -363,6 +372,27 @@ const ROUTES: Array<{
       ),
   },
   {
+    route: "GET /api/v1/teams/{teamId}/sprints/{sprintId}/peer-feedback",
+    call: ({ teamId, sprintId }) =>
+      listPeerFeedback(
+        apiGetRequest(`/teams/${teamId}/sprints/${sprintId}/peer-feedback`),
+        routeContext({ teamId, sprintId })
+      ),
+  },
+  {
+    route:
+      "PUT /api/v1/teams/{teamId}/sprints/{sprintId}/peer-feedback/{recipientId}",
+    call: ({ teamId, sprintId }) =>
+      savePeerFeedback(
+        apiRequest(
+          "PUT",
+          `/teams/${teamId}/sprints/${sprintId}/peer-feedback/user-1`,
+          { text: "Reviews were thorough." }
+        ),
+        routeContext({ teamId, sprintId, recipientId: "user-1" })
+      ),
+  },
+  {
     route: "POST /api/v1/teams/{teamId}/standups",
     call: ({ teamId }) =>
       postStandup(
@@ -493,5 +523,34 @@ describe("an /api/v1 route when the database fails", () => {
     for (const text of ["advisor", "flaky webhook", "TA's reply"]) {
       expect(loggedText()).not.toContain(text);
     }
+  });
+
+  it("never logs peer feedback, even when the database fails after reading it (#14)", async () => {
+    // Arrange: an open retro and a teammate; peer_feedback is missing
+    const { teamId, sprintId } = await setUpLead();
+    await insertRetro({ sprintId });
+    const teammate = await insertUser();
+    await insertMembership({ userId: teammate.id, teamId, role: "MEMBER" });
+
+    // Act
+    const res = await withTablesMissing(["peer_feedback"], () =>
+      savePeerFeedback(
+        apiRequest(
+          "PUT",
+          `/teams/${teamId}/sprints/${sprintId}/peer-feedback/${teammate.id}`,
+          { text: "Missed two standups after the family emergency." }
+        ),
+        routeContext({ teamId, sprintId, recipientId: teammate.id })
+      )
+    );
+
+    // Assert
+    expect(res.status).toBe(500);
+    expect(await res.json()).toEqual(INTERNAL_ERROR);
+    expect(loggedText()).toContain(
+      "PUT /api/v1/teams/{teamId}/sprints/{sprintId}/peer-feedback/{recipientId}"
+    );
+    expect(loggedText()).toContain("P2021");
+    expect(loggedText()).not.toContain("family emergency");
   });
 });

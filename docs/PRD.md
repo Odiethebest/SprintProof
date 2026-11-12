@@ -109,8 +109,10 @@ As someone who wants retros to change something, I want to vote on what to impro
 
 **US-9. Give honest partner feedback** · Issue #14
 As someone in a team of two, I want to leave partner feedback that only the instructor sees, so I can be honest without making things awkward.
-- One feedback entry per teammate per sprint, editable until the retro closes.
-- Only `INSTRUCTOR` users can read it — enforced on the server, not just hidden in the UI.
+- One feedback entry per teammate per sprint, written in the retro while it's open and editable until it closes.
+- The form is labeled "Visible to instructors only". It shows the author what they wrote, so they can edit it, and nothing a teammate wrote.
+- Only `INSTRUCTOR` users can read it — enforced on the server, not just hidden in the UI. Leads, members and other teams' instructors get 404 from the feedback API.
+- Instructors see it on the review page and in their export; a lead's page and export never contain it.
 
 ### Epic E — Instructors and integrations
 
@@ -151,7 +153,7 @@ These rules are the source of truth for `src/lib/` and are mirrored in `AGENTS.m
   - No status before the sprint starts: the sprint summary API returns `null` for an upcoming sprint.
   - Days left = the sprint's end date minus today's date, both in the team timezone, plus 1 (today counts). With a Nov 4 end: Nov 2 has 3 days left (`ON_TRACK`), Nov 3 has 2 (`AT_RISK`), Nov 4 has 1 (`AT_RISK`).
 - **R6. Retro votes.** 3 votes per member per retro, max 1 per item. The top 3 "To improve" items by votes (ties broken by earliest created) become action items for the next sprint.
-- **R7. Peer feedback visibility.** Readable only by `INSTRUCTOR`. Never returned to `LEAD` or `MEMBER` in any page, API response or export. Only course staff and the team's instructors can create instructor invite links, so a lead can't join their own team as an instructor with a second GitHub account (decision 006, #116).
+- **R7. Peer feedback visibility.** Readable only by `INSTRUCTOR`. Never returned to `LEAD` or `MEMBER` in any page, API response or export, except that an author sees their own entries in the retro form to edit them until the retro closes (#14). No one on the team reads an entry they didn't write. Only course staff and the team's instructors can create instructor invite links, so a lead can't join their own team as an instructor with a second GitHub account (decision 006, #116).
 
 ## 7. Screens
 
