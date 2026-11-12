@@ -4,7 +4,10 @@ import { notFound, redirect } from "next/navigation";
 import { TZDate } from "@date-fns/tz";
 import { maskApiToken } from "@/lib/api-tokens/api-token";
 import { toSignInPath } from "@/lib/auth/sign-in-redirect";
-import { INVITE_ROLES } from "@/lib/invites/invite-link";
+import {
+  getManageableInviteRoles,
+  type InviteRole,
+} from "@/lib/invites/invite-link";
 import { getSprintState } from "@/lib/sprints";
 import {
   ApiTokensCard,
@@ -20,6 +23,7 @@ import type { InviteLinkView } from "@/components/teams/invite-links";
 import { MembersCard } from "@/components/teams/members-card";
 import { RepositoryCard } from "@/components/teams/repository-card";
 import { requireTeamRole } from "@/server/auth";
+import { isCourseStaff } from "@/server/course-staff";
 import { getCurrentUser } from "@/server/current-user";
 import { getLastWebhookDelivery } from "@/server/repositories/activities";
 import { listApiTokens } from "@/server/repositories/api-tokens";
@@ -77,22 +81,42 @@ async function TeamSettings({ params }: { params: Params }) {
     // Same page as a team that doesn't exist, so outsiders learn nothing.
     notFound();
   }
-  const [user, team, memberships, sprints, origin, lastDelivery, apiTokens] =
-    await Promise.all([
-      getCurrentUser(),
-      findTeam({ teamId }),
-      listTeamMembers({ teamId }),
-      listSprints({ teamId }),
-      getRequestOrigin(),
-      getLastWebhookDelivery({ teamId }),
-      listApiTokens({ userId: access.userId }),
-    ]);
+  const [
+    user,
+    team,
+    memberships,
+    sprints,
+    origin,
+    lastDelivery,
+    apiTokens,
+    isStaff,
+  ] = await Promise.all([
+    getCurrentUser(),
+    findTeam({ teamId }),
+    listTeamMembers({ teamId }),
+    listSprints({ teamId }),
+    getRequestOrigin(),
+    getLastWebhookDelivery({ teamId }),
+    listApiTokens({ userId: access.userId }),
+    isCourseStaff({ userId: access.userId }),
+  ]);
   if (user === null || team === null) {
     notFound();
   }
+  // Decision 006 (#116): the lead sees the member link, course staff and the
+  // team's instructors the instructor link. A member sees no invite controls.
+  const inviteRoles = getManageableInviteRoles({
+    teamRole: access.role,
+    isCourseStaff: isStaff,
+  });
   const inviteLinks =
-    access.role === "LEAD"
-      ? await loadInviteLinks({ teamId, timezone: team.timezone, origin })
+    inviteRoles.length > 0
+      ? await loadInviteLinks({
+          teamId,
+          roles: inviteRoles,
+          timezone: team.timezone,
+          origin,
+        })
       : null;
   const members = memberships.map(({ role, user: member }) => ({
     userId: member.id,
@@ -213,10 +237,12 @@ function toApiTokenViews({
 
 async function loadInviteLinks({
   teamId,
+  roles,
   timezone,
   origin,
 }: {
   teamId: string;
+  roles: InviteRole[];
   timezone: string;
   origin: string;
 }): Promise<InviteLinkView[]> {
@@ -227,7 +253,7 @@ async function loadInviteLinks({
     day: "numeric",
     timeZone: timezone,
   });
-  return INVITE_ROLES.map((role) => {
+  return roles.map((role) => {
     const invite = invites.find((candidate) => candidate.role === role);
     return {
       role,

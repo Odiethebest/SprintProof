@@ -44,6 +44,22 @@ export async function createInvite({
   });
 }
 
+// The role of one of the team's links, or null when the team has no invite
+// with this id. Scoped to the team, so nobody reaches another team's link.
+export async function findTeamInvite({
+  teamId,
+  inviteId,
+}: {
+  teamId: string;
+  inviteId: string;
+}) {
+  if (!databaseTextSchema.safeParse(inviteId).success) return null;
+  return db.invite.findFirst({
+    where: { id: inviteId, teamId },
+    select: { role: true },
+  });
+}
+
 // Returns false when the team has no invite with this id.
 export async function revokeInvite({
   teamId,

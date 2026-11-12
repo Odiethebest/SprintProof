@@ -13,8 +13,10 @@ export interface MemberView {
   role: TeamRole;
 }
 
-// Settings "Members and invites". Invite links are only passed in for the lead;
-// for anyone else they aren't rendered at all (AGENTS.md §2 Screens).
+// Settings "Members and invites". Invite links are only passed in for people
+// who can manage at least one of them (the lead, course staff, the team's
+// instructors); for anyone else they aren't rendered at all (AGENTS.md §2
+// Screens).
 export function MembersCard({
   teamId,
   currentUserId,

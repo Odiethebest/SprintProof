@@ -1,3 +1,4 @@
+import { databaseTextSchema } from "@/lib/validation/text";
 import { db } from "@/server/db";
 import { toPage, type Page } from "@/lib/api/pagination";
 import type { TeamRole } from "@/lib/auth/team-access";
@@ -40,6 +41,8 @@ export async function createTeamWithLead({
 }
 
 export async function findTeam({ teamId }: { teamId: string }) {
+  // An id PostgreSQL can't store (a NUL character) is an unknown team (#74).
+  if (!databaseTextSchema.safeParse(teamId).success) return null;
   return db.team.findUnique({ where: { id: teamId }, select: TEAM_FIELDS });
 }
 

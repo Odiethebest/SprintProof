@@ -30,8 +30,10 @@ const ROLE_NAMES: Record<InviteRole, string> = {
   INSTRUCTOR: "instructor",
 };
 
-// Lead only. One status region for both panels, so copy and revoke results
-// are announced politely (AGENTS.md §4 Accessibility).
+// One panel per link the user can manage: the lead gets the member link,
+// course staff and the team's instructors the instructor link (decision 006,
+// #116). One status region for all panels, so copy and revoke results are
+// announced politely (AGENTS.md §4 Accessibility).
 export function InviteLinks({
   teamId,
   links,
@@ -47,6 +49,7 @@ export function InviteLinks({
   // The clicked button goes away, and its replacement only arrives with the
   // refreshed links, so its ref callback moves focus when it mounts.
   const pendingFocus = useRef<FocusTarget | null>(null);
+  const hasInstructorLink = links.some(({ role }) => role === "INSTRUCTOR");
 
   function focusWhenShown(target: FocusTarget) {
     return (element: HTMLButtonElement | null) => {
@@ -192,6 +195,11 @@ export function InviteLinks({
           )}
         </section>
       ))}
+      {!hasInstructorLink && (
+        <p className="text-xs text-text-muted">
+          Instructor invite links come from course staff.
+        </p>
+      )}
       <p role="status" aria-live="polite" className="sr-only">
         {announcement}
       </p>
