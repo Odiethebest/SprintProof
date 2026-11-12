@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import type { ActivityRecord } from "@/lib/stats/member-activity";
 import { buildSprintSummary } from "@/lib/stats/sprint-summary";
 import {
   createActivityRecord,
@@ -300,5 +301,110 @@ describe("buildSprintSummary", () => {
       standups: { count: 1 },
       reviews: { count: 0 },
     });
+  });
+
+  // Counting rule R3: a review counts whether it approved, requested changes
+  // or commented (AGENTS.md §1). The state only changes the feed's wording (#57).
+  describe("review state", () => {
+    const alice = () =>
+      createTeamMember({ userId: "user-1", githubLogin: "alice" });
+    const bob = () =>
+      createTeamMember({ userId: "user-2", githubLogin: "bob" });
+
+    function bobReviews(
+      reviews: {
+        prNumber: number;
+        reviewState: ActivityRecord["reviewState"];
+      }[]
+    ) {
+      return reviews.map(({ prNumber, reviewState }) =>
+        createActivityRecord({
+          type: "REVIEW",
+          actorLogin: "bob",
+          prNumber,
+          prAuthorLogin: "alice",
+          sha: null,
+          reviewState,
+        })
+      );
+    }
+
+    it("counts a review in every state, and one stored without a state, toward PR reviews", () => {
+      // Arrange
+      const activities = bobReviews([
+        { prNumber: 101, reviewState: "APPROVED" },
+        { prNumber: 102, reviewState: "CHANGES_REQUESTED" },
+        { prNumber: 103, reviewState: "COMMENTED" },
+        { prNumber: 104, reviewState: null },
+      ]);
+
+      // Act
+      const summary = buildSprintSummary({
+        sprint,
+        timeZone,
+        members: [alice(), bob()],
+        standups: [],
+        activities,
+        now: NOV_3_NOON,
+      });
+
+      // Assert
+      expect(summary.members[1].reviews).toEqual({
+        count: 4,
+        required: 5,
+        remaining: 1,
+        status: "AT_RISK",
+      });
+    });
+
+    it("counts reviews in different states on the same PR as one", () => {
+      // Arrange: changes requested, then a comment, then an approval on #101
+      const activities = bobReviews([
+        { prNumber: 101, reviewState: "CHANGES_REQUESTED" },
+        { prNumber: 101, reviewState: "COMMENTED" },
+        { prNumber: 101, reviewState: "APPROVED" },
+      ]);
+
+      // Act
+      const summary = buildSprintSummary({
+        sprint,
+        timeZone,
+        members: [alice(), bob()],
+        standups: [],
+        activities,
+        now: NOV_3_NOON,
+      });
+
+      // Assert
+      expect(summary.members[1].reviews.count).toBe(1);
+    });
+
+    it.each(["APPROVED", "CHANGES_REQUESTED", "COMMENTED"] as const)(
+      "doesn't count a %s review on the reviewer's own PR",
+      (reviewState) => {
+        // Arrange
+        const ownReview = createActivityRecord({
+          type: "REVIEW",
+          actorLogin: "alice",
+          prNumber: 101,
+          prAuthorLogin: "alice",
+          sha: null,
+          reviewState,
+        });
+
+        // Act
+        const summary = buildSprintSummary({
+          sprint,
+          timeZone,
+          members: [alice()],
+          standups: [],
+          activities: [ownReview],
+          now: NOV_3_NOON,
+        });
+
+        // Assert
+        expect(summary.members[0].reviews.count).toBe(0);
+      }
+    );
   });
 });

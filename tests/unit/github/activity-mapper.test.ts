@@ -90,6 +90,7 @@ describe("mapWebhookToActivities", () => {
         prAuthorLogin: null,
         sha: "1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b",
         title: "feat: add feature",
+        reviewState: null,
         occurredAt: new Date("2026-11-05T15:30:00Z"),
       });
 
@@ -100,6 +101,7 @@ describe("mapWebhookToActivities", () => {
         prAuthorLogin: null,
         sha: "3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d",
         title: "fix: bugfix by outsider",
+        reviewState: null,
         occurredAt: new Date("2026-11-05T15:32:00Z"),
       });
     });
@@ -200,6 +202,7 @@ describe("mapWebhookToActivities", () => {
         prAuthorLogin: "alice",
         sha: null,
         title: "Add webhook receiver",
+        reviewState: null,
         occurredAt: new Date("2026-11-05T16:00:00Z"),
       });
     });
@@ -218,6 +221,7 @@ describe("mapWebhookToActivities", () => {
         prAuthorLogin: "alice",
         sha: null,
         title: "Add webhook receiver",
+        reviewState: null,
         occurredAt: new Date("2026-11-05T17:00:00Z"),
       });
     });
@@ -325,9 +329,68 @@ describe("mapWebhookToActivities", () => {
         prAuthorLogin: "alice",
         sha: null,
         title: "Add webhook receiver",
+        reviewState: "APPROVED",
         occurredAt: new Date("2026-11-05T16:45:00Z"),
       });
     });
+
+    // GitHub sends review.state in lowercase in pull_request_review payloads.
+    it.each([
+      ["approved", "APPROVED"],
+      ["changes_requested", "CHANGES_REQUESTED"],
+      ["commented", "COMMENTED"],
+    ])(
+      "stores a review submitted as %s with the state %s",
+      (state, reviewState) => {
+        // Arrange
+        const payload = {
+          ...prReviewPayload,
+          review: { ...prReviewPayload.review, state },
+        };
+
+        // Act
+        const [activity] = activitiesFor({
+          event: "pull_request_review",
+          payload,
+        });
+
+        // Assert
+        expect(activity).toMatchObject({ type: "REVIEW", reviewState });
+      }
+    );
+
+    // A submitted review counts under R3 whatever GitHub calls it, and a
+    // redelivery carries the same state, so rejecting the payload would drop
+    // the review for good. It's stored with no state: the feed says "reviewed #N".
+    it.each([
+      ["an unknown state", { ...prReviewPayload.review, state: "dismissed" }],
+      ["a state in capitals", { ...prReviewPayload.review, state: "APPROVED" }],
+      ["a state that isn't text", { ...prReviewPayload.review, state: 42 }],
+      ["no state", withoutKey(prReviewPayload.review, "state")],
+    ])(
+      "stores a review submitted with %s as a review with no state",
+      (_label, review) => {
+        // Act
+        const activities = activitiesFor({
+          event: "pull_request_review",
+          payload: { ...prReviewPayload, review },
+        });
+
+        // Assert
+        expect(activities).toEqual([
+          {
+            type: "REVIEW",
+            actorLogin: "bob",
+            prNumber: 42,
+            prAuthorLogin: "alice",
+            sha: null,
+            title: "Add webhook receiver",
+            reviewState: null,
+            occurredAt: new Date("2026-11-05T16:45:00Z"),
+          },
+        ]);
+      }
+    );
 
     it("ignores reviews submitted by a bot ending in [bot]", () => {
       const activities = activitiesFor({
@@ -389,6 +452,7 @@ describe("mapWebhookToActivities", () => {
         prAuthorLogin: null,
         sha: "1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b",
         title: "feat: add feature",
+        reviewState: null,
         occurredAt: new Date("2026-11-05T15:30:00Z"),
       });
     });
