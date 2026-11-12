@@ -35,6 +35,28 @@ for (const path of PAGES) {
     expect(svg).toContain(`stroke="${PRIMARY_FG}"`);
   });
 
+  // A string match passes even when the file isn't valid XML (for example "--"
+  // inside a comment), and then no browser can draw the icon.
+  test(`${path} serves an icon the browser can parse as SVG`, async ({
+    page,
+  }) => {
+    await page.goto(path);
+    const href = await page
+      .locator('head link[rel="icon"][type="image/svg+xml"]')
+      .getAttribute("href");
+    expect(href).toBeTruthy();
+
+    const parse = await page.evaluate(async (url) => {
+      const text = await (await fetch(url)).text();
+      const doc = new DOMParser().parseFromString(text, "image/svg+xml");
+      return {
+        errors: doc.getElementsByTagName("parsererror").length,
+        root: doc.documentElement.nodeName,
+      };
+    }, href!);
+    expect(parse).toEqual({ errors: 0, root: "svg" });
+  });
+
   test(`${path} no longer links Next's default favicon.ico`, async ({
     page,
   }) => {
