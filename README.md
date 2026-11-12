@@ -51,11 +51,11 @@ Two product principles shape every feature:
 
 | Role | Can do |
 |---|---|
-| Team member | Submit standups, join retros, view the team dashboard |
-| Team lead | Everything a member can, plus create sprints, set requirements, connect the repo |
-| Instructor / TA | Read-only access to team summaries, peer feedback and exports |
+| Team member | Submit standups, add retro items and vote, write partner feedback, view the team dashboard |
+| Team lead | Everything a member can, plus create sprints, set requirements, connect the repo, invite members, open and close the retro |
+| Instructor / TA | Read-only access to team summaries, retros, peer feedback and exports |
 
-Built for CS6983 Project 2, Fall 2026.
+Built for CS6983 Project 2, Fall 2026, and submitted on Nov 12, 2026. Watch the [demo video](https://youtu.be/wMl-F6EXXLk) or try the [live app](https://sprintproof.vercel.app).
 
 ---
 
@@ -68,14 +68,14 @@ SprintProof is built by two people:
 | Ziqi (Odie) Yang | [@Odiethebest](https://github.com/Odiethebest) | Product, design and app features |
 | Yunhong Huang | [@santiaojun](https://github.com/santiaojun) | Platform and core logic |
 
-Every task is a GitHub Issue on the project board (Backlog → Sprint Todo → In Progress → In Review → Done). Each issue gets its own branch (`feature/12-standup-form`, `fix/31-webhook-signature`), commits follow [Conventional Commits](https://www.conventionalcommits.org/) ending with the issue number, and `main` is protected: a pull request needs the seven required checks (lint and typecheck, unit tests, E2E tests, production build, dependency audit, dependency review, CodeQL) and an approving review from the other partner. So far Ziqi has merged every pull request, both partners'. 20 of the 65 were merged without an approval from the partner in place, using the repository owner's admin override; the [contribution log](docs/contribution-log.md#process-notes) lists them. We never squash-merge, because squashing erases the test-first commits. AI coding tools follow the same rules and commit or push only when the developer explicitly asks, under that developer's own git identity, so authorship in the git history stays accurate.
+Every task is a GitHub Issue on the project board (Backlog → Sprint Todo → In Progress → In Review → Done). Each issue gets its own branch (`feature/12-standup-form`, `fix/31-webhook-signature`), commits follow [Conventional Commits](https://www.conventionalcommits.org/) ending with the issue number, and `main` is protected: a pull request needs the seven required checks (lint and typecheck, unit tests, E2E tests, production build, dependency audit, dependency review, CodeQL) and an approving review from the other partner. Ziqi merged every pull request, both partners'. Up to the final submission (`main` at `0717e6f`, Nov 12), 36 of the 81 were merged without an approval from the partner in place, using the repository owner's admin override; the [contribution log](docs/contribution-log.md#process-notes) lists them, and the [Sprint 2 retro](docs/sprints/sprint-2/retro.md) made this its first action item. We never squash-merge, because squashing erases the test-first commits. AI coding tools follow the same rules and commit or push only when the developer explicitly asks, under that developer's own git identity, so authorship in the git history stays accurate.
 
 | Sprint | Dates | Milestone |
 |---|---|---|
 | Sprint 1 | Oct 29 – Nov 4, 2026 | "Sprint 1" |
 | Sprint 2 | Nov 5 – Nov 11, 2026 | "Sprint 2" |
 
-Planning notes, standups and retros live in [`docs/sprints/`](docs/sprints/). For the full conventions shared by humans and AI tools (branching, commits, PRs, coding standards, security), see [`AGENTS.md`](AGENTS.md). Contribution log: [`docs/contribution-log.md`](docs/contribution-log.md) (draft, finalized after the Sprint 2 retro).
+Planning notes, standups and retros live in [`docs/sprints/`](docs/sprints/). For the full conventions shared by humans and AI tools (branching, commits, PRs, coding standards, security), see [`AGENTS.md`](AGENTS.md). Contribution log: [`docs/contribution-log.md`](docs/contribution-log.md).
 
 ---
 
@@ -329,6 +329,8 @@ npx vitest run tests/unit/checks/standup-quota.test.ts   # a single test file
 
 Before opening a PR, run `npm run lint && npm run typecheck && npm test`.
 
+At the final submission (`main` at `0717e6f`) CI ran 1,015 unit tests (99.25% line coverage of `src/lib/`), 588 integration tests and 87 E2E tests, all passing.
+
 ### Running the tests
 
 The live dashboard specs need Soketi, a Pusher-compatible server, running locally:
@@ -422,6 +424,8 @@ Each member gets 3 votes per retro, at most 1 per item. The top 3 "To improve" i
 | [`docs/design/`](docs/design/) | Prototype mockups for each screen |
 | [`docs/decisions/`](docs/decisions/) | One record per big technical choice |
 | [`docs/sprints/`](docs/sprints/) | Planning notes, standups and retros for each sprint |
+| [`docs/contribution-log.md`](docs/contribution-log.md) | Who did what: issues, pull requests, reviews, decision records and operations per person |
+| [`docs/research/`](docs/research/) | The HW3 experiment: the same issue built with and without the rules file, and what changed |
 | [`AGENTS.md`](AGENTS.md) | Shared rules for humans and AI coding tools: stack, architecture, conventions, workflow |
 | [`CLAUDE.md`](CLAUDE.md) | Claude Code-specific notes (imports `AGENTS.md`) |
 
