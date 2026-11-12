@@ -32,6 +32,7 @@ export async function insertUser(overrides: UserRecordOverrides = {}) {
 
 export async function insertTeam(
   overrides: {
+    id?: string;
     name?: string;
     repoFullName?: string;
     timezone?: string;
