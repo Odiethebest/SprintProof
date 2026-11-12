@@ -46,7 +46,8 @@ function uniqueRepo(): GithubRepo {
 // The lead creates the team and Sprint 1, and the member joins. The team is
 // created through the API, so the test knows the repo its deliveries name.
 // GitHub signs them with the team's own secret, which the lead copies from
-// Settings (#115).
+// Settings (#115). Adding the webhook makes GitHub send a ping, which
+// connects the repository (decision 007, #117).
 async function setUpTeam(
   page: Page,
   browser: Browser,
@@ -68,6 +69,18 @@ async function setUpTeam(
   const memberPage = await signedInPage(browser, member);
   await joinTeam({ lead: page, joiner: memberPage, teamId, role: "MEMBER" });
   const secret = await copyWebhookSecret(page, teamId);
+  const ping = await deliverWebhook(page.request, {
+    secret,
+    event: "ping",
+    deliveryId: crypto.randomUUID(),
+    payload: {
+      zen: "Keep it logically awesome.",
+      hook_id: 1,
+      repository: repositoryField(repo),
+      sender: { login: lead.login },
+    },
+  });
+  expect(ping.status()).toBe(200);
   return { teamId, repo, secret };
 }
 

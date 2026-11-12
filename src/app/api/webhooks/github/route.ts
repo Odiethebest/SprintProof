@@ -1,13 +1,19 @@
 import { errorResponse } from "@/server/api-response";
-import { matchWebhookSecret } from "@/lib/github/webhook-signature";
+import {
+  findSigningTeamId,
+  matchWebhookSecret,
+} from "@/lib/github/webhook-signature";
 import {
   extractWebhookRepository,
   mapWebhookToActivities,
+  type WebhookRepository,
 } from "@/lib/github/webhook-events";
 import {
+  findPendingTeamsByRepo,
   findTeamByRepo,
   recordTeamRepoId,
   stopServerWebhookSecret,
+  verifyTeamRepo,
 } from "@/server/repositories/teams";
 import { recordWebhookEvent } from "@/server/repositories/activities";
 import { triggerTeamEvent } from "@/server/realtime";
@@ -56,22 +62,33 @@ async function handleWebhook(request: Request): Promise<Response> {
     parsed === null
       ? null
       : extractWebhookRepository({ payload: parsed.payload });
-  const team =
+  // Decision 007 (#117): the team verified for the repository, if any, and
+  // the teams that have it pending.
+  const [team, pendingTeams] =
     repo === null
-      ? null
-      : await findTeamByRepo({
-          repoId: BigInt(repo.id),
-          repoFullName: repo.fullName,
-        });
+      ? [null, []]
+      : await Promise.all([
+          findTeamByRepo({
+            repoId: BigInt(repo.id),
+            repoFullName: repo.fullName,
+          }),
+          findPendingTeamsByRepo({ repoFullName: repo.fullName }),
+        ]);
+  const signatureHeader = request.headers.get("x-hub-signature-256");
   const signer = matchWebhookSecret({
     rawBody,
-    signatureHeader: request.headers.get("x-hub-signature-256"),
+    signatureHeader,
     team,
     // Only the transition fallback now (decision 005). Unset or empty, it
-    // verifies nothing.
+    // verifies nothing, and it never verifies a pending team: every lead
+    // from before #115 has it, so it can't show who added the webhook.
     serverSecret: process.env.GITHUB_WEBHOOK_SECRET ?? null,
   });
-  if (signer === null) {
+  const pendingTeamId =
+    signer === null
+      ? findSigningTeamId({ rawBody, signatureHeader, teams: pendingTeams })
+      : null;
+  if (signer === null && pendingTeamId === null) {
     return errorResponse({
       status: 401,
       code: "UNAUTHORIZED",
@@ -107,6 +124,18 @@ async function handleWebhook(request: Request): Promise<Response> {
     });
   }
   const { payload } = parsed;
+
+  // A pending team's own secret signed it, so the repository is in the
+  // payload: only such teams are looked up by it.
+  if (pendingTeamId !== null && repo !== null) {
+    return handlePendingTeamDelivery({
+      event,
+      deliveryId,
+      repo,
+      teamId: pendingTeamId,
+      hasVerifiedTeam: team !== null,
+    });
+  }
 
   if (event === "ping") {
     if (team !== null && repo !== null) {
@@ -162,4 +191,57 @@ async function handleWebhook(request: Request): Promise<Response> {
   }
 
   return Response.json({ ok: true }, { status: 200 });
+}
+
+// Decision 007 (#117): a delivery signed with the secret of a team that has
+// the repository pending. Its ping verifies the team, unless another team is
+// verified already; nothing else it sends is stored. The responses show up in
+// the webhook's Recent Deliveries on GitHub, so they say what to do.
+async function handlePendingTeamDelivery({
+  event,
+  deliveryId,
+  repo,
+  teamId,
+  hasVerifiedTeam,
+}: {
+  event: string;
+  deliveryId: string;
+  repo: WebhookRepository;
+  teamId: string;
+  hasVerifiedTeam: boolean;
+}): Promise<Response> {
+  if (hasVerifiedTeam) {
+    return repoAlreadyConnectedResponse();
+  }
+  if (event !== "ping") {
+    return errorResponse({
+      status: 404,
+      code: "NOT_FOUND",
+      message:
+        "This repository isn't connected yet. Redeliver GitHub's ping from the webhook's Recent Deliveries.",
+    });
+  }
+  const isVerified = await verifyTeamRepo({
+    teamId,
+    repoId: BigInt(repo.id),
+    repoFullName: repo.fullName,
+  });
+  if (!isVerified) {
+    return repoAlreadyConnectedResponse();
+  }
+  await recordWebhookEvent({
+    teamId,
+    event: "ping",
+    deliveryId,
+    activities: [],
+  });
+  return Response.json({ ok: true }, { status: 200 });
+}
+
+function repoAlreadyConnectedResponse(): Response {
+  return errorResponse({
+    status: 409,
+    code: "REPO_ALREADY_CONNECTED",
+    message: "Another team already connected this repo.",
+  });
 }

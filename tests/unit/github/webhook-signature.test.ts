@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import crypto from "node:crypto";
 import {
+  findSigningTeamId,
   matchWebhookSecret,
   verifyWebhookSignature,
 } from "@/lib/github/webhook-signature";
@@ -227,6 +228,78 @@ describe("matchWebhookSecret", () => {
         signatureHeader: null,
         team: teamWith(true),
         serverSecret,
+      })
+    ).toBeNull();
+  });
+});
+
+// Decision 007 (#117): a repository stays pending for every team that claimed
+// it until GitHub's ping, signed with one of those teams' secrets, verifies
+// that team. The route tries each pending team's secret.
+describe("findSigningTeamId", () => {
+  const payload = JSON.stringify({ zen: "Keep it logically awesome." });
+  const teams = [
+    { id: "team-a", webhookSecret: "team-a-secret" },
+    { id: "team-b", webhookSecret: "team-b-secret" },
+    { id: "team-c", webhookSecret: "team-c-secret" },
+  ];
+
+  it.each(["team-a", "team-b", "team-c"])(
+    "returns %s for a body signed with its secret",
+    (teamId) => {
+      expect(
+        findSigningTeamId({
+          rawBody: payload,
+          signatureHeader: createSignature(payload, `${teamId}-secret`),
+          teams,
+        })
+      ).toBe(teamId);
+    }
+  );
+
+  it("returns null when no team's secret signed the body", () => {
+    expect(
+      findSigningTeamId({
+        rawBody: payload,
+        signatureHeader: createSignature(payload, "someone-elses-secret"),
+        teams,
+      })
+    ).toBeNull();
+  });
+
+  it("returns null when there are no teams to try", () => {
+    expect(
+      findSigningTeamId({
+        rawBody: payload,
+        signatureHeader: createSignature(payload, "team-a-secret"),
+        teams: [],
+      })
+    ).toBeNull();
+  });
+
+  it("returns null when the signature header is missing", () => {
+    expect(
+      findSigningTeamId({ rawBody: payload, signatureHeader: null, teams })
+    ).toBeNull();
+  });
+
+  it("returns null for a body changed after a team's secret signed it", () => {
+    expect(
+      findSigningTeamId({
+        rawBody: `${payload} `,
+        signatureHeader: createSignature(payload, "team-b-secret"),
+        teams,
+      })
+    ).toBeNull();
+  });
+
+  // Anyone can compute an HMAC with an empty key.
+  it("never matches a team whose secret is empty", () => {
+    expect(
+      findSigningTeamId({
+        rawBody: payload,
+        signatureHeader: createSignature(payload, ""),
+        teams: [{ id: "team-empty", webhookSecret: "" }],
       })
     ).toBeNull();
   });

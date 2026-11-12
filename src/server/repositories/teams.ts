@@ -14,7 +14,25 @@ const TEAM_FIELDS = {
   timezone: true,
 } as const;
 
-// Returns null when another team already connected the repo.
+// Decision 007 (#117): only a team whose repository GitHub's ping verified
+// has it. A pending team's repo_verified_at is null.
+const VERIFIED_REPO = { repoVerifiedAt: { not: null } } as const;
+
+// A filter for repository names equal to this one ignoring case, and nothing
+// else. Prisma runs `equals` with `mode: "insensitive"` as ILIKE without
+// escaping the value, so "_" (which GitHub allows in names) and "%" (which a
+// forged payload can hold) would match other characters too. Escaped with
+// PostgreSQL's default LIKE escape, the backslash, they match only themselves.
+function sameRepoName(repoFullName: string) {
+  return {
+    equals: repoFullName.replace(/[\\%_]/g, "\\$&"),
+    mode: "insensitive",
+  } as const;
+}
+
+// The new team's repository is pending until GitHub's ping verifies it
+// (decision 007, #117). Returns null when another team is verified for the
+// repository; teams that only have it pending don't block anyone.
 export async function createTeamWithLead({
   input,
   leadUserId,
@@ -22,37 +40,32 @@ export async function createTeamWithLead({
   input: CreateTeamInput;
   leadUserId: string;
 }) {
-  try {
-    return await db.$transaction(async (tx) => {
-      // GitHub repository names ignore case; serialize all claims for that name.
-      await lockForWrite({
-        tx,
-        kind: REPO_CLAIM_LOCK,
-        id: input.repoFullName.toLowerCase(),
-      });
-      const existing = await tx.team.findFirst({
-        where: {
-          repoFullName: { equals: input.repoFullName, mode: "insensitive" },
-        },
-        select: { id: true },
-      });
-      if (existing !== null) return null;
-      return tx.team.create({
-        data: {
-          ...input,
-          webhookSecret: generateWebhookSecret(),
-          memberships: { create: { userId: leadUserId, role: "LEAD" } },
-        },
-        select: TEAM_FIELDS,
-      });
+  return db.$transaction(async (tx) => {
+    // GitHub repository names ignore case. Claims and verifications of one
+    // name wait for each other, so a claim made after a verification sees it.
+    await lockForWrite({
+      tx,
+      kind: REPO_CLAIM_LOCK,
+      id: input.repoFullName.toLowerCase(),
     });
-  } catch (error) {
-    // A unique index on the repo name caught a claim that got past the check
-    // without taking the lock. Nothing else a new team writes can clash: its
-    // id and its lead's membership are new, and repo_id is still empty.
-    if (isUniqueViolation(error)) return null;
-    throw error;
-  }
+    const verified = await tx.team.findFirst({
+      where: {
+        repoFullName: sameRepoName(input.repoFullName),
+        ...VERIFIED_REPO,
+      },
+      select: { id: true },
+    });
+    if (verified !== null) return null;
+    // Pending, with no repo id: no unique index can reject it.
+    return tx.team.create({
+      data: {
+        ...input,
+        webhookSecret: generateWebhookSecret(),
+        memberships: { create: { userId: leadUserId, role: "LEAD" } },
+      },
+      select: TEAM_FIELDS,
+    });
+  });
 }
 
 export async function findTeam({ teamId }: { teamId: string }) {
@@ -71,6 +84,7 @@ const WEBHOOK_TEAM_FIELDS = {
   canUseServerWebhookSecret: true,
 } as const;
 
+// The team verified for the repository (decision 007, #117), or null.
 // Only reads: the webhook route verifies the delivery's signature with the
 // team's secret before it stores anything, the repo id included
 // (recordTeamRepoId).
@@ -82,8 +96,8 @@ export async function findTeamByRepo({
   repoFullName: string;
 }) {
   if (repoId !== undefined && repoId !== null) {
-    const byRepoId = await db.team.findUnique({
-      where: { repoId },
+    const byRepoId = await db.team.findFirst({
+      where: { repoId, ...VERIFIED_REPO },
       select: WEBHOOK_TEAM_FIELDS,
     });
     if (byRepoId !== null) {
@@ -98,7 +112,8 @@ export async function findTeamByRepo({
   }
   const byFullName = await db.team.findFirst({
     where: {
-      repoFullName: { equals: repoFullName, mode: "insensitive" },
+      repoFullName: sameRepoName(repoFullName),
+      ...VERIFIED_REPO,
     },
     select: WEBHOOK_TEAM_FIELDS,
   });
@@ -115,8 +130,94 @@ export async function findTeamByRepo({
   return byFullName;
 }
 
-// GitHub's repository id finds the team after a rename (#11). Stored from the
-// first verified delivery; a team that already has one keeps it.
+// The teams that have the repository pending, oldest first: each one's secret
+// may have signed the ping that verifies it (decision 007, #117). Only reads.
+export async function findPendingTeamsByRepo({
+  repoFullName,
+}: {
+  repoFullName: string;
+}): Promise<{ id: string; webhookSecret: string }[]> {
+  // The name comes from a body nobody has verified yet (#74).
+  if (!databaseTextSchema.safeParse(repoFullName).success) {
+    return [];
+  }
+  return db.team.findMany({
+    where: {
+      repoFullName: sameRepoName(repoFullName),
+      repoVerifiedAt: null,
+    },
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+    select: { id: true, webhookSecret: true },
+  });
+}
+
+// Decision 007 (#117): GitHub's ping, signed with this pending team's own
+// secret, verifies the team for the repository and stores the repository id.
+// The ping also proves GitHub signs with the team's secret, so the
+// server-wide secret stops working for it (decision 005). Returns false,
+// changing nothing, when another team is verified for the repository.
+export async function verifyTeamRepo({
+  teamId,
+  repoId,
+  repoFullName,
+}: {
+  teamId: string;
+  repoId: bigint;
+  repoFullName: string;
+}): Promise<boolean> {
+  try {
+    return await db.$transaction(async (tx) => {
+      await lockForWrite({
+        tx,
+        kind: REPO_CLAIM_LOCK,
+        id: repoFullName.toLowerCase(),
+      });
+      // By id too: the verified team may have the repository under the name
+      // it had before a rename (#11).
+      const other = await tx.team.findFirst({
+        where: {
+          id: { not: teamId },
+          ...VERIFIED_REPO,
+          OR: [{ repoId }, { repoFullName: sameRepoName(repoFullName) }],
+        },
+        select: { id: true },
+      });
+      if (other !== null) return false;
+      await tx.team.updateMany({
+        where: { id: teamId, repoVerifiedAt: null },
+        data: {
+          repoVerifiedAt: new Date(),
+          repoId,
+          canUseServerWebhookSecret: false,
+        },
+      });
+      return true;
+    });
+  } catch (error) {
+    // A unique index caught a verification that got past the check without
+    // taking the lock: at most one verified team per repository name,
+    // ignoring case, and one team per repository id.
+    if (isUniqueViolation(error)) return false;
+    throw error;
+  }
+}
+
+// For Settings: "Waiting for GitHub's ping" until the team is verified,
+// "Connected" after (decision 007, #117).
+export async function isTeamRepoVerified({
+  teamId,
+}: {
+  teamId: string;
+}): Promise<boolean> {
+  const team = await db.team.findUnique({
+    where: { id: teamId },
+    select: { repoVerifiedAt: true },
+  });
+  return team !== null && team.repoVerifiedAt !== null;
+}
+
+// GitHub's repository id finds the team after a rename (#11). Stored by the
+// ping that verifies the team; a team that already has one keeps it.
 export async function recordTeamRepoId({
   teamId,
   repoId,

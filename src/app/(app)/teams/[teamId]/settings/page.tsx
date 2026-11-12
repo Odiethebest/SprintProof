@@ -32,7 +32,11 @@ import { listApiTokens } from "@/server/repositories/api-tokens";
 import { listActiveInvites } from "@/server/repositories/invites";
 import { listTeamMembers } from "@/server/repositories/memberships";
 import { listSprints } from "@/server/repositories/sprints";
-import { findTeam, findTeamWebhookSecret } from "@/server/repositories/teams";
+import {
+  findTeam,
+  findTeamWebhookSecret,
+  isTeamRepoVerified,
+} from "@/server/repositories/teams";
 import { getRequestOrigin } from "@/server/request-origin";
 
 export const metadata: Metadata = { title: "Settings · SprintProof" };
@@ -92,6 +96,7 @@ async function TeamSettings({ params }: { params: Params }) {
     lastDelivery,
     apiTokens,
     isStaff,
+    isRepoVerified,
   ] = await Promise.all([
     getCurrentUser(),
     findTeam({ teamId }),
@@ -101,6 +106,7 @@ async function TeamSettings({ params }: { params: Params }) {
     getLastWebhookDelivery({ teamId }),
     listApiTokens({ userId: access.userId }),
     isCourseStaff({ userId: access.userId }),
+    isTeamRepoVerified({ teamId }),
   ]);
   if (user === null || team === null) {
     notFound();
@@ -166,6 +172,7 @@ async function TeamSettings({ params }: { params: Params }) {
             }
             webhookSecret={webhookSecret}
             isLead={access.role === "LEAD"}
+            isRepoVerified={isRepoVerified}
             lastDelivery={
               lastDelivery === null
                 ? null

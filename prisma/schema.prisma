@@ -58,12 +58,19 @@ model Team {
   id                        String            @id @default(cuid())
   name                      String
   // GitHub's `full_name` ("owner/name"); webhooks find the team by it (#11).
-  // Also unique ignoring case: the index teams_repo_full_name_lower_key on
-  // lower(repo_full_name) is raw SQL in its migration, since Prisma can't
-  // express it (#94).
-  repoFullName              String            @unique @map("repo_full_name")
-  // GitHub's numeric repository ID; set on first webhook delivery (#11).
+  // Not unique: any number of teams can have a repository pending, and only
+  // one can be verified for it (decision 007, #117). The partial unique index
+  // teams_verified_repo_full_name_lower_key on lower(repo_full_name) WHERE
+  // repo_verified_at IS NOT NULL enforces that ignoring case. It's raw SQL in
+  // its migration, since Prisma can't express it.
+  repoFullName              String            @map("repo_full_name")
+  // GitHub's numeric repository ID, stored by the ping that verifies the team
+  // (#11, #117). It finds the team after a rename.
   repoId                    BigInt?           @unique @map("repo_id")
+  // When GitHub delivered a ping signed with webhookSecret for this
+  // repository; null while the connection is pending. Only a verified team's
+  // deliveries count (decision 007, #117).
+  repoVerifiedAt            DateTime?         @map("repo_verified_at")
   // Signs this team's GitHub webhook deliveries (decision 005, #115). Kept as
   // is, not hashed: verifying an HMAC needs the key, and the lead copies it
   // from Settings into GitHub. Never returned by the API or logged.

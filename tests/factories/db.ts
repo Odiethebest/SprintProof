@@ -30,6 +30,9 @@ export async function insertUser(overrides: UserRecordOverrides = {}) {
   });
 }
 
+// When factory teams' repositories were verified, unless a test says otherwise.
+export const TEAM_REPO_VERIFIED_AT = new Date("2026-11-01T12:00:00.000Z");
+
 export async function insertTeam(
   overrides: {
     id?: string;
@@ -41,6 +44,9 @@ export async function insertTeam(
     // true for a team connected before #115, whose GitHub webhook may still
     // sign with the server-wide GITHUB_WEBHOOK_SECRET (decision 005).
     canUseServerWebhookSecret?: boolean;
+    // When GitHub's ping verified the team's repository; null while it's
+    // pending (decision 007, #117).
+    repoVerifiedAt?: Date | null;
   } = {}
 ) {
   const n = recordSeq++;
@@ -53,6 +59,9 @@ export async function insertTeam(
       // Different for every team, so a delivery signed for one team never
       // verifies for another by accident.
       webhookSecret: `test-team-webhook-secret-${n}`,
+      // Connected by default: most tests send deliveries to a team whose
+      // repository GitHub's ping already verified. Pass null for a pending one.
+      repoVerifiedAt: TEAM_REPO_VERIFIED_AT,
       ...rest,
     },
   });
