@@ -4,8 +4,33 @@ import {
   listTeamActivities,
   recordWebhookEvent,
 } from "@/server/repositories/activities";
+import {
+  mapWebhookToActivities,
+  type MappedActivity,
+} from "@/lib/github/webhook-events";
+import { countMemberActivity } from "@/lib/stats/member-activity";
 import { insertActivity, insertTeam } from "../../factories/db";
+import {
+  createPushCommit,
+  createPushPayload,
+  createRebasedCopy,
+} from "../../factories/github-push";
 import { clearDatabase } from "../setup/test-setup";
+
+// The activities the webhook route would store for a push of these commits.
+function mappedPush(commits: object[]): MappedActivity[] {
+  const mapping = mapWebhookToActivities({
+    event: "push",
+    payload: createPushPayload({
+      ref: "refs/heads/feature/12-dashboard",
+      commits,
+    }),
+  });
+  if (!mapping.isValid) {
+    throw new Error(mapping.message);
+  }
+  return mapping.activities;
+}
 
 describe("activities repository", () => {
   beforeEach(async () => {
@@ -32,6 +57,7 @@ describe("activities repository", () => {
             sha: null,
             title: "Show live contribution dashboard",
             reviewState: "COMMENTED",
+            commitKey: null,
             occurredAt,
           },
           {
@@ -42,6 +68,7 @@ describe("activities repository", () => {
             sha: "sha-1",
             title: "Add the dashboard page",
             reviewState: null,
+            commitKey: null,
             occurredAt,
           },
         ],
@@ -56,6 +83,132 @@ describe("activities repository", () => {
       expect(stored).toEqual([
         { type: "COMMIT", reviewState: null },
         { type: "REVIEW", reviewState: "COMMENTED" },
+      ]);
+    });
+
+    // Counting rule (#114, decision 004): a commit counts once per author,
+    // author date and full message, whatever its SHA.
+    it("stores a commit and its copy under a new SHA once, though one delivery carries both", async () => {
+      // Arrange: a branch that still has a commit and its cherry-picked copy
+      const team = await insertTeam();
+      const original = createPushCommit();
+      const copy = createRebasedCopy(original, {
+        id: "0f9e8d7c6b5a4938271605f4e3d2c1b0a9876543",
+        committedAt: "2026-11-03T09:15:00Z",
+      });
+
+      // Act
+      const result = await recordWebhookEvent({
+        teamId: team.id,
+        event: "push",
+        deliveryId: "commit-and-copy",
+        activities: mappedPush([original, copy]),
+      });
+
+      // Assert
+      expect(result).toEqual({ alreadyProcessed: false, activitiesCreated: 1 });
+      expect(
+        await db.activity.findMany({
+          where: { teamId: team.id },
+          select: { sha: true },
+        })
+      ).toEqual([{ sha: original.id }]);
+    });
+
+    it("stores commits without a commit key by SHA only, as before", async () => {
+      // Arrange: rows written without a key, as the payload left out the author date
+      const team = await insertTeam();
+      const activities = mappedPush([
+        createPushCommit({ id: "sha-1", message: "Same message" }),
+        createPushCommit({ id: "sha-2", message: "Same message" }),
+      ]).map((activity) => ({ ...activity, commitKey: null }));
+
+      // Act
+      await recordWebhookEvent({
+        teamId: team.id,
+        event: "push",
+        deliveryId: "keyless-1",
+        activities,
+      });
+      await recordWebhookEvent({
+        teamId: team.id,
+        event: "push",
+        deliveryId: "keyless-2",
+        activities,
+      });
+
+      // Assert
+      const stored = await db.activity.findMany({
+        where: { teamId: team.id },
+        orderBy: { sha: "asc" },
+        select: { sha: true, commitKey: true },
+      });
+      expect(stored).toEqual([
+        { sha: "sha-1", commitKey: null },
+        { sha: "sha-2", commitKey: null },
+      ]);
+    });
+
+    it("stores the same commit once for each team that receives it", async () => {
+      // Arrange
+      const team = await insertTeam();
+      const otherTeam = await insertTeam();
+      const commit = createPushCommit();
+
+      // Act
+      for (const [teamId, deliveryId] of [
+        [team.id, "team-delivery"],
+        [otherTeam.id, "other-team-delivery"],
+      ]) {
+        await recordWebhookEvent({
+          teamId,
+          event: "push",
+          deliveryId,
+          activities: mappedPush([commit]),
+        });
+      }
+
+      // Assert
+      expect(await db.activity.count({ where: { sha: commit.id } })).toBe(2);
+    });
+
+    // The counts read stored rows, so they follow storage: one per commit.
+    it("counts a commit and its rebased copy as one commit in the sprint", async () => {
+      // Arrange
+      const team = await insertTeam();
+      const original = createPushCommit();
+      const copy = createRebasedCopy(original, {
+        id: "0f9e8d7c6b5a4938271605f4e3d2c1b0a9876543",
+        committedAt: "2026-11-03T09:15:00Z",
+      });
+      await recordWebhookEvent({
+        teamId: team.id,
+        event: "push",
+        deliveryId: "original",
+        activities: mappedPush([original]),
+      });
+      await recordWebhookEvent({
+        teamId: team.id,
+        event: "push",
+        deliveryId: "copy",
+        activities: mappedPush([copy]),
+      });
+
+      // Act
+      const counts = countMemberActivity({
+        sprint: { startDate: "2026-10-29", endDate: "2026-11-04" },
+        timeZone: "America/Los_Angeles",
+        members: [{ userId: "alice-id", githubLogin: "alice" }],
+        activities: await listTeamActivities({
+          teamId: team.id,
+          from: new Date("2026-10-29T07:00:00.000Z"),
+          to: new Date("2026-11-05T07:59:59.999Z"),
+        }),
+      });
+
+      // Assert
+      expect(counts).toEqual([
+        { userId: "alice-id", commits: 1, pullRequests: 0 },
       ]);
     });
   });
