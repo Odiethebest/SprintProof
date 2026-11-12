@@ -35,6 +35,9 @@ erDiagram
   RetroItem ||--o{ RetroVote : gets
   RetroItem ||--o| ActionItem : becomes
   Sprint ||--o{ ActionItem : "carries in"
+  Sprint ||--o{ PeerFeedback : collects
+  User ||--o{ PeerFeedback : writes
+  User ||--o{ PeerFeedback : "is about"
 
   User {
     string id PK "cuid"
@@ -156,6 +159,16 @@ erDiagram
     datetime updatedAt "updated_at"
   }
 
+  PeerFeedback {
+    string id PK "cuid"
+    string sprintId FK "sprint_id"
+    string authorId FK "author_id"
+    string recipientId FK "recipient_id, the teammate"
+    string text
+    datetime createdAt "created_at"
+    datetime updatedAt "updated_at, last saved"
+  }
+
   ApiToken {
     string id PK "cuid"
     string userId FK "user_id"
@@ -184,6 +197,7 @@ erDiagram
 | `retro_items` | `RetroItem` | — | `retro_id`, `author_id` |
 | `retro_votes` | `RetroVote` | `[item_id, user_id]` | `user_id` |
 | `action_items` | `ActionItem` | `retro_item_id` | `sprint_id` |
+| `peer_feedback` | `PeerFeedback` | `[sprint_id, author_id, recipient_id]` | `author_id`, `recipient_id` |
 
 - **`users` (`User`)**: `github_id` is required and unique. `github_login` is unique but nullable: after a GitHub rename the login can move to another account, and the previous holder's login is cleared until they sign in again (#6). No email column (`docs/decisions/001-github-oauth-scopes.md`).
 - **`teams` (`Team`)**: Holds the connected GitHub repo (`repo_full_name`, GitHub's `owner/name`, unique so a webhook delivery maps to one team), GitHub's numeric repository ID (`repo_id`, nullable and unique, set on the first webhook delivery, #11) and the team timezone (`timezone`, default `America/Los_Angeles`).
@@ -198,6 +212,7 @@ erDiagram
 - **`retro_items` (`RetroItem`)**: An item in "Went well" or "To improve" (`column`), with its author. `created_at` breaks vote ties (rule R6).
 - **`retro_votes` (`RetroVote`)**: One member's vote on one item; `@@unique([item_id, user_id])` keeps it to 1 per item. The 3 per retro are checked when voting.
 - **`action_items` (`ActionItem`)**: A "To improve" item carried into the sprint that starts next (`sprint_id`) when its retro closed; `retro_item_id` is unique, so an item is carried once. Its text and votes stay on the retro item. `is_done` is the done checkbox on the next sprint's retro.
+- **`peer_feedback` (`PeerFeedback`)**: One author's partner feedback about one teammate (`recipient_id`) for a sprint (#14); `@@unique([sprint_id, author_id, recipient_id])` keeps it to one entry, which saving again replaces. Written only while the sprint's retro is open, under the same `SPRINT_RETRO_LOCK`, so nothing changes after closing. Only the team's instructors read it (rule R7); the author reads back only their own entries. "Feedback" is uncountable, so the table name isn't pluralized.
 
 ### Enums
 
@@ -222,3 +237,4 @@ In `prisma/migrations/`, applied in order:
 | `20261109224149_standups_belong_to_team` | #56 | Fills `standups.team_id` from each standup's sprint, drops `sprint_id`, and replaces the unique key with `[team_id, user_id, date]`. Fails if a person already has two standups on one day in a team |
 | `20261112025033_add_activity_review_state` | #57 | The `ReviewState` enum and `activities.review_state` (nullable, no default, so existing rows stay null) |
 | `20261112050000_add_retros` | #13 | The `RetroColumn` enum and the `retros`, `retro_items`, `retro_votes` and `action_items` tables (new tables only) |
+| `20261112080628_add_peer_feedback` | #14 | The `peer_feedback` table (new table only) |

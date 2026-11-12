@@ -29,7 +29,8 @@ info:
     - 401: `UNAUTHENTICATED`, `INVALID_TOKEN`
     - 403: `FORBIDDEN`
     - 404: `NOT_FOUND`, `SPRINT_NOT_FOUND`, `INVITE_NOT_FOUND`, `TOKEN_NOT_FOUND`,
-      `RETRO_NOT_FOUND`, `RETRO_ITEM_NOT_FOUND`, `ACTION_ITEM_NOT_FOUND`
+      `RETRO_NOT_FOUND`, `RETRO_ITEM_NOT_FOUND`, `ACTION_ITEM_NOT_FOUND`,
+      `PEER_FEEDBACK_NOT_FOUND`, `TEAMMATE_NOT_FOUND`
     - 409: `REPO_ALREADY_CONNECTED`, `NO_CURRENT_SPRINT`, `STANDUP_DAY_CHANGED`,
       `RETRO_EXISTS`, `RETRO_CLOSED`, `NO_VOTES_LEFT`, `NO_NEXT_SPRINT`
     - 410: `INVITE_REVOKED`, `INVITE_EXPIRED`
@@ -44,7 +45,13 @@ info:
     ## Counting rules
     Counts follow the rules in the README: one standup per person per day in the
     team's timezone, reviews count distinct PRs by someone else, and bot activity
-    is ignored. Peer feedback is never part of any response.
+    is ignored.
+
+    ## Peer feedback
+    Only the team's instructors read partner feedback, from the endpoint tagged
+    **Peer feedback**; a lead or member gets 404 there. Saving feedback returns
+    the author's own entry and nothing else. Feedback is never part of any other
+    response, and API tokens can't read it.
 servers:
   - url: /api/v1
 tags:
@@ -65,6 +72,11 @@ tags:
       Session only. A sprint's retro: the lead opens and closes it; leads and
       members add items, vote (3 votes each, 1 per item) and check off the
       action items carried in from the previous retro. Instructors only read it.
+  - name: Peer feedback
+    description: |
+      Session only. Partner feedback for a sprint: while its retro is open, each
+      lead and member saves one entry about each teammate. Only the team's
+      instructors list it (rule R7).
   - name: API tokens
     description: Session only. Create and revoke personal API tokens.
 # Validation (#74): user text rejects NUL with 400 VALIDATION_ERROR.
@@ -785,6 +797,114 @@ paths:
                 error:
                   code: RETRO_CLOSED
                   message: This sprint's retro is closed, so its action items can't change.
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /teams/{teamId}/sprints/{sprintId}/peer-feedback:
+    parameters:
+      - $ref: "#/components/parameters/TeamId"
+      - $ref: "#/components/parameters/SprintId"
+    get:
+      tags: [Peer feedback]
+      summary: List a sprint's peer feedback
+      description: |
+        The team's instructors only, oldest first. Each entry is one author's
+        feedback about one teammate. A lead, a member, an instructor of another
+        team or anyone off the team gets 404 `PEER_FEEDBACK_NOT_FOUND`, the same
+        answer whether the team, the sprint or any feedback exists (rule R7).
+      operationId: listPeerFeedback
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: One page of peer feedback.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PeerFeedbackList"
+        "400":
+          $ref: "#/components/responses/BadPageQuery"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          description: |
+            You aren't an instructor on this team (`PEER_FEEDBACK_NOT_FOUND`), or
+            you are and the team has no sprint with this id (`SPRINT_NOT_FOUND`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error:
+                  code: PEER_FEEDBACK_NOT_FOUND
+                  message: Peer feedback not found.
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /teams/{teamId}/sprints/{sprintId}/peer-feedback/{recipientId}:
+    parameters:
+      - $ref: "#/components/parameters/TeamId"
+      - $ref: "#/components/parameters/SprintId"
+      - name: recipientId
+        in: path
+        required: true
+        description: The user id of the teammate the feedback is about, another lead or member of the team.
+        schema:
+          type: string
+    put:
+      tags: [Peer feedback]
+      summary: Save your feedback about a teammate
+      description: |
+        Leads and members only, while the sprint's retro is open. Saves your
+        feedback about this teammate for the sprint, replacing what you saved
+        before: one entry per author, teammate and sprint. The response is
+        your own entry; no one else on the team can read it.
+      operationId: savePeerFeedback
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PeerFeedbackInput"
+      responses:
+        "200":
+          description: Your saved feedback about the teammate.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PeerFeedback"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: |
+            The team has no sprint with this id (`SPRINT_NOT_FOUND`), the lead
+            hasn't opened its retro (`RETRO_NOT_FOUND`), or the recipient isn't
+            another lead or member of this team (`TEAMMATE_NOT_FOUND`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error:
+                  code: TEAMMATE_NOT_FOUND
+                  message: Teammate not found. Feedback is about another lead or member of this team.
+        "409":
+          description: The sprint's retro is closed, so its partner feedback can't change. Nothing is saved.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error:
+                  code: RETRO_CLOSED
+                  message: This sprint's retro is closed, so its partner feedback can't change.
         "500":
           $ref: "#/components/responses/InternalError"
   /teams/{teamId}/standups:
@@ -1605,6 +1725,57 @@ components:
           type: integer
           minimum: 0
           maximum: 3
+    PeerFeedbackPerson:
+      type: object
+      required: [userId, name, githubLogin]
+      properties:
+        userId:
+          type: string
+        name:
+          type: [string, "null"]
+        githubLogin:
+          type: [string, "null"]
+    PeerFeedbackInput:
+      type: object
+      required: [text]
+      properties:
+        text:
+          type: string
+          minLength: 1
+          maxLength: 1000
+          description: Spaces around the text are trimmed; line breaks inside it are kept.
+    PeerFeedback:
+      type: object
+      required: [id, sprintId, author, recipient, text, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+        sprintId:
+          type: string
+        author:
+          $ref: "#/components/schemas/PeerFeedbackPerson"
+        recipient:
+          description: The teammate the feedback is about.
+          $ref: "#/components/schemas/PeerFeedbackPerson"
+        text:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+          description: When the author last saved it.
+    PeerFeedbackList:
+      type: object
+      required: [data, nextCursor]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/PeerFeedback"
+        nextCursor:
+          type: [string, "null"]
     NewApiToken:
       type: object
       required: [id, name, token, last4, createdAt, lastUsedAt]
