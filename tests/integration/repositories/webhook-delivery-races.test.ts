@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/server/db";
 import { recordWebhookEvent } from "@/server/repositories/activities";
-import { createActivityRecord } from "../../factories/activity";
+import { createMappedActivity } from "../../factories/activity";
 import { insertTeam } from "../../factories/db";
 import { releaseActivityInsertsTogether } from "../helpers/activity-inserts";
 import { clearDatabase } from "../setup/test-setup";
@@ -11,14 +11,14 @@ describe("webhook delivery atomicity", () => {
 
   it("stores every SHA from overlapping concurrent deliveries exactly once", async () => {
     const team = await insertTeam();
-    const shared = createActivityRecord({ sha: "shared" });
+    const shared = createMappedActivity({ sha: "shared" });
     const results = await Promise.all(
       ["left", "right"].map((deliveryId) =>
         recordWebhookEvent({
           teamId: team.id,
           event: "push",
           deliveryId,
-          activities: [shared, createActivityRecord({ sha: deliveryId })],
+          activities: [shared, createMappedActivity({ sha: deliveryId })],
         })
       )
     );
@@ -45,7 +45,7 @@ describe("webhook delivery atomicity", () => {
         teamId: team.id,
         event: "push",
         deliveryId,
-        activities: order.map((sha) => createActivityRecord({ sha })),
+        activities: order.map((sha) => createMappedActivity({ sha })),
       });
 
     // Act
@@ -74,7 +74,7 @@ describe("webhook delivery atomicity", () => {
       teamId: team.id,
       event: "push",
       deliveryId: "same",
-      activities: [createActivityRecord()],
+      activities: [createMappedActivity()],
     };
     const results = await Promise.all([
       recordWebhookEvent(input),
@@ -93,7 +93,7 @@ describe("webhook delivery atomicity", () => {
     const input = {
       teamId: team.id,
       event: "push",
-      activities: [createActivityRecord()],
+      activities: [createMappedActivity()],
     };
     await recordWebhookEvent({ ...input, deliveryId: "first" });
     expect(
@@ -110,7 +110,7 @@ describe("webhook delivery atomicity", () => {
       teamId: team.id,
       event: "push",
       deliveryId: "large",
-      activities: Array.from({ length: 2048 }, () => createActivityRecord()),
+      activities: Array.from({ length: 2048 }, () => createMappedActivity()),
     });
     expect(result.activitiesCreated).toBe(2048);
     expect(await db.activity.count()).toBe(2048);
@@ -125,8 +125,8 @@ describe("webhook delivery atomicity", () => {
         event: "push",
         deliveryId: "failed",
         activities: [
-          createActivityRecord(),
-          createActivityRecord({ title: "bad\u0000text" }),
+          createMappedActivity(),
+          createMappedActivity({ title: "bad\u0000text" }),
         ],
       })
     ).rejects.toThrow();

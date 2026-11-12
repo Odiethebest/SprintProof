@@ -222,12 +222,18 @@ model Activity {
   // Only REVIEW rows have a state. Reviews stored before #57, and reviews with
   // a state GitHub doesn't document, have none and still count.
   reviewState   ReviewState? @map("review_state")
+  // Only COMMIT rows have a key: a hash of the author, author date and full
+  // message, so a rebased or amended copy under a new SHA is stored once (#114).
+  // Commits stored before #114, or whose payload left out the author's date,
+  // have none and are deduplicated by SHA only.
+  commitKey     String?      @map("commit_key")
   occurredAt    DateTime     @map("occurred_at")
   createdAt     DateTime     @default(now()) @map("created_at")
   updatedAt     DateTime     @updatedAt @map("updated_at")
   team          Team         @relation(fields: [teamId], references: [id], onDelete: Cascade)
 
   @@unique([teamId, type, sha])
+  @@unique([teamId, commitKey])
   @@index([teamId])
   @@index([actorLogin])
   @@map("activities")

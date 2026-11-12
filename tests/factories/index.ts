@@ -5,4 +5,5 @@ export * from "./activity";
 export * from "./github-profile";
 export * from "./invite";
 export * from "./sprint-summary";
+export * from "./github-push";
 export * from "./retro";
